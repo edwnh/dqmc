@@ -44,6 +44,7 @@ static void print_progress(FILE *log, const tick_t wall_start,
 	        (first < n_sweep_warm) ? " (ignoring measurement cost)" : "",
 	        t_left < 3600 ? t_left : t_left/3600,
 	        t_left < 3600 ? 's' : 'h');
+	fflush(log);
 }
 
 static int get_lwork(const int N)
@@ -707,6 +708,10 @@ cleanup:
 
 	profile_print(log, wall_time);
 
-	if (log != stdout) fclose(log);
+	if (log != stdout)
+		fclose(log);
+	else
+		fflush(log);
+
 	return status;
 }
