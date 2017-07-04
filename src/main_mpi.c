@@ -13,7 +13,7 @@
 #include "util.h"
 
 #define mpi_printf(...) do { \
-	printf("%d/%d: ", mpi_rank, mpi_size); \
+	printf("%d/%d: ", mpi_rank + 1, mpi_size); \
 	printf(__VA_ARGS__); \
 } while (0)
 
