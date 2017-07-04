@@ -265,7 +265,7 @@ int main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
 	// offset each rank by 0.1s
-	nanosleep(&(const struct timespec){0, mpi_rank * 100000000}, NULL);
+	nanosleep(&(const struct timespec){mpi_rank % 10, mpi_rank * 100000000}, NULL);
 	mpi_printf("mpi initialized\n");
 
 	char *str_max_time = NULL;
