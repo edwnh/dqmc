@@ -34,12 +34,6 @@ static void lock_file(const char *file)
 	struct timespec lock_mtime = {0};
 	int cycles_same_mtime = 0;
 	while (1) {
-		//~ FILE *f = fopen(lock_file, "wx");
-		//~ if (f != NULL) { // successfully created lock file
-			//~ fclose(f);
-			//~ my_free(lock_file);
-			//~ return;
-		//~ }
 		if (symlink(file, lock_file) == 0) { // successfully locked
 			my_free(lock_file);
 			return;
@@ -230,26 +224,6 @@ end:
 		mpi_printf("error: write() failed or incomplete in push_stack()\n");
 	if (status & 4)
 		mpi_printf("error: close() failed in push_stack()\n");
-/*
-	lock_file(file);
-	FILE *f = fopen(file, "a");
-	if (f == NULL) {
-		unlock_file(file);
-		my_free(line_nl);
-		mpi_printf("error: fopen() failed in push_stack()\n");
-		return;
-	}
-	int status_fputs = fputs(line_nl, f);
-	int status_fclose = fclose(f);
-	unlock_file(file);
-
-	my_free(line_nl);
-
-	if (status_fputs == EOF)
-		mpi_printf("error: fputs() failed in push_stack()\n");
-	if (status_fclose == EOF)
-		mpi_printf("error: fclose() failed in push_stack()\n");
-*/
 }
 
 int main(int argc, char **argv)
@@ -298,26 +272,7 @@ int main(int argc, char **argv)
 		if (status == 1 || status < 0) { // empty or pop_stack failed
 			mpi_printf("pop_stack() returned %d; idling\n", status);
 			break;
-			// TODO
-			//~ if (mpi_rank == 0)
-				//~ //
-			//~ else
-				//~ // if not idle before, idle
-				//~ //     isend 0 idle
-			//~ nanosleep(&(const struct timespec){7, 0}, NULL);
-			//~ if (mpi_rank != 0)
-				//~ // irecv
-				//~ // if stop, break
-			//~ continue;
 		}
-
-		//~ if (mpi_rank != 0)
-			// if idle == 1
-				// idle = 0
-				// isend 0 not idle
-			// wait X seconds
-			// irecv
-			// if stop, break
 
 		const size_t len_sim_file = strlen(sim_file);
 		memcpy(log_file, sim_file, len_sim_file);
