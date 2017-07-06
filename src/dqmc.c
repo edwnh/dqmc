@@ -380,7 +380,8 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	#pragma omp section
 	{
 	for (int ls = 0; ls < n_Bs; ls++) {
-		calcBu(Bsu + idk*ls, ls * n_matmul);
+		calcBu(Bu + idk*ls*n_matmul, ls*n_matmul);
+		my_copy(Bsu + idk*ls, Bu + idk*ls*n_matmul, N*N);
 		for (int l = ls*n_matmul + 1 ; l < (ls + 1) * n_matmul; l++) {
 			calcBu(Bu + idk*l, l);
 			my_copy(tmpNN1u, Bsu + idk*ls, N*N);
@@ -393,7 +394,8 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	#pragma omp section
 	{
 	for (int ls = 0; ls < n_Bs; ls++) {
-		calcBd(Bsd + idk*ls, ls * n_matmul);
+		calcBd(Bd + idk*ls*n_matmul, ls*n_matmul);
+		my_copy(Bsd + idk*ls, Bd + idk*ls*n_matmul, N*N);
 		for (int l = ls*n_matmul + 1 ; l < (ls + 1) * n_matmul; l++) {
 			calcBd(Bd + idk*l, l);
 			my_copy(tmpNN1d, Bsd + idk*ls, N*N);
@@ -401,7 +403,7 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 		}
 	}
 	signd = calcG(0, N, idk, n_Bs, Bsd, Gd, tmpNN1d, tmpNN2d,
-	      tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
+		      tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
 	}
 	}
 	sign = signu*signd;
