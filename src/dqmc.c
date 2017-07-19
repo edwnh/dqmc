@@ -11,9 +11,13 @@
 #include "time_.h"
 #include "util.h"
 
-//~ #define CHECK_G_WRP // check recalculated G against wrapped G
-//~ #define CHECK_G_ACC // check recalculated G against using QR for every 2nd multiply
+// uncomment below to check recalculated G against wrapped G
+// #define CHECK_G_WRP
 
+// uncomment below check recalculated G against using QR for every 2nd multiply
+// #define CHECK_G_ACC 
+
+// use these since fortran blas/lapack function take pointers for arguments
 #define cint(x) &(const int){(x)}
 #define cdbl(x) &(const double){(x)}
 
@@ -69,7 +73,7 @@ static int get_lwork(const int N)
 	return max_lwork;
 }
 
-
+// equal-time Green's function
 static int calcG(const int ls, const int N, const int idk, const int n_Bs,
 		const double *const restrict Bs, double *const restrict G,
 		// work arrays
@@ -296,7 +300,7 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	uint64_t *const restrict rng = s->rng; _aa(rng);
 	int *const restrict hs = s->hs;
 
-	// idk what to call this
+	// stride for time index in arrays of B matrices
 	const int idk = DBL_ALIGN * ((N*N + DBL_ALIGN - 1) / DBL_ALIGN);
 	__assume(idk % DBL_ALIGN == 0);
 
@@ -610,6 +614,7 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	my_free(Bu);
 }
 
+// returns -1 for failure, 0 for completion, 1 for partial completion
 int dqmc_wrapper(const char *sim_file, const char *log_file,
 		const tick_t max_time)
 {
