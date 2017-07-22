@@ -74,31 +74,31 @@ static int get_lwork(const int N)
 }
 
 // equal-time Green's function
-static int calcG(const int ls, const int N, const int idk, const int n_Bs,
-		const double *const restrict Bs, double *const restrict G,
+static int calcG(const int f, const int N, const int stride, const int F,
+		const double *const restrict C, double *const restrict G,
 		// work arrays
 		double *const restrict Q, double *const restrict T,
 		double *const restrict tau, double *const restrict d,
 		double *const restrict v, int *const restrict pvt,
 		double *const restrict work, const int lwork)
 {
-	__assume(idk % DBL_ALIGN == 0);
-	_aa(Bs); _aa(G); _aa(Q); _aa(T); _aa(tau); _aa(d); _aa(v); _aa(pvt);
+	__assume(stride % DBL_ALIGN == 0);
+	_aa(C); _aa(G); _aa(Q); _aa(T); _aa(tau); _aa(d); _aa(v); _aa(pvt);
 
 	int info;
 
 	// algorithm 3 of 10.1109/IPDPS.2012.37
 	// slightly modified; pairs of matrices are multiplied with dgemm
-	// like (B5 B4)(B3 B2)(B1 B0) if n_Bs is even
-	// or (B6 B5)(B4 B3)(B2 B1)(B0) if n_Bs is odd
+	// like (B5 B4)(B3 B2)(B1 B0) if F is even
+	// or (B6 B5)(B4 B3)(B2 B1)(B0) if F is odd
 	// (1)
 	int l;
-	if (n_Bs % 2 == 1) { // odd
-		my_copy(Q, Bs + idk*ls, N*N);
+	if (F % 2 == 1) { // odd
+		my_copy(Q, C + stride*f, N*N);
 		l = 1;
 	} else { // even
-		dgemm("N", "N", &N, &N, &N, cdbl(1.0), Bs + idk*((ls + 1)%n_Bs),
-		      &N, Bs + idk*ls, &N, cdbl(0.0), Q, &N);
+		dgemm("N", "N", &N, &N, &N, cdbl(1.0), C + stride*((f + 1)%F),
+		      &N, C + stride*f, &N, cdbl(0.0), Q, &N);
 		l = 2;
 	}
 
@@ -118,10 +118,10 @@ static int calcG(const int ls, const int N, const int idk, const int n_Bs,
 			T[i + (pvt[j]-1)*N] = v[i] * Q[i + j*N];
 
 
-	for (; l < n_Bs; l += 2) {
+	for (; l < F; l += 2) {
 		// (3a)
-		dgemm("N", "N", &N, &N, &N, cdbl(1.0), Bs + idk*((ls + l + 1)%n_Bs),
-		      &N, Bs + idk*((ls + l)%n_Bs), &N, cdbl(0.0), G, &N);
+		dgemm("N", "N", &N, &N, &N, cdbl(1.0), C + stride*((f + l + 1)%F),
+		      &N, C + stride*((f + l)%F), &N, cdbl(0.0), G, &N);
 
 		dormqr("R", "N", &N, &N, &N, Q, &N, tau, G, &N, work, &lwork, &info);
 
@@ -292,7 +292,7 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	const int N = p->N;
 	const int n_matmul = p->n_matmul;
 	const int n_delay = p->n_delay;
-	const int n_Bs = p->n_Bs;
+	const int F = p->F;
 	const double *const restrict exp_K = p->exp_K; _aa(exp_K);
 	const double *const restrict inv_exp_K = p->inv_exp_K; _aa(inv_exp_K);
 	const double *const restrict exp_lambda = p->exp_lambda; _aa(exp_lambda);
@@ -300,14 +300,14 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	uint64_t *const restrict rng = s->rng; _aa(rng);
 	int *const restrict hs = s->hs;
 
-	// stride for time index in arrays of B matrices
-	const int idk = DBL_ALIGN * ((N*N + DBL_ALIGN - 1) / DBL_ALIGN);
-	__assume(idk % DBL_ALIGN == 0);
+	// stride for time index in arrays of B or C matrices
+	const int stride = DBL_ALIGN * ((N*N + DBL_ALIGN - 1) / DBL_ALIGN);
+	__assume(stride % DBL_ALIGN == 0);
 
-	double *const restrict Bu = my_calloc(idk*p->L * sizeof(double)); _aa(Bu);
-	double *const restrict Bd = my_calloc(idk*p->L * sizeof(double)); _aa(Bd);
-	double *const restrict Bsu = my_calloc(idk*n_Bs * sizeof(double)); _aa(Bsu);
-	double *const restrict Bsd = my_calloc(idk*n_Bs * sizeof(double)); _aa(Bsd);
+	double *const restrict Bu = my_calloc(stride*p->L * sizeof(double)); _aa(Bu);
+	double *const restrict Bd = my_calloc(stride*p->L * sizeof(double)); _aa(Bd);
+	double *const restrict Cu = my_calloc(stride*F * sizeof(double)); _aa(Cu);
+	double *const restrict Cd = my_calloc(stride*F * sizeof(double)); _aa(Cd);
 	double *const restrict Gu = my_calloc(N*N * sizeof(double)); _aa(Gu);
 	double *const restrict Gd = my_calloc(N*N * sizeof(double)); _aa(Gd);
 	#ifdef CHECK_G_WRP
@@ -383,30 +383,30 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	{
 	#pragma omp section
 	{
-	for (int ls = 0; ls < n_Bs; ls++) {
-		calcBu(Bu + idk*ls*n_matmul, ls*n_matmul);
-		my_copy(Bsu + idk*ls, Bu + idk*ls*n_matmul, N*N);
-		for (int l = ls*n_matmul + 1 ; l < (ls + 1) * n_matmul; l++) {
-			calcBu(Bu + idk*l, l);
-			my_copy(tmpNN1u, Bsu + idk*ls, N*N);
-			matmul(Bsu + idk*ls, Bu + idk*l, tmpNN1u);
+	for (int f = 0; f < F; f++) {
+		calcBu(Bu + stride*f*n_matmul, f*n_matmul);
+		my_copy(Cu + stride*f, Bu + stride*f*n_matmul, N*N);
+		for (int l = f*n_matmul + 1 ; l < (f + 1) * n_matmul; l++) {
+			calcBu(Bu + stride*l, l);
+			my_copy(tmpNN1u, Cu + stride*f, N*N);
+			matmul(Cu + stride*f, Bu + stride*l, tmpNN1u);
 		}
 	}
-	signu = calcG(0, N, idk, n_Bs, Bsu, Gu, tmpNN1u, tmpNN2u,
+	signu = calcG(0, N, stride, F, Cu, Gu, tmpNN1u, tmpNN2u,
 		      tmpN1u, tmpN2u, tmpN3u, pvtu, worku, lwork);
 	}
 	#pragma omp section
 	{
-	for (int ls = 0; ls < n_Bs; ls++) {
-		calcBd(Bd + idk*ls*n_matmul, ls*n_matmul);
-		my_copy(Bsd + idk*ls, Bd + idk*ls*n_matmul, N*N);
-		for (int l = ls*n_matmul + 1 ; l < (ls + 1) * n_matmul; l++) {
-			calcBd(Bd + idk*l, l);
-			my_copy(tmpNN1d, Bsd + idk*ls, N*N);
-			matmul(Bsd + idk*ls, Bd + idk*l, tmpNN1d);
+	for (int f = 0; f < F; f++) {
+		calcBd(Bd + stride*f*n_matmul, f*n_matmul);
+		my_copy(Cd + stride*f, Bd + stride*f*n_matmul, N*N);
+		for (int l = f*n_matmul + 1 ; l < (f + 1) * n_matmul; l++) {
+			calcBd(Bd + stride*l, l);
+			my_copy(tmpNN1d, Cd + stride*f, N*N);
+			matmul(Cd + stride*f, Bd + stride*l, tmpNN1d);
 		}
 	}
-	signd = calcG(0, N, idk, n_Bs, Bsd, Gd, tmpNN1d, tmpNN2d,
+	signd = calcG(0, N, stride, F, Cd, Gd, tmpNN1d, tmpNN2d,
 		      tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
 	}
 	}
@@ -450,7 +450,7 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 			                       tmpNN1u, tmpNN2u, tmpN1u, tmpNN1d, tmpNN2d, tmpN1d);
 			profile_end(updates);
 
-			const int ls = l / n_matmul;
+			const int f = l / n_matmul;
 			const int recalc = ((l + 1) % n_matmul == 0);
 			int signu, signd;
 			#pragma omp parallel sections
@@ -458,12 +458,12 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 			#pragma omp section
 			{
 			profile_begin(multb);
-			calcBu(Bu + idk*l, l);
+			calcBu(Bu + stride*l, l);
 			if (l % n_matmul == 0) {
-				my_copy(Bsu + idk*ls, Bu + idk*l, N*N);
+				my_copy(Cu + stride*f, Bu + stride*l, N*N);
 			} else {
-				my_copy(tmpNN1u, Bsu + idk*ls, N*N);
-				matmul(Bsu + idk*ls, Bu + idk*l, tmpNN1u);
+				my_copy(tmpNN1u, Cu + stride*f, N*N);
+				matmul(Cu + stride*f, Bu + stride*l, tmpNN1u);
 			}
 			profile_end(multb);
 			if (recalc) {
@@ -471,14 +471,14 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 				#ifdef CHECK_G_WRP
 				calcinvBu(tmpNN1u, l);
 				matmul(tmpNN2u, Gu, tmpNN1u);
-				matmul(Guwrp, Bu + idk*l, tmpNN2u);
+				matmul(Guwrp, Bu + stride*l, tmpNN2u);
 				#endif
 				#ifdef CHECK_G_ACC
-				calcG((l + 1) % p->L, N, idk, p->L, Bu, Guacc,
+				calcG((l + 1) % p->L, N, stride, p->L, Bu, Guacc,
 				      tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				      tmpN3u, pvtu, worku, lwork);
 				#endif
-				signu = calcG((ls + 1) % n_Bs, N, idk, n_Bs, Bsu, Gu,
+				signu = calcG((f + 1) % F, N, stride, F, Cu, Gu,
 				              tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				              tmpN3u, pvtu, worku, lwork);
 				profile_end(recalc);
@@ -486,19 +486,19 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 				profile_begin(wrap);
 				calcinvBu(tmpNN1u, l);
 				matmul(tmpNN2u, Gu, tmpNN1u);
-				matmul(Gu, Bu + idk*l, tmpNN2u);
+				matmul(Gu, Bu + stride*l, tmpNN2u);
 				profile_end(wrap);
 			}
 			}
 			#pragma omp section
 			{
 			profile_begin(multb);
-			calcBd(Bd + idk*l, l)
+			calcBd(Bd + stride*l, l)
 			if (l % n_matmul == 0) {
-				my_copy(Bsd + idk*ls, Bd + idk*l, N*N);
+				my_copy(Cd + stride*f, Bd + stride*l, N*N);
 			} else {
-				my_copy(tmpNN1d, Bsd + idk*ls, N*N);
-				matmul(Bsd + idk*ls, Bd + idk*l, tmpNN1d);
+				my_copy(tmpNN1d, Cd + stride*f, N*N);
+				matmul(Cd + stride*f, Bd + stride*l, tmpNN1d);
 			}
 			profile_end(multb);
 			if (recalc) {
@@ -506,14 +506,14 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 				#ifdef CHECK_G_WRP
 				calcinvBd(tmpNN1d, l);
 				matmul(tmpNN2d, Gd, tmpNN1d);
-				matmul(Gdwrp, Bd + idk*l, tmpNN2d);
+				matmul(Gdwrp, Bd + stride*l, tmpNN2d);
 				#endif
 				#ifdef CHECK_G_ACC
-				calcG((l + 1) % p->L, N, idk, p->L, Bd, Gdacc,
+				calcG((l + 1) % p->L, N, stride, p->L, Bd, Gdacc,
 				      tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				      tmpN3d, pvtd, workd, lwork);
 				#endif
-				signd = calcG((ls + 1) % n_Bs, N, idk, n_Bs, Bsd, Gd,
+				signd = calcG((f + 1) % F, N, stride, F, Cd, Gd,
 				              tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				              tmpN3d, pvtd, workd, lwork);
 				profile_end(recalc);
@@ -521,7 +521,7 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 				profile_begin(wrap);
 				calcinvBd(tmpNN1d, l);
 				matmul(tmpNN2d, Gd, tmpNN1d);
-				matmul(Gd, Bd + idk*l, tmpNN2d);
+				matmul(Gd, Bd + stride*l, tmpNN2d);
 				profile_end(wrap);
 			}
 			}
@@ -608,8 +608,8 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	#endif
 	my_free(Gd);
 	my_free(Gu);
-	my_free(Bsd);
-	my_free(Bsu);
+	my_free(Cd);
+	my_free(Cu);
 	my_free(Bd);
 	my_free(Bu);
 }

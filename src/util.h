@@ -32,7 +32,7 @@ struct params {
 	int *degen_i, *degen_ij;
 	double *exp_K, *inv_exp_K;
 	double *exp_lambda, *del;
-	int n_Bs, n_sweep;
+	int F, n_sweep;
 };
 
 struct state {

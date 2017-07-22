@@ -149,7 +149,7 @@ def create_1(filename=None, overwrite=False, init_rng=None,
         f["params"]["inv_exp_K"] = inv_exp_K
         f["params"]["exp_lambda"] = exp_lambda
         f["params"]["del"] = delll
-        f["params"]["n_Bs"] = np.array(L//n_matmul, dtype=np.int32)
+        f["params"]["F"] = np.array(L//n_matmul, dtype=np.int32)
         f["params"]["n_sweep"] = np.array(n_sweep_warm + n_sweep_meas,
                                           dtype=np.int32)
 

@@ -69,7 +69,7 @@ int read_file(const char *file, struct params *p, struct state *s,
 	my_read(_double, "/params/inv_exp_K",      p->inv_exp_K);
 	my_read(_double, "/params/exp_lambda",     p->exp_lambda);
 	my_read(_double, "/params/del",            p->del);
-	my_read(_int,    "/params/n_Bs",          &p->n_Bs);
+	my_read(_int,    "/params/F",             &p->F);
 	my_read(_int,    "/params/n_sweep",       &p->n_sweep);
 	my_read( ,       "/state/rng", H5T_NATIVE_UINT64, s->rng);
 	my_read(_int,    "/state/sweep",          &s->sweep);
