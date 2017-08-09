@@ -32,15 +32,15 @@ def shuffle(rng, n):
     return a
 
 
-def calcG(f, C):
-    F = C.shape[0]
-    order = (np.arange(F) + f) % F
-    Q, jpvt, tau, work, info = dgeqp3(C[order[0]] if F % 2 == 1 else np.dot(C[order[1]], C[order[0]]))
+def calcG(l, B):
+    L = B.shape[0]
+    order = (np.arange(L) + l) % L
+    Q, jpvt, tau, work, info = dgeqp3(B[order[0]] if L % 2 == 1 else np.dot(B[order[1]], B[order[0]]))
     d = Q.diagonal().copy()
     d[d == 0.0] = 1.0
     T = ((np.triu(Q).T / d).T)[:, jpvt.argsort()]
-    for l in range((1 if F % 2 == 1 else 2), F, 2):
-        W, work, info = dormqr("R", "N", Q, tau, np.dot(C[order[l+1]], C[order[l]]), work.shape[0])
+    for m in range((1 if L % 2 == 1 else 2), L, 2):
+        W, work, info = dormqr("R", "N", Q, tau, np.dot(B[order[m+1]], B[order[m]]), work.shape[0])
         W *= d
         jpvt = (W*W).sum(0).argsort()[::-1]
         Q, tau, work, info = dgeqrf(W[:, jpvt])
@@ -48,7 +48,7 @@ def calcG(f, C):
         d[d == 0.0] = 1.0
         T = np.dot((np.triu(Q).T / d).T, T[jpvt, :])
 
-    N = C.shape[1]
+    N = B.shape[1]
     invDb = np.zeros((N, N))
     for i in range(N):
         invDb[i, i] = 1.0 / d[i] if np.abs(d[i]) > 1.0 else 1.0

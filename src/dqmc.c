@@ -74,8 +74,8 @@ static int get_lwork(const int N)
 }
 
 // equal-time Green's function
-static int calcG(const int f, const int N, const int stride, const int F,
-		const double *const restrict C, double *const restrict G,
+static int calcG(const int l, const int N, const int stride, const int L,
+		const double *const restrict B, double *const restrict G,
 		// work arrays
 		double *const restrict Q, double *const restrict T,
 		double *const restrict tau, double *const restrict d,
@@ -83,23 +83,23 @@ static int calcG(const int f, const int N, const int stride, const int F,
 		double *const restrict work, const int lwork)
 {
 	__assume(stride % DBL_ALIGN == 0);
-	_aa(C); _aa(G); _aa(Q); _aa(T); _aa(tau); _aa(d); _aa(v); _aa(pvt);
+	_aa(B); _aa(G); _aa(Q); _aa(T); _aa(tau); _aa(d); _aa(v); _aa(pvt);
 
 	int info;
 
 	// algorithm 3 of 10.1109/IPDPS.2012.37
 	// slightly modified; pairs of matrices are multiplied with dgemm
-	// like (B5 B4)(B3 B2)(B1 B0) if F is even
-	// or (B6 B5)(B4 B3)(B2 B1)(B0) if F is odd
+	// like (B5 B4)(B3 B2)(B1 B0) if L is even
+	// or (B6 B5)(B4 B3)(B2 B1)(B0) if L is odd
 	// (1)
-	int l;
-	if (F % 2 == 1) { // odd
-		my_copy(Q, C + stride*f, N*N);
-		l = 1;
+	int m;
+	if (L % 2 == 1) { // odd
+		my_copy(Q, B + stride*l, N*N);
+		m = 1;
 	} else { // even
-		dgemm("N", "N", &N, &N, &N, cdbl(1.0), C + stride*((f + 1)%F),
-		      &N, C + stride*f, &N, cdbl(0.0), Q, &N);
-		l = 2;
+		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*((l + 1)%L),
+		      &N, B + stride*l, &N, cdbl(0.0), Q, &N);
+		m = 2;
 	}
 
 	for (int i = 0; i < N; i++) pvt[i] = 0;
@@ -118,10 +118,10 @@ static int calcG(const int f, const int N, const int stride, const int F,
 			T[i + (pvt[j]-1)*N] = v[i] * Q[i + j*N];
 
 
-	for (; l < F; l += 2) {
+	for (; m < L; m += 2) {
 		// (3a)
-		dgemm("N", "N", &N, &N, &N, cdbl(1.0), C + stride*((f + l + 1)%F),
-		      &N, C + stride*((f + l)%F), &N, cdbl(0.0), G, &N);
+		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*((l + m + 1)%L),
+		      &N, B + stride*((l + m)%L), &N, cdbl(0.0), G, &N);
 
 		dormqr("R", "N", &N, &N, &N, Q, &N, tau, G, &N, work, &lwork, &info);
 
@@ -169,6 +169,7 @@ static int calcG(const int f, const int N, const int stride, const int F,
 
 		dtrmm("L", "U", "N", "N", &N, &N, cdbl(1.0), Q, &N, T, &N);
 	}
+
 	// construct G from Eq 2.12 of 10.1016/j.laa.2010.06.023
 	for (int i = 0; i < N*N; i++) G[i] = 0.0;
 	for (int i = 0; i < N; i++) {
