@@ -73,7 +73,7 @@ def create_1(filename=None, overwrite=False, init_rng=None,
             init_hs[l, i] = rand_uint(init_rng) >> np.uint64(63)
 
     map_i = np.zeros(N, dtype=np.int32)
-    degen_i = np.array(N, dtype=np.int32)
+    degen_i = np.array((N,), dtype=np.int32)
     num_i = map_i.max() + 1
     assert num_i == degen_i.size
 
