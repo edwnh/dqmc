@@ -32,7 +32,7 @@ def shuffle(rng, n):
     return a
 
 
-def calcG(l, B):
+def calc_eq_g(l, B):
     L = B.shape[0]
     order = (np.arange(L) + l) % L
     Q, jpvt, tau, work, info = dgeqp3(B[order[0]] if L % 2 == 1 else np.dot(B[order[1]], B[order[0]]))
@@ -262,8 +262,8 @@ def dqmc(params, state, meas_eqlt, meas_uneqlt):
 
     Gu = np.zeros((params["N"], params["N"]))
     Gd = np.zeros((params["N"], params["N"]))
-    Gu[...], signu = calcG(0, Cu)
-    Gd[...], signd = calcG(0, Cd)
+    Gu[...], signu = calc_eq_g(0, Cu)
+    Gd[...], signd = calc_eq_g(0, Cd)
     sign = signu*signd
 
     for state["sweep"] in range(state["sweep"], params["n_sweep"]):
@@ -299,10 +299,10 @@ def dqmc(params, state, meas_eqlt, meas_uneqlt):
                 # Guwrp = np.dot(np.dot(Bu[l, :, :], Gu), invBlu)
                 # invBld = exp_Vu[None].T * params["inv_exp_K"]
                 # Gdwrp = np.dot(np.dot(Bd[l, :, :], Gd), invBld)
-                # Guacc, signu = calcG((l + 1) % params["L"], Bu)
-                # Gdacc, signu = calcG((l + 1) % params["L"], Bd)
-                Gu[...], signu = calcG((f + 1) % params["F"], Cu)
-                Gd[...], signd = calcG((f + 1) % params["F"], Cd)
+                # Guacc, signu = calc_eq_g((l + 1) % params["L"], Bu)
+                # Gdacc, signu = calc_eq_g((l + 1) % params["L"], Bd)
+                Gu[...], signu = calc_eq_g((f + 1) % params["F"], Cu)
+                Gd[...], signd = calc_eq_g((f + 1) % params["F"], Cd)
                 sign = signu*signd
                 # print("Gu - Guwrp:\tmax {:.3e}\tavg {:.3e}".format(np.max(np.abs(Gu-Guwrp)), np.mean(np.abs(Gu-Guwrp))))
                 # print("Gd - Gdwrp:\tmax {:.3e}\tavg {:.3e}".format(np.max(np.abs(Gd-Gdwrp)), np.mean(np.abs(Gd-Gdwrp))))

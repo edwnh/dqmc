@@ -74,7 +74,7 @@ static int get_lwork(const int N)
 }
 
 // equal-time Green's function
-static int calcG(const int l, const int N, const int stride, const int L,
+static int calc_eq_g(const int l, const int N, const int stride, const int L,
 		const double *const restrict B, double *const restrict G,
 		// work arrays
 		double *const restrict Q, double *const restrict T,
@@ -322,7 +322,7 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	int sign = 0;
 	int *const site_order = my_calloc(N * sizeof(double)); _aa(site_order);
 
-	// work arrays for calcG and stuff. two sets for easy 2x parallelization
+	// work arrays for calc_eq_g and stuff. two sets for easy 2x parallelization
 	const int lwork = get_lwork(N);
 
 	double *const restrict worku = my_calloc(lwork * sizeof(double)); _aa(worku);
@@ -393,8 +393,8 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 			matmul(Cu + stride*f, Bu + stride*l, tmpNN1u);
 		}
 	}
-	signu = calcG(0, N, stride, F, Cu, Gu, tmpNN1u, tmpNN2u,
-		      tmpN1u, tmpN2u, tmpN3u, pvtu, worku, lwork);
+	signu = calc_eq_g(0, N, stride, F, Cu, Gu, tmpNN1u, tmpNN2u,
+		          tmpN1u, tmpN2u, tmpN3u, pvtu, worku, lwork);
 	}
 	#pragma omp section
 	{
@@ -407,8 +407,8 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 			matmul(Cd + stride*f, Bd + stride*l, tmpNN1d);
 		}
 	}
-	signd = calcG(0, N, stride, F, Cd, Gd, tmpNN1d, tmpNN2d,
-		      tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
+	signd = calc_eq_g(0, N, stride, F, Cd, Gd, tmpNN1d, tmpNN2d,
+		          tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
 	}
 	}
 	sign = signu*signd;
@@ -475,13 +475,13 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 				matmul(Guwrp, Bu + stride*l, tmpNN2u);
 				#endif
 				#ifdef CHECK_G_ACC
-				calcG((l + 1) % p->L, N, stride, p->L, Bu, Guacc,
-				      tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
-				      tmpN3u, pvtu, worku, lwork);
+				calc_eq_g((l + 1) % p->L, N, stride, p->L, Bu, Guacc,
+				          tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
+				          tmpN3u, pvtu, worku, lwork);
 				#endif
-				signu = calcG((f + 1) % F, N, stride, F, Cu, Gu,
-				              tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
-				              tmpN3u, pvtu, worku, lwork);
+				signu = calc_eq_g((f + 1) % F, N, stride, F, Cu, Gu,
+				                  tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
+				                  tmpN3u, pvtu, worku, lwork);
 				profile_end(recalc);
 			} else {
 				profile_begin(wrap);
@@ -510,13 +510,13 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 				matmul(Gdwrp, Bd + stride*l, tmpNN2d);
 				#endif
 				#ifdef CHECK_G_ACC
-				calcG((l + 1) % p->L, N, stride, p->L, Bd, Gdacc,
-				      tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
-				      tmpN3d, pvtd, workd, lwork);
+				calc_eq_g((l + 1) % p->L, N, stride, p->L, Bd, Gdacc,
+				          tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
+				          tmpN3d, pvtd, workd, lwork);
 				#endif
-				signd = calcG((f + 1) % F, N, stride, F, Cd, Gd,
-				              tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
-				              tmpN3d, pvtd, workd, lwork);
+				signd = calc_eq_g((f + 1) % F, N, stride, F, Cd, Gd,
+				                  tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
+				                  tmpN3d, pvtd, workd, lwork);
 				profile_end(recalc);
 			} else {
 				profile_begin(wrap);
