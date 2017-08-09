@@ -690,12 +690,14 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 
 cleanup:
 	if (m_ue != NULL) {
+		my_free(m_ue->pair_sw);
 		my_free(m_ue->zz);
 		my_free(m_ue->xx);
 		my_free(m_ue->nn);
 		my_free(m_ue->gt0);
 		my_free(m_ue->g0t);
 	}
+	my_free(m_eq->pair_sw);
 	my_free(m_eq->zz);
 	my_free(m_eq->xx);
 	my_free(m_eq->nn);
