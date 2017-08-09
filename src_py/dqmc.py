@@ -336,7 +336,10 @@ def main(argv):
         params = {k: v[...] for k, v in f["params"].items()}
         state = {k: v[...] for k, v in f["state"].items()}
         meas_eqlt = {k: v[...] for k, v in f["meas_eqlt"].items()}
-        meas_uneqlt = {k: v[...] for k, v in f["meas_uneqlt"].items()}
+        if params["period_uneqlt"] > 0:
+            meas_uneqlt = {k: v[...] for k, v in f["meas_uneqlt"].items()}
+        else:
+            meas_uneqlt = None
 
     print("{}/{} sweeps completed".format(state["sweep"], params["n_sweep"]))
     if state["sweep"] >= params["n_sweep"]:
@@ -353,8 +356,9 @@ def main(argv):
             v[...] = state[k]
         for k, v in f["meas_eqlt"].items():
             v[...] = meas_eqlt[k]
-        for k, v in f["meas_uneqlt"].items():
-            v[...] = meas_uneqlt[k]
+        if params["period_uneqlt"] > 0:
+            for k, v in f["meas_uneqlt"].items():
+                v[...] = meas_uneqlt[k]
 
     print("wall time:", time.time() - start_time)
 

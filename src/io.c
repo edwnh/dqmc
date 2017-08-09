@@ -24,6 +24,7 @@ int read_file(const char *file, struct params *p, struct state *s,
 	my_read(_int, "/params/L",      &p->L);
 	my_read(_int, "/params/num_i",  &p->num_i);
 	my_read(_int, "/params/num_ij", &p->num_ij);
+	my_read(_int, "/params/period_uneqlt", &p->period_uneqlt);
 
 	const int N = p->N, L = p->L, num_i = p->num_i, num_ij = p->num_ij;
 	p->map_i         = my_calloc(N        * sizeof(int));
@@ -44,12 +45,14 @@ int read_file(const char *file, struct params *p, struct state *s,
 	m_eq->xx         = my_calloc(num_ij   * sizeof(double));
 	m_eq->zz         = my_calloc(num_ij   * sizeof(double));
 	m_eq->pair_sw    = my_calloc(num_ij   * sizeof(double));
-	m_ue->g0t        = my_calloc(num_ij*L * sizeof(double));
-	m_ue->gt0        = my_calloc(num_ij*L * sizeof(double));
-	m_ue->nn         = my_calloc(num_ij*L * sizeof(double));
-	m_ue->xx         = my_calloc(num_ij*L * sizeof(double));
-	m_ue->zz         = my_calloc(num_ij*L * sizeof(double));
-	m_ue->pair_sw    = my_calloc(num_ij*L * sizeof(double));
+	if (p->period_uneqlt > 0) {
+		m_ue->g0t     = my_calloc(num_ij*L * sizeof(double));
+		m_ue->gt0     = my_calloc(num_ij*L * sizeof(double));
+		m_ue->nn      = my_calloc(num_ij*L * sizeof(double));
+		m_ue->xx      = my_calloc(num_ij*L * sizeof(double));
+		m_ue->zz      = my_calloc(num_ij*L * sizeof(double));
+		m_ue->pair_sw = my_calloc(num_ij*L * sizeof(double));
+	}
 	// make sure anything appended here is free'd in dqmc_wrapper()
 
 	my_read(_int,    "/params/map_i",          p->map_i);
@@ -62,7 +65,6 @@ int read_file(const char *file, struct params *p, struct state *s,
 	my_read(_int,    "/params/n_sweep_warm",  &p->n_sweep_warm);
 	my_read(_int,    "/params/n_sweep_meas",  &p->n_sweep_meas);
 	my_read(_int,    "/params/period_eqlt",   &p->period_eqlt);
-	my_read(_int,    "/params/period_uneqlt", &p->period_uneqlt);
 	my_read(_int,    "/params/degen_i",        p->degen_i);
 	my_read(_int,    "/params/degen_ij",       p->degen_ij);
 	my_read(_double, "/params/exp_K",          p->exp_K);
@@ -83,14 +85,16 @@ int read_file(const char *file, struct params *p, struct state *s,
 	my_read(_double, "/meas_eqlt/xx",          m_eq->xx);
 	my_read(_double, "/meas_eqlt/zz",          m_eq->zz);
 	my_read(_double, "/meas_eqlt/pair_sw",     m_eq->pair_sw);
-	my_read(_int,    "/meas_uneqlt/n_sample", &m_ue->n_sample);
-	my_read(_double, "/meas_uneqlt/sign",     &m_ue->sign);
-	my_read(_double, "/meas_uneqlt/g0t",       m_ue->g0t);
-	my_read(_double, "/meas_uneqlt/gt0",       m_ue->gt0);
-	my_read(_double, "/meas_uneqlt/nn",        m_ue->nn);
-	my_read(_double, "/meas_uneqlt/xx",        m_ue->xx);
-	my_read(_double, "/meas_uneqlt/zz",        m_ue->zz);
-	my_read(_double, "/meas_uneqlt/pair_sw",   m_ue->pair_sw);
+	if (p->period_uneqlt > 0) {
+		my_read(_int,    "/meas_uneqlt/n_sample", &m_ue->n_sample);
+		my_read(_double, "/meas_uneqlt/sign",     &m_ue->sign);
+		my_read(_double, "/meas_uneqlt/g0t",       m_ue->g0t);
+		my_read(_double, "/meas_uneqlt/gt0",       m_ue->gt0);
+		my_read(_double, "/meas_uneqlt/nn",        m_ue->nn);
+		my_read(_double, "/meas_uneqlt/xx",        m_ue->xx);
+		my_read(_double, "/meas_uneqlt/zz",        m_ue->zz);
+		my_read(_double, "/meas_uneqlt/pair_sw",   m_ue->pair_sw);
+	}
 
 #undef my_read
 
@@ -129,14 +133,16 @@ int save_file(const char *file, const struct state *s,
 	my_write("/meas_eqlt/xx",         H5T_NATIVE_DOUBLE,  m_eq->xx);
 	my_write("/meas_eqlt/zz",         H5T_NATIVE_DOUBLE,  m_eq->zz);
 	my_write("/meas_eqlt/pair_sw",    H5T_NATIVE_DOUBLE,  m_eq->pair_sw);
-	my_write("/meas_uneqlt/n_sample", H5T_NATIVE_INT,    &m_ue->n_sample);
-	my_write("/meas_uneqlt/sign",     H5T_NATIVE_DOUBLE, &m_ue->sign);
-	my_write("/meas_uneqlt/g0t",      H5T_NATIVE_DOUBLE,  m_ue->g0t);
-	my_write("/meas_uneqlt/gt0",      H5T_NATIVE_DOUBLE,  m_ue->gt0);
-	my_write("/meas_uneqlt/nn",       H5T_NATIVE_DOUBLE,  m_ue->nn);
-	my_write("/meas_uneqlt/xx",       H5T_NATIVE_DOUBLE,  m_ue->xx);
-	my_write("/meas_uneqlt/zz",       H5T_NATIVE_DOUBLE,  m_ue->zz);
-	my_write("/meas_uneqlt/pair_sw",  H5T_NATIVE_DOUBLE,  m_ue->pair_sw);
+	if (m_ue != NULL) {
+		my_write("/meas_uneqlt/n_sample", H5T_NATIVE_INT,    &m_ue->n_sample);
+		my_write("/meas_uneqlt/sign",     H5T_NATIVE_DOUBLE, &m_ue->sign);
+		my_write("/meas_uneqlt/g0t",      H5T_NATIVE_DOUBLE,  m_ue->g0t);
+		my_write("/meas_uneqlt/gt0",      H5T_NATIVE_DOUBLE,  m_ue->gt0);
+		my_write("/meas_uneqlt/nn",       H5T_NATIVE_DOUBLE,  m_ue->nn);
+		my_write("/meas_uneqlt/xx",       H5T_NATIVE_DOUBLE,  m_ue->xx);
+		my_write("/meas_uneqlt/zz",       H5T_NATIVE_DOUBLE,  m_ue->zz);
+		my_write("/meas_uneqlt/pair_sw",  H5T_NATIVE_DOUBLE,  m_ue->pair_sw);
+	}
 
 #undef my_write
 

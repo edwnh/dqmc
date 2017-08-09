@@ -15,7 +15,7 @@
 // #define CHECK_G_WRP
 
 // uncomment below check recalculated G against using QR for every 2nd multiply
-// #define CHECK_G_ACC 
+// #define CHECK_G_ACC
 
 // use these since fortran blas/lapack function take pointers for arguments
 #define cint(x) &(const int){(x)}
@@ -658,6 +658,12 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 		goto cleanup;
 	}
 
+	// if no uneqlt measurements, free m_ue and set to NULL
+	if (p->period_uneqlt == 0) {
+		my_free(m_ue);
+		m_ue = NULL;
+	}
+
 	// check existing progress
 	fprintf(log, "%d/%d sweeps completed\n", s->sweep, p->n_sweep);
 	if (s->sweep >= p->n_sweep) {
@@ -682,11 +688,13 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 	status = (s->sweep == p->n_sweep) ? 0 : 1;
 
 cleanup:
-	my_free(m_ue->zz);
-	my_free(m_ue->xx);
-	my_free(m_ue->nn);
-	my_free(m_ue->gt0);
-	my_free(m_ue->g0t);
+	if (m_ue != NULL) {
+		my_free(m_ue->zz);
+		my_free(m_ue->xx);
+		my_free(m_ue->nn);
+		my_free(m_ue->gt0);
+		my_free(m_ue->g0t);
+	}
 	my_free(m_eq->zz);
 	my_free(m_eq->xx);
 	my_free(m_eq->nn);

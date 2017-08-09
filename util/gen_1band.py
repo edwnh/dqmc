@@ -171,15 +171,16 @@ def create_1(filename=None, overwrite=False, init_rng=None,
         f["meas_eqlt"]["zz"] = np.zeros(num_ij, dtype=np.float64)
         f["meas_eqlt"]["pair_sw"] = np.zeros(num_ij, dtype=np.float64)
 
-        f.create_group("meas_uneqlt")
-        f["meas_uneqlt"]["n_sample"] = np.array(0, dtype=np.int32)
-        f["meas_uneqlt"]["sign"] = np.array(0.0, dtype=np.float64)
-        f["meas_uneqlt"]["g0t"] = np.zeros(num_ij*L, dtype=np.float64)
-        f["meas_uneqlt"]["gt0"] = np.zeros(num_ij*L, dtype=np.float64)
-        f["meas_uneqlt"]["nn"] = np.zeros(num_ij*L, dtype=np.float64)
-        f["meas_uneqlt"]["xx"] = np.zeros(num_ij*L, dtype=np.float64)
-        f["meas_uneqlt"]["zz"] = np.zeros(num_ij*L, dtype=np.float64)
-        f["meas_uneqlt"]["pair_sw"] = np.zeros(num_ij*L, dtype=np.float64)
+        if period_uneqlt > 0:
+            f.create_group("meas_uneqlt")
+            f["meas_uneqlt"]["n_sample"] = np.array(0, dtype=np.int32)
+            f["meas_uneqlt"]["sign"] = np.array(0.0, dtype=np.float64)
+            f["meas_uneqlt"]["g0t"] = np.zeros(num_ij*L, dtype=np.float64)
+            f["meas_uneqlt"]["gt0"] = np.zeros(num_ij*L, dtype=np.float64)
+            f["meas_uneqlt"]["nn"] = np.zeros(num_ij*L, dtype=np.float64)
+            f["meas_uneqlt"]["xx"] = np.zeros(num_ij*L, dtype=np.float64)
+            f["meas_uneqlt"]["zz"] = np.zeros(num_ij*L, dtype=np.float64)
+            f["meas_uneqlt"]["pair_sw"] = np.zeros(num_ij*L, dtype=np.float64)
 
 
 def create_batch(Nfiles, fileprefix=None, seed=None, Nx=16, Ny=4, L=40, **kwargs):
