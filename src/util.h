@@ -18,6 +18,10 @@
 
 #define my_copy(dest, src, N) memcpy((dest), (src), (N)*sizeof((src)[0]))
 
+// use these since fortran blas/lapack function take pointers for arguments
+#define cint(x) &(const int){(x)}
+#define cdbl(x) &(const double){(x)}
+
 struct params {
 	int N, L;
 	int *map_i, *map_ij;

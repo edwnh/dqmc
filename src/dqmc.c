@@ -4,22 +4,19 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <mkl.h>
+#include "eq_g.h"
 #include "io.h"
 #include "meas.h"
 #include "prof.h"
-#include "rand.h"
 #include "time_.h"
+#include "updates.h"
 #include "util.h"
 
-// uncomment below to check recalculated G against wrapped G
+// uncomment below to check recalculated g against wrapped g
 // #define CHECK_G_WRP
 
-// uncomment below check recalculated G against using QR for every 2nd multiply
+// uncomment below check recalculated g against using QR for every 2nd multiply
 // #define CHECK_G_ACC
-
-// use these since fortran blas/lapack function take pointers for arguments
-#define cint(x) &(const int){(x)}
-#define cdbl(x) &(const double){(x)}
 
 static volatile sig_atomic_t progress_flag = 0;
 static void progress(int signum) { progress_flag = 1; }
@@ -51,241 +48,6 @@ static void print_progress(FILE *log, const tick_t wall_start,
 	fflush(log);
 }
 
-static int get_lwork(const int N)
-{
-	double lwork;
-
-	int info;
-	int max_lwork = N;
-
-	dgeqp3(&N, &N, NULL, &N, NULL, NULL, &lwork, cint(-1), &info);
-	if (lwork > max_lwork) max_lwork = (int)lwork;
-
-	dgeqrf(&N, &N, NULL, &N, NULL, &lwork, cint(-1), &info);
-	if (lwork > max_lwork) max_lwork = (int)lwork;
-
-	dormqr("R", "N", &N, &N, &N, NULL, &N, NULL, NULL, &N, &lwork, cint(-1), &info);
-	if (lwork > max_lwork) max_lwork = (int)lwork;
-
-	dormqr("R", "T", &N, &N, &N, NULL, &N, NULL, NULL, &N, &lwork, cint(-1), &info);
-	if (lwork > max_lwork) max_lwork = (int)lwork;
-
-	return max_lwork;
-}
-
-// equal-time Green's function
-static int calc_eq_g(const int l, const int N, const int stride, const int L,
-		const double *const restrict B, double *const restrict G,
-		// work arrays
-		double *const restrict Q, double *const restrict T,
-		double *const restrict tau, double *const restrict d,
-		double *const restrict v, int *const restrict pvt,
-		double *const restrict work, const int lwork)
-{
-	__assume(stride % DBL_ALIGN == 0);
-	_aa(B); _aa(G); _aa(Q); _aa(T); _aa(tau); _aa(d); _aa(v); _aa(pvt);
-
-	int info;
-
-	// algorithm 3 of 10.1109/IPDPS.2012.37
-	// slightly modified; pairs of matrices are multiplied with dgemm
-	// like (B5 B4)(B3 B2)(B1 B0) if L is even
-	// or (B6 B5)(B4 B3)(B2 B1)(B0) if L is odd
-	// (1)
-	int m;
-	if (L % 2 == 1) { // odd
-		my_copy(Q, B + stride*l, N*N);
-		m = 1;
-	} else { // even
-		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*((l + 1)%L),
-		      &N, B + stride*l, &N, cdbl(0.0), Q, &N);
-		m = 2;
-	}
-
-	for (int i = 0; i < N; i++) pvt[i] = 0;
-	dgeqp3(&N, &N, Q, &N, pvt, tau, work, &lwork, &info);
-
-	// (2)
-	for (int i = 0; i < N; i++) {
-		d[i] = Q[i + i*N];
-		if (d[i] == 0.0) d[i] = 1.0;
-		v[i] = 1.0/d[i];
-	}
-
-	for (int i = 0; i < N*N; i++) T[i] = 0.0;
-	for (int j = 0; j < N; j++)
-		for (int i = 0; i <= j; i++)
-			T[i + (pvt[j]-1)*N] = v[i] * Q[i + j*N];
-
-
-	for (; m < L; m += 2) {
-		// (3a)
-		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*((l + m + 1)%L),
-		      &N, B + stride*((l + m)%L), &N, cdbl(0.0), G, &N);
-
-		dormqr("R", "N", &N, &N, &N, Q, &N, tau, G, &N, work, &lwork, &info);
-
-		for (int j = 0; j < N; j++)
-			for (int i = 0; i < N; i++)
-				G[i + j*N] *= d[j];
-
-		// (3b)
-		for (int j = 0; j < N; j++) { // use d for norms
-			d[j] = 0.0;
-			for (int i = 0; i < N; i++)
-				d[j] += G[i + j*N] * G[i + j*N];
-		}
-
-		pvt[0] = 0;
-		for (int i = 1; i < N; i++) { // insertion sort
-			int j;
-			for (j = i; j > 0 && d[pvt[j-1]] < d[i]; j--)
-				pvt[j] = pvt[j-1];
-			pvt[j] = i;
-		}
-
-		for (int j = 0; j < N; j++) // pre-pivot
-			my_copy(Q + j*N, G + pvt[j]*N, N);
-
-		// (3c)
-		dgeqrf(&N, &N, Q, &N, tau, work, &lwork, &info);
-
-		// (3d)
-		for (int i = 0; i < N; i++) {
-			d[i] = Q[i + i*N];
-			if (d[i] == 0.0) d[i] = 1.0;
-			v[i] = 1.0/d[i];
-		}
-
-		for (int j = 0; j < N; j++)
-			for (int i = 0; i <= j; i++)
-				Q[i + j*N] *= v[i];
-
-		for (int j = 0; j < N; j++) {
-			for (int i = 0; i < N; i++)
-				v[i] = T[pvt[i] + j*N];
-			my_copy(T + j*N, v, N);
-		}
-
-		dtrmm("L", "U", "N", "N", &N, &N, cdbl(1.0), Q, &N, T, &N);
-	}
-
-	// construct G from Eq 2.12 of 10.1016/j.laa.2010.06.023
-	for (int i = 0; i < N*N; i++) G[i] = 0.0;
-	for (int i = 0; i < N; i++) {
-		if (fabs(d[i]) > 1.0) { // v = 1/Db; d = Ds
-			v[i] = 1.0/d[i];
-			d[i] = 1.0;
-		} else {
-			v[i] = 1.0;
-		}
-		G[i+i*N] = v[i];
-	}
-
-	dormqr("R", "T", &N, &N, &N, Q, &N, tau, G, &N, work, &lwork, &info);
-
-	for (int j = 0; j < N; j++)
-		for (int i = 0; i < N; i++)
-			T[i + j*N] *= d[i];
-
-	for (int i = 0; i < N*N; i++) T[i] += G[i];
-
-	dgetrf(&N, &N, T, &N, pvt, &info);
-	dgetrs("N", &N, &N, T, &N, pvt, G, &N, &info);
-
-	// calculate sign of det(G)
-	int sign = 1;
-	for (int i = 0; i < N; i++)
-		if ((T[i + N*i] < 0) ^ (pvt[i] != i + 1) ^ (v[i] < 0) ^ (tau[i] > 0))
-			sign *= -1;
-
-	return sign;
-}
-
-static inline int update_delayed(const int N, const double *const restrict del,
-		uint64_t *const restrict rng, int *const restrict site_order,
-		int *const restrict hs,
-		double *const restrict Gu, double *const restrict Gd,
-		const int q,
-		double *const restrict au, double *const restrict bu,
-		double *const restrict du, double *const restrict ad,
-		double *const restrict bd, double *const restrict dd)
-{
-	_aa(Gu); _aa(Gd); _aa(au); _aa(bu); _aa(du); _aa(ad); _aa(bd); _aa(dd);
-
-	int sign = 1;
-	int k = 0;
-	for (int j = 0; j < N; j++) du[j] = Gu[j + N*j];
-	for (int j = 0; j < N; j++) dd[j] = Gd[j + N*j];
-	shuffle(rng, N, site_order);
-	for (int ii = 0; ii < N; ii++) {
-		const int i = site_order[ii];
-		const double delu = del[i + N*hs[i]];
-		const double deld = del[i + N*!hs[i]];
-		const double ru = 1.0 + (1.0 - du[i]) * delu;
-		const double rd = 1.0 + (1.0 - dd[i]) * deld;
-		const double prob = ru * rd;
-		if (rand_doub(rng) < fabs(prob)) {
-			#pragma omp parallel sections
-			{
-			#pragma omp section
-			{
-			for (int j = 0; j < N; j++) au[j + N*k] = Gu[j + N*i];
-			for (int j = 0; j < N; j++) bu[j + N*k] = Gu[i + N*j];
-			dgemv("N", &N, &k, cdbl(1.0), au, &N, bu + i,
-			      &N, cdbl(1.0), au + N*k, cint(1));
-			dgemv("N", &N, &k, cdbl(1.0), bu, &N, au + i,
-			      &N, cdbl(1.0), bu + N*k, cint(1));
-			au[i + N*k] -= 1.0;
-			for (int j = 0; j < N; j++) au[j + N*k] *= delu/ru;
-			for (int j = 0; j < N; j++) du[j] += au[j + N*k] * bu[j + N*k];
-			}
-			#pragma omp section
-			{
-			for (int j = 0; j < N; j++) ad[j + N*k] = Gd[j + N*i];
-			for (int j = 0; j < N; j++) bd[j + N*k] = Gd[i + N*j];
-			dgemv("N", &N, &k, cdbl(1.0), ad, &N, bd + i,
-			      &N, cdbl(1.0), ad + N*k, cint(1));
-			dgemv("N", &N, &k, cdbl(1.0), bd, &N, ad + i,
-			      &N, cdbl(1.0), bd + N*k, cint(1));
-			ad[i + N*k] -= 1.0;
-			for (int j = 0; j < N; j++) ad[j + N*k] *= deld/rd;
-			for (int j = 0; j < N; j++) dd[j] += ad[j + N*k] * bd[j + N*k];
-			}
-			}
-			k++;
-			hs[i] = !hs[i];
-			if (prob < 0) sign *= -1;
-		}
-		if (k == q) {
-			k = 0;
-			#pragma omp parallel sections
-			{
-			#pragma omp section
-			{
-			dgemm("N", "T", &N, &N, &q, cdbl(1.0),
-			      au, &N, bu, &N, cdbl(1.0), Gu, &N);
-			for (int j = 0; j < N; j++) du[j] = Gu[j + N*j];
-			}
-			#pragma omp section
-			{
-			dgemm("N", "T", &N, &N, &q, cdbl(1.0),
-			      ad, &N, bd, &N, cdbl(1.0), Gd, &N);
-			for (int j = 0; j < N; j++) dd[j] = Gd[j + N*j];
-			}
-			}
-		}
-	}
-	#pragma omp parallel sections
-	{
-	#pragma omp section
-	dgemm("N", "T", &N, &N, &k, cdbl(1.0), au, &N, bu, &N, cdbl(1.0), Gu, &N);
-	#pragma omp section
-	dgemm("N", "T", &N, &N, &k, cdbl(1.0), ad, &N, bd, &N, cdbl(1.0), Gd, &N);
-	}
-	return sign;
-}
-
 static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 		const struct params *p, struct state *s,
 		struct meas_eqlt *m_eq, struct meas_uneqlt *m_ue)
@@ -309,21 +71,21 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	double *const restrict Bd = my_calloc(stride*p->L * sizeof(double)); _aa(Bd);
 	double *const restrict Cu = my_calloc(stride*F * sizeof(double)); _aa(Cu);
 	double *const restrict Cd = my_calloc(stride*F * sizeof(double)); _aa(Cd);
-	double *const restrict Gu = my_calloc(N*N * sizeof(double)); _aa(Gu);
-	double *const restrict Gd = my_calloc(N*N * sizeof(double)); _aa(Gd);
+	double *const restrict gu = my_calloc(N*N * sizeof(double)); _aa(gu);
+	double *const restrict gd = my_calloc(N*N * sizeof(double)); _aa(gd);
 	#ifdef CHECK_G_WRP
-	double *const restrict Guwrp = my_calloc(N*N * sizeof(double)); _aa(Guwrp);
-	double *const restrict Gdwrp = my_calloc(N*N * sizeof(double)); _aa(Gdwrp);
+	double *const restrict guwrp = my_calloc(N*N * sizeof(double)); _aa(guwrp);
+	double *const restrict gdwrp = my_calloc(N*N * sizeof(double)); _aa(gdwrp);
 	#endif
 	#ifdef CHECK_G_ACC
-	double *const restrict Guacc = my_calloc(N*N * sizeof(double)); _aa(Guwrp);
-	double *const restrict Gdacc = my_calloc(N*N * sizeof(double)); _aa(Gdwrp);
+	double *const restrict guacc = my_calloc(N*N * sizeof(double)); _aa(guwrp);
+	double *const restrict gdacc = my_calloc(N*N * sizeof(double)); _aa(gdwrp);
 	#endif
 	int sign = 0;
 	int *const site_order = my_calloc(N * sizeof(double)); _aa(site_order);
 
 	// work arrays for calc_eq_g and stuff. two sets for easy 2x parallelization
-	const int lwork = get_lwork(N);
+	const int lwork = get_lwork_eq_g(N);
 
 	double *const restrict worku = my_calloc(lwork * sizeof(double)); _aa(worku);
 	double *const restrict tmpNN1u = my_calloc(N*N * sizeof(double)); _aa(tmpNN1u);
@@ -393,7 +155,7 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 			matmul(Cu + stride*f, Bu + stride*l, tmpNN1u);
 		}
 	}
-	signu = calc_eq_g(0, N, stride, F, Cu, Gu, tmpNN1u, tmpNN2u,
+	signu = calc_eq_g(0, N, stride, F, Cu, gu, tmpNN1u, tmpNN2u,
 		          tmpN1u, tmpN2u, tmpN3u, pvtu, worku, lwork);
 	}
 	#pragma omp section
@@ -407,7 +169,7 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 			matmul(Cd + stride*f, Bd + stride*l, tmpNN1d);
 		}
 	}
-	signd = calc_eq_g(0, N, stride, F, Cd, Gd, tmpNN1d, tmpNN2d,
+	signd = calc_eq_g(0, N, stride, F, Cd, gd, tmpNN1d, tmpNN2d,
 		          tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
 	}
 	}
@@ -447,7 +209,7 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 
 		for (int l = 0; l < p->L; l++) {
 			profile_begin(updates);
-			sign *= update_delayed(N, del, rng, site_order, hs + N*l, Gu, Gd, n_delay,
+			sign *= update_delayed(N, n_delay, del, rng, hs + N*l, gu, gd, site_order,
 			                       tmpNN1u, tmpNN2u, tmpN1u, tmpNN1d, tmpNN2d, tmpN1d);
 			profile_end(updates);
 
@@ -471,23 +233,23 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 				profile_begin(recalc);
 				#ifdef CHECK_G_WRP
 				calcinvBu(tmpNN1u, l);
-				matmul(tmpNN2u, Gu, tmpNN1u);
-				matmul(Guwrp, Bu + stride*l, tmpNN2u);
+				matmul(tmpNN2u, gu, tmpNN1u);
+				matmul(guwrp, Bu + stride*l, tmpNN2u);
 				#endif
 				#ifdef CHECK_G_ACC
-				calc_eq_g((l + 1) % p->L, N, stride, p->L, Bu, Guacc,
+				calc_eq_g((l + 1) % p->L, N, stride, p->L, Bu, guacc,
 				          tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				          tmpN3u, pvtu, worku, lwork);
 				#endif
-				signu = calc_eq_g((f + 1) % F, N, stride, F, Cu, Gu,
+				signu = calc_eq_g((f + 1) % F, N, stride, F, Cu, gu,
 				                  tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				                  tmpN3u, pvtu, worku, lwork);
 				profile_end(recalc);
 			} else {
 				profile_begin(wrap);
 				calcinvBu(tmpNN1u, l);
-				matmul(tmpNN2u, Gu, tmpNN1u);
-				matmul(Gu, Bu + stride*l, tmpNN2u);
+				matmul(tmpNN2u, gu, tmpNN1u);
+				matmul(gu, Bu + stride*l, tmpNN2u);
 				profile_end(wrap);
 			}
 			}
@@ -506,23 +268,23 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 				profile_begin(recalc);
 				#ifdef CHECK_G_WRP
 				calcinvBd(tmpNN1d, l);
-				matmul(tmpNN2d, Gd, tmpNN1d);
-				matmul(Gdwrp, Bd + stride*l, tmpNN2d);
+				matmul(tmpNN2d, gd, tmpNN1d);
+				matmul(gdwrp, Bd + stride*l, tmpNN2d);
 				#endif
 				#ifdef CHECK_G_ACC
-				calc_eq_g((l + 1) % p->L, N, stride, p->L, Bd, Gdacc,
+				calc_eq_g((l + 1) % p->L, N, stride, p->L, Bd, gdacc,
 				          tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				          tmpN3d, pvtd, workd, lwork);
 				#endif
-				signd = calc_eq_g((f + 1) % F, N, stride, F, Cd, Gd,
+				signd = calc_eq_g((f + 1) % F, N, stride, F, Cd, gd,
 				                  tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				                  tmpN3d, pvtd, workd, lwork);
 				profile_end(recalc);
 			} else {
 				profile_begin(wrap);
 				calcinvBd(tmpNN1d, l);
-				matmul(tmpNN2d, Gd, tmpNN1d);
-				matmul(Gd, Bd + stride*l, tmpNN2d);
+				matmul(tmpNN2d, gd, tmpNN1d);
+				matmul(gd, Bd + stride*l, tmpNN2d);
 				profile_end(wrap);
 			}
 			}
@@ -541,20 +303,20 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 
 			#ifdef CHECK_G_WRP
 			if (recalc) {
-				matdiff(Gu, Guwrp);
-				matdiff(Gd, Gdwrp);
+				matdiff(gu, guwrp);
+				matdiff(gd, gdwrp);
 			}
 			#endif
 			#ifdef CHECK_G_ACC
 			if (recalc) {
-				matdiff(Gu, Guacc);
-				matdiff(Gd, Gdacc);
+				matdiff(gu, guacc);
+				matdiff(gd, gdacc);
 			}
 			#endif
 			#if defined(CHECK_G_WRP) && defined(CHECK_G_ACC)
 			if (recalc) {
-				matdiff(Guwrp, Guacc);
-				matdiff(Gdwrp, Gdacc);
+				matdiff(guwrp, guacc);
+				matdiff(gdwrp, gdacc);
 			}
 			#endif
 
@@ -564,14 +326,14 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 
 			if (enabled_eqlt && (l + 1) % p->period_eqlt == 0) {
 				profile_begin(meas_eq);
-				measure_eqlt(p, sign, Gu, Gd, m_eq);
+				measure_eqlt(p, sign, gu, gd, m_eq);
 				profile_end(meas_eq);
 			}
 		}
 
 		if (enabled_uneqlt && s->sweep % p->period_uneqlt == 0) {
 			profile_begin(meas_uneq);
-			measure_uneqlt(p, sign, Gu, Gd, m_ue);
+			measure_uneqlt(p, sign, gu, gd, m_ue);
 			profile_end(meas_uneq);
 		}
 	}
@@ -600,15 +362,15 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	my_free(worku);
 	my_free(site_order);
 	#ifdef CHECK_G_ACC
-	my_free(Gdacc);
-	my_free(Guacc);
+	my_free(gdacc);
+	my_free(guacc);
 	#endif
 	#ifdef CHECK_G_WRP
-	my_free(Gdwrp);
-	my_free(Guwrp);
+	my_free(gdwrp);
+	my_free(guwrp);
 	#endif
-	my_free(Gd);
-	my_free(Gu);
+	my_free(gd);
+	my_free(gu);
 	my_free(Cd);
 	my_free(Cu);
 	my_free(Bd);
