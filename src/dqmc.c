@@ -39,19 +39,19 @@
 	} \
 } while (0);
 
-#define calcinvBu(invB, l) do { \
+#define calciBu(iB, l) do { \
 	for (int i = 0; i < N; i++) { \
 		const double el = exp_lambda[i + N*!hs[i + N*(l)]]; \
 		for (int j = 0; j < N; j++) \
-			(invB)[i + N*j] = el * inv_exp_K[i + N*j]; \
+			(iB)[i + N*j] = el * inv_exp_K[i + N*j]; \
 	} \
 } while (0);
 
-#define calcinvBd(invB, l) do { \
+#define calciBd(iB, l) do { \
 	for (int i = 0; i < N; i++) { \
 		const double el = exp_lambda[i + N*hs[i + N*(l)]]; \
 		for (int j = 0; j < N; j++) \
-			(invB)[i + N*j] = el * inv_exp_K[i + N*j]; \
+			(iB)[i + N*j] = el * inv_exp_K[i + N*j]; \
 	} \
 } while (0);
 
@@ -73,10 +73,12 @@ static void dqmc(struct sim_data *sim)
 	const int stride = DBL_ALIGN * ((N*N + DBL_ALIGN - 1) / DBL_ALIGN);
 	__assume(stride % DBL_ALIGN == 0);
 
-	double *const restrict Bu = my_calloc(stride*L * sizeof(double)); _aa(Bu);
-	double *const restrict Bd = my_calloc(stride*L * sizeof(double)); _aa(Bd);
-	double *const restrict Cu = my_calloc(stride*F * sizeof(double)); _aa(Cu);
-	double *const restrict Cd = my_calloc(stride*F * sizeof(double)); _aa(Cd);
+	double *const Bu = my_calloc(stride*L * sizeof(double)); _aa(Bu);
+	double *const Bd = my_calloc(stride*L * sizeof(double)); _aa(Bd);
+	double *const iBu = my_calloc(stride*L * sizeof(double)); _aa(iBu);
+	double *const iBd = my_calloc(stride*L * sizeof(double)); _aa(iBd);
+	double *const Cu = my_calloc(stride*F * sizeof(double)); _aa(Cu);
+	double *const Cd = my_calloc(stride*F * sizeof(double)); _aa(Cd);
 	double *const restrict gu = my_calloc(N*N * sizeof(double)); _aa(gu);
 	double *const restrict gd = my_calloc(N*N * sizeof(double)); _aa(gd);
 	#ifdef CHECK_G_WRP
@@ -115,6 +117,9 @@ static void dqmc(struct sim_data *sim)
 	{
 	#pragma omp section
 	{
+	if (sim->p.period_uneqlt > 0)
+		for (int l = 0; l < L; l++)
+			calciBu(iBu + stride*l, l);
 	for (int f = 0; f < F; f++) {
 		calcBu(Bu + stride*f*n_matmul, f*n_matmul);
 		my_copy(Cu + stride*f, Bu + stride*f*n_matmul, N*N);
@@ -125,10 +130,13 @@ static void dqmc(struct sim_data *sim)
 		}
 	}
 	signu = calc_eq_g(0, N, stride, F, Cu, gu, tmpNN1u, tmpNN2u,
-		          tmpN1u, tmpN2u, tmpN3u, pvtu, worku, lwork);
+	                  tmpN1u, tmpN2u, tmpN3u, pvtu, worku, lwork);
 	}
 	#pragma omp section
 	{
+	if (sim->p.period_uneqlt > 0)
+		for (int l = 0; l < L; l++)
+			calciBu(iBu + stride*l, l);
 	for (int f = 0; f < F; f++) {
 		calcBd(Bd + stride*f*n_matmul, f*n_matmul);
 		my_copy(Cd + stride*f, Bd + stride*f*n_matmul, N*N);
@@ -139,7 +147,7 @@ static void dqmc(struct sim_data *sim)
 		}
 	}
 	signd = calc_eq_g(0, N, stride, F, Cd, gd, tmpNN1d, tmpNN2d,
-		          tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
+	                  tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
 	}
 	}
 	sign = signu*signd;
@@ -166,20 +174,26 @@ static void dqmc(struct sim_data *sim)
 			#pragma omp section
 			{
 			profile_begin(multb);
-			calcBu(Bu + stride*l, l);
+			double *const restrict Bul = Bu + stride*l; _aa(Bul);
+			double *const restrict iBul = iBu + stride*l; _aa(iBul);
+			double *const restrict Cuf = Cu + stride*f; _aa(Cuf);
+			calcBu(Bul, l);
 			if (l % n_matmul == 0) {
-				my_copy(Cu + stride*f, Bu + stride*l, N*N);
+				my_copy(Cuf, Bul, N*N);
 			} else {
-				my_copy(tmpNN1u, Cu + stride*f, N*N);
-				matmul(Cu + stride*f, Bu + stride*l, tmpNN1u);
+				my_copy(tmpNN1u, Cuf, N*N);
+				matmul(Cuf, Bul, tmpNN1u);
 			}
+			if (!recalc || sim->p.period_uneqlt > 0)
+				calciBu(iBul, l);
 			profile_end(multb);
 			if (recalc) {
 				profile_begin(recalc);
 				#ifdef CHECK_G_WRP
-				calcinvBu(tmpNN1u, l);
-				matmul(tmpNN2u, gu, tmpNN1u);
-				matmul(guwrp, Bu + stride*l, tmpNN2u);
+				if (sim->p.period_uneqlt == 0)
+					calciBu(iBu + stride*l, l);
+				matmul(tmpNN1u, gu, iBu + stride*l);
+				matmul(guwrp, Bu + stride*l, tmpNN1u);
 				#endif
 				#ifdef CHECK_G_ACC
 				calc_eq_g((l + 1) % L, N, stride, L, Bu, guacc,
@@ -192,29 +206,34 @@ static void dqmc(struct sim_data *sim)
 				profile_end(recalc);
 			} else {
 				profile_begin(wrap);
-				calcinvBu(tmpNN1u, l);
-				matmul(tmpNN2u, gu, tmpNN1u);
-				matmul(gu, Bu + stride*l, tmpNN2u);
+				matmul(tmpNN1u, gu, iBul);
+				matmul(gu, Bul, tmpNN1u);
 				profile_end(wrap);
 			}
 			}
 			#pragma omp section
 			{
 			profile_begin(multb);
-			calcBd(Bd + stride*l, l)
+			double *const restrict Bdl = Bd + stride*l; _aa(Bdl);
+			double *const restrict iBdl = iBd + stride*l; _aa(iBdl);
+			double *const restrict Cdf = Cd + stride*f; _aa(Cdf);
+			calcBd(Bdl, l)
 			if (l % n_matmul == 0) {
-				my_copy(Cd + stride*f, Bd + stride*l, N*N);
+				my_copy(Cdf, Bdl, N*N);
 			} else {
-				my_copy(tmpNN1d, Cd + stride*f, N*N);
-				matmul(Cd + stride*f, Bd + stride*l, tmpNN1d);
+				my_copy(tmpNN1d, Cdf, N*N);
+				matmul(Cdf, Bdl, tmpNN1d);
 			}
+			if (!recalc || sim->p.period_uneqlt > 0)
+				calciBd(iBdl, l);
 			profile_end(multb);
 			if (recalc) {
 				profile_begin(recalc);
 				#ifdef CHECK_G_WRP
-				calcinvBd(tmpNN1d, l);
-				matmul(tmpNN2d, gd, tmpNN1d);
-				matmul(gdwrp, Bd + stride*l, tmpNN2d);
+				if (sim->p.period_uneqlt == 0)
+					calciBd(iBd + stride*l, l);
+				matmul(tmpNN1d, gd, iBd + stride*l);
+				matmul(gdwrp, Bd + stride*l, tmpNN1d);
 				#endif
 				#ifdef CHECK_G_ACC
 				calc_eq_g((l + 1) % L, N, stride, L, Bd, gdacc,
@@ -227,9 +246,8 @@ static void dqmc(struct sim_data *sim)
 				profile_end(recalc);
 			} else {
 				profile_begin(wrap);
-				calcinvBd(tmpNN1d, l);
-				matmul(tmpNN2d, gd, tmpNN1d);
-				matmul(gd, Bd + stride*l, tmpNN2d);
+				matmul(tmpNN1d, gd, iBdl);
+				matmul(gd, Bdl, tmpNN1d);
 				profile_end(wrap);
 			}
 			}
@@ -313,6 +331,8 @@ static void dqmc(struct sim_data *sim)
 	my_free(gu);
 	my_free(Cd);
 	my_free(Cu);
+	my_free(iBd);
+	my_free(iBu);
 	my_free(Bd);
 	my_free(Bu);
 }
