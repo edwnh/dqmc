@@ -3,20 +3,18 @@
 #include "rand.h"
 #include "util.h"
 
-int update_delayed(const int N, const int n_delay, const double *const restrict del,
+void update_delayed(const int N, const int n_delay, const double *const restrict del,
+		const int *const restrict site_order,
 		uint64_t *const restrict rng, int *const restrict hs,
-		double *const restrict gu, double *const restrict gd,
-		int *const restrict site_order,
+		double *const restrict gu, double *const restrict gd, int *const restrict sign,
 		double *const restrict au, double *const restrict bu, double *const restrict du,
 		double *const restrict ad, double *const restrict bd, double *const restrict dd)
 {
 	_aa(gu); _aa(gd); _aa(au); _aa(bu); _aa(du); _aa(ad); _aa(bd); _aa(dd);
 
-	int sign = 1;
 	int k = 0;
 	for (int j = 0; j < N; j++) du[j] = gu[j + N*j];
 	for (int j = 0; j < N; j++) dd[j] = gd[j + N*j];
-	shuffle(rng, N, site_order);
 	for (int ii = 0; ii < N; ii++) {
 		const int i = site_order[ii];
 		const double delu = del[i + N*hs[i]];
@@ -54,7 +52,7 @@ int update_delayed(const int N, const int n_delay, const double *const restrict 
 			}
 			k++;
 			hs[i] = !hs[i];
-			if (prob < 0) sign *= -1;
+			if (prob < 0) *sign *= -1;
 		}
 		if (k == n_delay) {
 			k = 0;
@@ -82,21 +80,18 @@ int update_delayed(const int N, const int n_delay, const double *const restrict 
 	#pragma omp section
 	dgemm("N", "T", &N, &N, &k, cdbl(1.0), ad, &N, bd, &N, cdbl(1.0), gd, &N);
 	}
-	return sign;
 }
 
 /*
-int update_shermor(const int N, const double *const restrict del,
+void update_shermor(const int N, const double *const restrict del,
+		const int *const restrict site_order,
 		uint64_t *const restrict rng, int *const restrict hs,
-		double *const restrict gu, double *const restrict gd,
-		int *const restrict site_order,
+		double *const restrict gu, double *const restrict gd, int *const restrict sign,
 		double *const restrict cu, double *const restrict du,
 		double *const restrict cd, double *const restrict dd)
 {
 	_aa(gu); _aa(gd); _aa(cu); _aa(du); _aa(cd); _aa(dd);
 
-	int sign = 1;
-	shuffle(rng, N, site_order);
 	for (int ii = 0; ii < N; ii++) {
 		const int i = site_order[ii];
 		const double delu = del[i + N*hs[i]];
@@ -118,16 +113,15 @@ int update_shermor(const int N, const double *const restrict del,
 			dger(&N, &N, &ad, cd, cint(1), dd, cint(1), gd, &N);
 
 			hs[i] = !hs[i];
-			if (prob < 0) sign *= -1;
+			if (prob < 0) *sign *= -1;
 		}
 	}
-	return sign;
 }
 
-int update_submat(const int N, const int q, const double *const restrict del,
+void update_submat(const int N, const int q, const double *const restrict del,
+		const int *const restrict site_order,
 		uint64_t *const restrict rng, int *const restrict hs,
-		double *const restrict gu, double *const restrict gd,
-		int *const restrict site_order,
+		double *const restrict gu, double *const restrict gd, int *const restrict sign,
 		double *const restrict gr_u, double *const restrict g_ru,
 		double *const restrict DDu, double *const restrict yu, double *const restrict xu,
 		double *const restrict gr_d, double *const restrict g_rd,
@@ -136,9 +130,8 @@ int update_submat(const int N, const int q, const double *const restrict del,
 	int *const restrict r = my_calloc(q * sizeof(int)); _aa(r);
 	double *const restrict LUu = my_calloc(q*q * sizeof(double)); _aa(LUu);
 	double *const restrict LUd = my_calloc(q*q * sizeof(double)); _aa(LUd);
-	int sign = 1;
+
 	int k = 0;
-	shuffle(rng, N, site_order);
 	for (int ii = 0; ii < N; ii++) {
 		const int i = site_order[ii];
 		const double delu = del[i + N*hs[i]];
@@ -176,7 +169,7 @@ int update_submat(const int N, const int q, const double *const restrict del,
 			LUd[k + q*k] = dd;
 			k++;
 			hs[i] = !hs[i];
-			if (prob < 0) sign *= -1;
+			if (prob < 0) *sign *= -1;
 		}
 
 		if (k == q || (ii == N - 1 && k > 0)) {
@@ -204,6 +197,5 @@ int update_submat(const int N, const int q, const double *const restrict del,
 	my_free(LUd);
 	my_free(LUu);
 	my_free(r);
-	return sign;
 }
 */

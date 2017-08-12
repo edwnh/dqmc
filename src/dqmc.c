@@ -6,6 +6,7 @@
 #include "eq_g.h"
 #include "meas.h"
 #include "prof.h"
+#include "rand.h"
 #include "sig.h"
 #include "time_.h"
 #include "updates.h"
@@ -150,8 +151,11 @@ static void dqmc(struct sim_data *sim)
 
 		for (int l = 0; l < L; l++) {
 			profile_begin(updates);
-			sign *= update_delayed(N, n_delay, del, rng, hs + N*l, gu, gd, site_order,
-			                       tmpNN1u, tmpNN2u, tmpN1u, tmpNN1d, tmpNN2d, tmpN1d);
+			shuffle(rng, N, site_order);
+			update_delayed(N, n_delay, del, site_order,
+			               rng, hs + N*l, gu, gd, &sign,
+			               tmpNN1u, tmpNN2u, tmpN1u,
+			               tmpNN1d, tmpNN2d, tmpN1d);
 			profile_end(updates);
 
 			const int f = l / n_matmul;
