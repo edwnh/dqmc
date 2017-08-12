@@ -2,8 +2,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <mkl.h>
+#include "data.h"
 #include "eq_g.h"
-#include "io.h"
 #include "meas.h"
 #include "prof.h"
 #include "sig.h"
@@ -54,26 +54,26 @@
 	} \
 } while (0);
 
-static void dqmc(const struct params *p, struct state *s,
-		struct meas_eqlt *m_eq, struct meas_uneqlt *m_ue)
+static void dqmc(struct sim_data *sim)
 {
-	const int N = p->N;
-	const int n_matmul = p->n_matmul;
-	const int n_delay = p->n_delay;
-	const int F = p->F;
-	const double *const restrict exp_K = p->exp_K; _aa(exp_K);
-	const double *const restrict inv_exp_K = p->inv_exp_K; _aa(inv_exp_K);
-	const double *const restrict exp_lambda = p->exp_lambda; _aa(exp_lambda);
-	const double *const restrict del = p->del; _aa(del);
-	uint64_t *const restrict rng = s->rng; _aa(rng);
-	int *const restrict hs = s->hs;
+	const int N = sim->p.N;
+	const int L = sim->p.L;
+	const int n_matmul = sim->p.n_matmul;
+	const int n_delay = sim->p.n_delay;
+	const int F = sim->p.F;
+	const double *const restrict exp_K = sim->p.exp_K; _aa(exp_K);
+	const double *const restrict inv_exp_K = sim->p.inv_exp_K; _aa(inv_exp_K);
+	const double *const restrict exp_lambda = sim->p.exp_lambda; _aa(exp_lambda);
+	const double *const restrict del = sim->p.del; _aa(del);
+	uint64_t *const restrict rng = sim->s.rng; _aa(rng);
+	int *const restrict hs = sim->s.hs;
 
 	// stride for time index in arrays of B or C matrices
 	const int stride = DBL_ALIGN * ((N*N + DBL_ALIGN - 1) / DBL_ALIGN);
 	__assume(stride % DBL_ALIGN == 0);
 
-	double *const restrict Bu = my_calloc(stride*p->L * sizeof(double)); _aa(Bu);
-	double *const restrict Bd = my_calloc(stride*p->L * sizeof(double)); _aa(Bd);
+	double *const restrict Bu = my_calloc(stride*L * sizeof(double)); _aa(Bu);
+	double *const restrict Bd = my_calloc(stride*L * sizeof(double)); _aa(Bd);
 	double *const restrict Cu = my_calloc(stride*F * sizeof(double)); _aa(Cu);
 	double *const restrict Cd = my_calloc(stride*F * sizeof(double)); _aa(Cd);
 	double *const restrict gu = my_calloc(N*N * sizeof(double)); _aa(gu);
@@ -144,11 +144,11 @@ static void dqmc(const struct params *p, struct state *s,
 	sign = signu*signd;
 	}
 
-	for (; s->sweep < p->n_sweep; s->sweep++) {
-		if (sig_check_state(s->sweep, p->n_sweep_warm, p->n_sweep) != 0)
+	for (; sim->s.sweep < sim->p.n_sweep; sim->s.sweep++) {
+		if (sig_check_state(sim->s.sweep, sim->p.n_sweep_warm, sim->p.n_sweep) != 0)
 			break;
 
-		for (int l = 0; l < p->L; l++) {
+		for (int l = 0; l < L; l++) {
 			profile_begin(updates);
 			sign *= update_delayed(N, n_delay, del, rng, hs + N*l, gu, gd, site_order,
 			                       tmpNN1u, tmpNN2u, tmpN1u, tmpNN1d, tmpNN2d, tmpN1d);
@@ -178,7 +178,7 @@ static void dqmc(const struct params *p, struct state *s,
 				matmul(guwrp, Bu + stride*l, tmpNN2u);
 				#endif
 				#ifdef CHECK_G_ACC
-				calc_eq_g((l + 1) % p->L, N, stride, p->L, Bu, guacc,
+				calc_eq_g((l + 1) % L, N, stride, L, Bu, guacc,
 				          tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				          tmpN3u, pvtu, worku, lwork);
 				#endif
@@ -213,7 +213,7 @@ static void dqmc(const struct params *p, struct state *s,
 				matmul(gdwrp, Bd + stride*l, tmpNN2d);
 				#endif
 				#ifdef CHECK_G_ACC
-				calc_eq_g((l + 1) % p->L, N, stride, p->L, Bd, gdacc,
+				calc_eq_g((l + 1) % L, N, stride, L, Bd, gdacc,
 				          tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				          tmpN3d, pvtd, workd, lwork);
 				#endif
@@ -265,19 +265,19 @@ static void dqmc(const struct params *p, struct state *s,
 
 			if (recalc) sign = signu*signd;
 
-			if ((s->sweep >= p->n_sweep_warm) &&
-					(p->period_eqlt > 0) &&
-					(l + 1) % p->period_eqlt == 0) {
+			if ((sim->s.sweep >= sim->p.n_sweep_warm) &&
+					(sim->p.period_eqlt > 0) &&
+					(l + 1) % sim->p.period_eqlt == 0) {
 				profile_begin(meas_eq);
-				measure_eqlt(p, sign, gu, gd, m_eq);
+				measure_eqlt(&sim->p, sign, gu, gd, &sim->m_eq);
 				profile_end(meas_eq);
 			}
 		}
 
-		if ((s->sweep >= p->n_sweep_warm) && (p->period_uneqlt > 0) &&
-				s->sweep % p->period_uneqlt == 0) {
+		if ((sim->s.sweep >= sim->p.n_sweep_warm) && (sim->p.period_uneqlt > 0) &&
+				sim->s.sweep % sim->p.period_uneqlt == 0) {
 			profile_begin(meas_uneq);
-			measure_uneqlt(p, sign, gu, gd, m_ue);
+			measure_uneqlt(&sim->p, sign, gu, gd, &sim->m_ue);
 			profile_end(meas_uneq);
 		}
 	}
@@ -319,6 +319,8 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 	const tick_t wall_start = time_wall();
 	profile_clear();
 
+	int status = 0;
+
 	// open log file
 	FILE *log = (log_file != NULL) ? fopen(log_file, "a") : stdout;
 	if (log == NULL) {
@@ -332,89 +334,45 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 	// initialize signal handling
 	sig_init(log, wall_start, max_time);
 
-	// open and read simulation file into structs
-	int status = 0;
-	struct params *p = my_calloc(sizeof(struct params));
-	struct state *s = my_calloc(sizeof(struct state));
-	struct meas_eqlt *m_eq = my_calloc(sizeof(struct meas_eqlt));
-	struct meas_uneqlt *m_ue = my_calloc(sizeof(struct meas_uneqlt));
-
+	// open and read simulation file
+	struct sim_data *sim = my_calloc(sizeof(struct sim_data));
 	fprintf(log, "opening %s\n", sim_file);
-	profile_begin(read_file);
-	status = read_file(sim_file, p, s, m_eq, m_ue);
-	profile_end(read_file);
+	status = sim_data_read_alloc(sim, sim_file);
 	if (status < 0) {
 		fprintf(stderr, "read_file() failed: %d\n", status);
 		status = -1;
 		goto cleanup;
 	}
 
-	// if no uneqlt measurements, free m_ue and set to NULL
-	if (p->period_uneqlt == 0) {
-		my_free(m_ue);
-		m_ue = NULL;
-	}
-
 	// check existing progress
-	fprintf(log, "%d/%d sweeps completed\n", s->sweep, p->n_sweep);
-	if (s->sweep >= p->n_sweep) {
+	fprintf(log, "%d/%d sweeps completed\n", sim->s.sweep, sim->p.n_sweep);
+	if (sim->s.sweep >= sim->p.n_sweep) {
 		fprintf(log, "already finished\n");
-		status = 0;
 		goto cleanup;
 	}
 
+	// run dqmc
 	fprintf(log, "starting dqmc\n");
-	dqmc(p, s, m_eq, m_ue);
-	fprintf(log, "%d/%d sweeps completed\n", s->sweep, p->n_sweep);
+	dqmc(sim);
+	fprintf(log, "%d/%d sweeps completed\n", sim->s.sweep, sim->p.n_sweep);
 
+	// save to simulation file
 	fprintf(log, "saving data\n");
-	profile_begin(save_file);
-	status = save_file(sim_file, s, m_eq, m_ue);
-	profile_end(save_file);
+	status = sim_data_save(sim, sim_file);
 	if (status < 0) {
 		fprintf(stderr, "save_file() failed: %d\n", status);
 		status = -1;
 		goto cleanup;
 	}
 
-	status = (s->sweep == p->n_sweep) ? 0 : 1;
+	status = (sim->s.sweep == sim->p.n_sweep) ? 0 : 1;
 
 cleanup:
-	if (m_ue != NULL) {
-		my_free(m_ue->pair_sw);
-		my_free(m_ue->zz);
-		my_free(m_ue->xx);
-		my_free(m_ue->nn);
-		my_free(m_ue->gt0);
-		my_free(m_ue->g0t);
-	}
-	my_free(m_eq->pair_sw);
-	my_free(m_eq->zz);
-	my_free(m_eq->xx);
-	my_free(m_eq->nn);
-	my_free(m_eq->g00);
-	my_free(m_eq->double_occ);
-	my_free(m_eq->density);
-	my_free(s->hs);
-	my_free(p->del);
-	my_free(p->exp_lambda);
-	my_free(p->inv_exp_K);
-	my_free(p->exp_K);
-	my_free(p->degen_ij);
-	my_free(p->degen_i);
-//	my_free(p->U);
-//	my_free(p->K);
-	my_free(p->map_ij);
-	my_free(p->map_i);
-
-	my_free(m_ue);
-	my_free(m_eq);
-	my_free(s);
-	my_free(p);
+	sim_data_free(sim);
+	my_free(sim);
 
 	const tick_t wall_time = time_wall() - wall_start;
 	fprintf(log, "wall time: %.3f\n", wall_time * SEC_PER_TICK);
-
 	profile_print(log, wall_time);
 
 	if (log != stdout)

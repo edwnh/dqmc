@@ -13,9 +13,7 @@
 	X(recalc) \
 	X(wrap) \
 	X(meas_eq) \
-	X(meas_uneq) \
-	X(read_file) \
-	X(save_file)
+	X(meas_uneq)
 
 #define X(a) __profile_##a,
 enum {

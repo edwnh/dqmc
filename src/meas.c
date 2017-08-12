@@ -1,5 +1,5 @@
 #include "meas.h"
-#include "util.h"
+#include "data.h"
 
 void measure_eqlt(const struct params *const restrict p, const int sign,
 		const double *const restrict Gu,
