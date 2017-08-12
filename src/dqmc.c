@@ -1,55 +1,60 @@
 #include "dqmc.h"
 #include <math.h>
-#include <signal.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <mkl.h>
 #include "eq_g.h"
 #include "io.h"
 #include "meas.h"
 #include "prof.h"
+#include "sig.h"
 #include "time_.h"
 #include "updates.h"
 #include "util.h"
 
-// uncomment below to check recalculated g against wrapped g
+// uncomment to check recalculated g against wrapped g
 // #define CHECK_G_WRP
 
-// uncomment below check recalculated g against using QR for every 2nd multiply
+// uncomment to check recalculated g against using QR for every 2nd multiply
 // #define CHECK_G_ACC
 
-static volatile sig_atomic_t progress_flag = 0;
-static void progress(int signum) { progress_flag = 1; }
+// who needs function calls
+#define matmul(C, A, B) do { \
+	dgemm("N", "N", &N, &N, &N, cdbl(1.0), (A), &N, (B), &N, cdbl(0.0), (C), &N); \
+} while (0);
 
-static volatile sig_atomic_t stop_flag = 0;
-static void stop(int signum) { stop_flag = signum; }
+#define calcBu(B, l) do { \
+	for (int j = 0; j < N; j++) { \
+		const double el = exp_lambda[j + N*hs[j + N*(l)]]; \
+		for (int i = 0; i < N; i++) \
+			(B)[i + N*j] = exp_K[i + N*j] * el; \
+	} \
+} while (0);
 
-static void print_progress(FILE *log, const tick_t wall_start,
-		const tick_t t_first, const tick_t t_now, const int first,
-		const int sweep, const int n_sweep_warm, const int n_sweep)
-{
-	const int warmed_up = (sweep >= n_sweep_warm);
-	const double t_elapsed = (t_now - wall_start)/1e9;
-	const double t_done = (t_now - t_first)/1e9;
-	const int sweep_done = sweep - first;
-	const int sweep_left = n_sweep - sweep;
-	const double t_left = (t_done / sweep_done) * sweep_left;
-	fprintf(log, "%d/%d sweeps completed (%s)\n",
-	        sweep,
-	        n_sweep,
-	        warmed_up ? "measuring" : "warming up");
-	fprintf(log, "\telapsed: %.3f%c\n",
-	        t_elapsed < 3600 ? t_elapsed : t_elapsed/3600,
-	        t_elapsed < 3600 ? 's' : 'h');
-	fprintf(log, "\tremaining%s: %.3f%c\n",
-	        (first < n_sweep_warm) ? " (ignoring measurement cost)" : "",
-	        t_left < 3600 ? t_left : t_left/3600,
-	        t_left < 3600 ? 's' : 'h');
-	fflush(log);
-}
+#define calcBd(B, l) do { \
+	for (int j = 0; j < N; j++) { \
+		const double el = exp_lambda[j + N*!hs[j + N*(l)]]; \
+		for (int i = 0; i < N; i++) \
+			(B)[i + N*j] = exp_K[i + N*j] * el; \
+	} \
+} while (0);
 
-static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
-		const struct params *p, struct state *s,
+#define calcinvBu(invB, l) do { \
+	for (int i = 0; i < N; i++) { \
+		const double el = exp_lambda[i + N*!hs[i + N*(l)]]; \
+		for (int j = 0; j < N; j++) \
+			(invB)[i + N*j] = el * inv_exp_K[i + N*j]; \
+	} \
+} while (0);
+
+#define calcinvBd(invB, l) do { \
+	for (int i = 0; i < N; i++) { \
+		const double el = exp_lambda[i + N*hs[i + N*(l)]]; \
+		for (int j = 0; j < N; j++) \
+			(invB)[i + N*j] = el * inv_exp_K[i + N*j]; \
+	} \
+} while (0);
+
+static void dqmc(const struct params *p, struct state *s,
 		struct meas_eqlt *m_eq, struct meas_uneqlt *m_ue)
 {
 	const int N = p->N;
@@ -103,43 +108,6 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	double *const restrict tmpN3d = my_calloc(N * sizeof(double)); _aa(tmpN3d);
 	int *const restrict pvtd = my_calloc(N * sizeof(int)); _aa(pvtd);
 
-	// who needs function calls
-	#define matmul(C, A, B) do { \
-		dgemm("N", "N", &N, &N, &N, cdbl(1.0), (A), &N, (B), &N, cdbl(0.0), (C), &N); \
-	} while (0);
-
-	#define calcBu(B, l) do { \
-		for (int j = 0; j < N; j++) { \
-			const double el = exp_lambda[j + N*hs[j + N*(l)]]; \
-			for (int i = 0; i < N; i++) \
-				(B)[i + N*j] = exp_K[i + N*j] * el; \
-		} \
-	} while (0);
-
-	#define calcBd(B, l) do { \
-		for (int j = 0; j < N; j++) { \
-			const double el = exp_lambda[j + N*!hs[j + N*(l)]]; \
-			for (int i = 0; i < N; i++) \
-				(B)[i + N*j] = exp_K[i + N*j] * el; \
-		} \
-	} while (0);
-
-	#define calcinvBu(invB, l) do { \
-		for (int i = 0; i < N; i++) { \
-			const double el = exp_lambda[i + N*!hs[i + N*(l)]]; \
-			for (int j = 0; j < N; j++) \
-				(invB)[i + N*j] = el * inv_exp_K[i + N*j]; \
-		} \
-	} while (0);
-
-	#define calcinvBd(invB, l) do { \
-		for (int i = 0; i < N; i++) { \
-			const double el = exp_lambda[i + N*hs[i + N*(l)]]; \
-			for (int j = 0; j < N; j++) \
-				(invB)[i + N*j] = el * inv_exp_K[i + N*j]; \
-		} \
-	} while (0);
-
 	{
 	int signu, signd;
 	#pragma omp parallel sections
@@ -176,36 +144,9 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	sign = signu*signd;
 	}
 
-	// these are used to estimate remaining time in print_progress
-	int first = s->sweep;
-	tick_t t_first = time_wall();
-
 	for (; s->sweep < p->n_sweep; s->sweep++) {
-		const int warmed_up = (s->sweep >= p->n_sweep_warm);
-		const int enabled_eqlt = warmed_up && (p->period_eqlt > 0);
-		const int enabled_uneqlt = warmed_up && (p->period_uneqlt > 0);
-
-		const tick_t t_now = time_wall();
-		if (max_time > 0 && t_now >= wall_start + max_time)
-			stop_flag = -1;
-
-		// signal handling
-		if (stop_flag != 0 || progress_flag != 0) {
-			progress_flag = 0;
-			print_progress(log, wall_start, t_first, t_now, first,
-			               s->sweep, p->n_sweep_warm, p->n_sweep);
-		}
-		if (s->sweep == p->n_sweep_warm) {
-			first = s->sweep;
-			t_first = t_now;
-		}
-		if (stop_flag != 0) {
-			if (stop_flag < 0)
-				fprintf(log, "reached time limit, checkpointing\n");
-			else
-				fprintf(log, "signal %d received, checkpointing\n", stop_flag);
+		if (sig_check_state(s->sweep, p->n_sweep_warm, p->n_sweep) != 0)
 			break;
-		}
 
 		for (int l = 0; l < p->L; l++) {
 			profile_begin(updates);
@@ -324,27 +265,22 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 
 			if (recalc) sign = signu*signd;
 
-			if (enabled_eqlt && (l + 1) % p->period_eqlt == 0) {
+			if ((s->sweep >= p->n_sweep_warm) &&
+					(p->period_eqlt > 0) &&
+					(l + 1) % p->period_eqlt == 0) {
 				profile_begin(meas_eq);
 				measure_eqlt(p, sign, gu, gd, m_eq);
 				profile_end(meas_eq);
 			}
 		}
 
-		if (enabled_uneqlt && s->sweep % p->period_uneqlt == 0) {
+		if ((s->sweep >= p->n_sweep_warm) && (p->period_uneqlt > 0) &&
+				s->sweep % p->period_uneqlt == 0) {
 			profile_begin(meas_uneq);
 			measure_uneqlt(p, sign, gu, gd, m_ue);
 			profile_end(meas_uneq);
 		}
 	}
-	#undef calcinvBd
-	#undef calcinvBu
-	#undef calcBd
-	#undef calcBu
-	#undef matmul
-
-	if (stop_flag == 0) // if all sweeps done
-		fprintf(log, "%d/%d sweeps completed\n", s->sweep, p->n_sweep);
 
 	my_free(pvtd);
 	my_free(tmpN3d);
@@ -377,22 +313,11 @@ static void dqmc(FILE *log, const tick_t wall_start, const tick_t max_time,
 	my_free(Bu);
 }
 
-// returns -1 for failure, 0 for completion, 1 for partial completion
 int dqmc_wrapper(const char *sim_file, const char *log_file,
 		const tick_t max_time)
 {
 	const tick_t wall_start = time_wall();
-
 	profile_clear();
-
-	// initialize signal handlers first time dqmc_wrapper() is called
-	static int sigaction_called = 0;
-	if (sigaction_called == 0) {
-		sigaction_called = 1;
-		sigaction(SIGUSR1, &(const struct sigaction){.sa_handler = progress}, NULL);
-		sigaction(SIGINT, &(const struct sigaction){.sa_handler = stop}, NULL);
-		sigaction(SIGTERM, &(const struct sigaction){.sa_handler = stop}, NULL);
-	}
 
 	// open log file
 	FILE *log = (log_file != NULL) ? fopen(log_file, "a") : stdout;
@@ -403,6 +328,9 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 
 	fprintf(log, "commit id %s\n", GIT_ID);
 	fprintf(log, "compiled on %s %s\n", __DATE__, __TIME__);
+
+	// initialize signal handling
+	sig_init(log, wall_start, max_time);
 
 	// open and read simulation file into structs
 	int status = 0;
@@ -436,7 +364,8 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 	}
 
 	fprintf(log, "starting dqmc\n");
-	dqmc(log, wall_start, max_time, p, s, m_eq, m_ue);
+	dqmc(p, s, m_eq, m_ue);
+	fprintf(log, "%d/%d sweeps completed\n", s->sweep, p->n_sweep);
 
 	fprintf(log, "saving data\n");
 	profile_begin(save_file);
