@@ -1,5 +1,4 @@
-#ifndef _DATA_H
-#define _DATA_H
+#pragma once
 
 #include <stdint.h>
 
@@ -64,5 +63,3 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file);
 int sim_data_save(const struct sim_data *sim, const char *file);
 
 void sim_data_free(const struct sim_data *sim);
-
-#endif

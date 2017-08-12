@@ -1,5 +1,4 @@
-#ifndef _UTIL_H
-#define _UTIL_H
+#pragma once
 
 #include <string.h>
 #include <mkl.h>
@@ -20,5 +19,3 @@
 // use these since fortran blas/lapack functions take pointers for arguments
 #define cint(x) &(const int){(x)}
 #define cdbl(x) &(const double){(x)}
-
-#endif

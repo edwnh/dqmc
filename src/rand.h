@@ -1,5 +1,4 @@
-#ifndef _RAND_H
-#define _RAND_H
+#pragma once
 
 #include <stdint.h>
 
@@ -31,5 +30,3 @@ static inline void shuffle(uint64_t *rng, const int n, int *a)
 		a[j] = i;
 	}
 }
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef _PROF_H
-#define _PROF_H
+#pragma once
 
 #ifdef PROFILE_ENABLE
 
@@ -45,7 +44,5 @@ void profile_clear(void);
 #define profile_end(a) ((void)0)
 #define profile_print(a, b) ((void)0)
 #define profile_clear() ((void)0)
-
-#endif
 
 #endif

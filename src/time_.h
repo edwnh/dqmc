@@ -1,5 +1,4 @@
-#ifndef _TIME__H
-#define _TIME__H
+#pragma once
 
 #include <stdint.h>
 #include <time.h>
@@ -16,5 +15,3 @@ static inline tick_t time_wall(void)
 	clock_gettime(CLOCK_MONOTONIC, &t);
 	return t.tv_sec * TICK_PER_SEC + t.tv_nsec;
 }
-
-#endif

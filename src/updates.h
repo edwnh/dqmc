@@ -1,5 +1,4 @@
-#ifndef _UPDATES_H
-#define _UPDATES_H
+#pragma once
 
 #include <stdint.h>
 
@@ -32,5 +31,3 @@ int update_submat(const int N, const int q, const double *const restrict del,
 		double *const restrict Gr_d, double *const restrict G_rd,
 		double *const restrict DDd, double *const restrict yd, double *const restrict xd);
 */
-
-#endif
