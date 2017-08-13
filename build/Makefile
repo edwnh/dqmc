@@ -9,7 +9,7 @@ CFLAGS += -qopenmp  # to disable openmp, use -qopenmp-stubs
 
 LDFLAGS += -lhdf5 -lhdf5_hl
 
-SRCFILES = data.o dqmc.o eq_g.o meas.o prof.o sig.o updates.o
+SRCFILES = data.o dqmc.o eq_g.o meas.o prof.o sig.o uneq_g.o updates.o
 
 all: one mpi
 

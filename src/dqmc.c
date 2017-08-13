@@ -9,6 +9,7 @@
 #include "rand.h"
 #include "sig.h"
 #include "time_.h"
+#include "uneq_g.h"
 #include "updates.h"
 #include "util.h"
 
@@ -93,9 +94,6 @@ static void dqmc(struct sim_data *sim)
 	int *const site_order = my_calloc(N * sizeof(double)); _aa(site_order);
 
 	// work arrays for calc_eq_g and stuff. two sets for easy 2x parallelization
-	const int lwork = get_lwork_eq_g(N);
-
-	double *const restrict worku = my_calloc(lwork * sizeof(double)); _aa(worku);
 	double *const restrict tmpNN1u = my_calloc(N*N * sizeof(double)); _aa(tmpNN1u);
 	double *const restrict tmpNN2u = my_calloc(N*N * sizeof(double)); _aa(tmpNN2u);
 	double *const restrict tmpN1u = my_calloc(N * sizeof(double)); _aa(tmpN1u);
@@ -103,13 +101,44 @@ static void dqmc(struct sim_data *sim)
 	double *const restrict tmpN3u = my_calloc(N * sizeof(double)); _aa(tmpN3u);
 	int *const restrict pvtu = my_calloc(N * sizeof(int)); _aa(pvtu);
 
-	double *const restrict workd = my_calloc(lwork * sizeof(double)); _aa(workd);
 	double *const restrict tmpNN1d = my_calloc(N*N * sizeof(double)); _aa(tmpNN1d);
 	double *const restrict tmpNN2d = my_calloc(N*N * sizeof(double)); _aa(tmpNN2d);
 	double *const restrict tmpN1d = my_calloc(N * sizeof(double)); _aa(tmpN1d);
 	double *const restrict tmpN2d = my_calloc(N * sizeof(double)); _aa(tmpN2d);
 	double *const restrict tmpN3d = my_calloc(N * sizeof(double)); _aa(tmpN3d);
 	int *const restrict pvtd = my_calloc(N * sizeof(int)); _aa(pvtd);
+
+	// arrays for calc_ue_g
+	double *restrict ueGu = NULL;
+	double *restrict Gredu = NULL;
+	double *restrict tauu = NULL;
+	double *restrict Qu = NULL;
+
+	double *restrict ueGd = NULL;
+	double *restrict Gredd = NULL;
+	double *restrict taud = NULL;
+	double *restrict Qd = NULL;
+
+	if (sim->p.period_uneqlt > 0) {
+		ueGu = my_calloc(N*L*N*L * sizeof(double)); _aa(ueGu);
+		Gredu = my_calloc(N*F*N*F * sizeof(double)); _aa(Gredu);
+		tauu = my_calloc(N*F * sizeof(double)); _aa(tauu);
+		Qu = my_calloc(4*N*N * sizeof(double)); _aa(Qu);
+
+		ueGd = my_calloc(N*L*N*L * sizeof(double)); _aa(ueGd);
+		Gredd = my_calloc(N*F*N*F * sizeof(double)); _aa(Gredd);
+		taud = my_calloc(N*F * sizeof(double)); _aa(taud);
+		Qd = my_calloc(4*N*N * sizeof(double)); _aa(Qd);
+	}
+
+	// lapack work arrays
+	int lwork = get_lwork_eq_g(N);
+	if (sim->p.period_uneqlt > 0) {
+		const int lwork_ue = get_lwork_ue_g(N, F);
+		if (lwork_ue > lwork) lwork = lwork_ue;
+	}
+	double *const restrict worku = my_calloc(lwork * sizeof(double)); _aa(worku);
+	double *const restrict workd = my_calloc(lwork * sizeof(double)); _aa(workd);
 
 	{
 	int signu, signd;
@@ -298,26 +327,51 @@ static void dqmc(struct sim_data *sim)
 
 		if ((sim->s.sweep >= sim->p.n_sweep_warm) && (sim->p.period_uneqlt > 0) &&
 				sim->s.sweep % sim->p.period_uneqlt == 0) {
+			#pragma omp parallel sections
+			{
+			#pragma omp section
+			{
+			calc_ue_g(N, stride, L, F, Bu, iBu, Cu,
+			          ueGu, Gredu, tauu, Qu, worku, lwork);
+			}
+			#pragma omp section
+			{
+			calc_ue_g(N, stride, L, F, Bd, iBd, Cd,
+			          ueGd, Gredd, taud, Qd, workd, lwork);
+			}
+			}
+
 			profile_begin(meas_uneq);
-			measure_uneqlt(&sim->p, sign, gu, gd, &sim->m_ue);
+			measure_uneqlt(&sim->p, sign, ueGu, ueGd, &sim->m_ue);
 			profile_end(meas_uneq);
 		}
 	}
 
+
+	my_free(workd);
+	my_free(worku);
+	if (sim->p.period_uneqlt > 0) {
+		my_free(Qd);
+		my_free(taud);
+		my_free(Gredd);
+		my_free(ueGd);
+		my_free(Qu);
+		my_free(tauu);
+		my_free(Gredu);
+		my_free(ueGu);
+	}
 	my_free(pvtd);
 	my_free(tmpN3d);
 	my_free(tmpN2d);
 	my_free(tmpN1d);
 	my_free(tmpNN2d);
 	my_free(tmpNN1d);
-	my_free(workd);
 	my_free(pvtu);
 	my_free(tmpN3u);
 	my_free(tmpN2u);
 	my_free(tmpN1u);
 	my_free(tmpNN2u);
 	my_free(tmpNN1u);
-	my_free(worku);
 	my_free(site_order);
 	#ifdef CHECK_G_ACC
 	my_free(gdacc);

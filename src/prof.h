@@ -12,6 +12,9 @@
 	X(recalc) \
 	X(wrap) \
 	X(meas_eq) \
+	X(calc_o) \
+	X(bsofi) \
+	X(expand_g) \
 	X(meas_uneq)
 
 #define X(a) __profile_##a,

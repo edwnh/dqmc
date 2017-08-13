@@ -1,10 +1,11 @@
 #include "uneq_g.h"
 #include <mkl.h>
+#include "prof.h"
 #include "util.h"
 
 #define G_BLK(i, j) (G + N*(i) + NL*N*(j))
 
-int get_lwork_ue_G(const int N, const int L)
+int get_lwork_ue_g(const int N, const int L)
 {
 	double lwork;
 	int info = 0;
@@ -215,9 +216,17 @@ void calc_ue_g(const int N, const int stride, const int L, const int F,
 		double *const restrict Q,
 		double *const restrict work, const int lwork)
 {
+	profile_begin(calc_o);
 	calc_o(N, stride, F, C, Gred);
+	profile_end(calc_o);
+
+	profile_begin(bsofi);
 	bsofi(N, F, Gred, tau, Q, work, lwork);
+	profile_end(bsofi);
+
+	profile_begin(expand_g);
 	expand_g(N, stride, L, F, B, iB, Gred, G);
+	profile_end(expand_g);
 }
 
 
