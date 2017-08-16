@@ -19,6 +19,9 @@
 // uncomment to check recalculated g against using QR for every 2nd multiply
 // #define CHECK_G_ACC
 
+// uncomment to check 0,0 block of unequal-time G against recalculated g
+// #define CHECK_G_UE
+
 // who needs function calls
 #define matmul(C, A, B) do { \
 	dgemm("N", "N", &N, &N, &N, cdbl(1.0), (A), &N, (B), &N, cdbl(0.0), (C), &N); \
@@ -56,6 +59,18 @@
 	} \
 } while (0);
 
+#define matdiff(m, n, A, ldA, B, ldB) do { \
+	double max = 0.0, avg = 0.0; \
+	for (int j = 0; j < (n); j++) \
+	for (int i = 0; i < (m); i++) { \
+		const double diff = fabs((A)[i + (ldA)*j] - (B)[i + (ldB)*j]); \
+		if (diff > max) max = diff; \
+		avg += diff; \
+	} \
+	avg /= N*N; \
+	printf(#A " - " #B ":\tmax %.3e\tavg %.3e\n", max, avg); \
+} while (0);
+
 static void dqmc(struct sim_data *sim)
 {
 	const int N = sim->p.N;
@@ -87,8 +102,8 @@ static void dqmc(struct sim_data *sim)
 	double *const restrict gdwrp = my_calloc(N*N * sizeof(double)); _aa(gdwrp);
 	#endif
 	#ifdef CHECK_G_ACC
-	double *const restrict guacc = my_calloc(N*N * sizeof(double)); _aa(guwrp);
-	double *const restrict gdacc = my_calloc(N*N * sizeof(double)); _aa(gdwrp);
+	double *const restrict guacc = my_calloc(N*N * sizeof(double)); _aa(guacc);
+	double *const restrict gdacc = my_calloc(N*N * sizeof(double)); _aa(gdacc);
 	#endif
 	int sign = 0;
 	int *const site_order = my_calloc(N * sizeof(double)); _aa(site_order);
@@ -282,37 +297,24 @@ static void dqmc(struct sim_data *sim)
 			}
 			}
 
-			#define matdiff(A, B) do { \
-				double max = 0.0, avg = 0.0; \
-				for (int i = 0; i < N*N; i++) { \
-					const double diff = fabs((A)[i] - (B)[i]); \
-					if (diff > max) max = diff; \
-					avg += diff; \
-				} \
-				avg /= N*N; \
-				printf(#A " - " #B ":\tmax %.3e\tavg %.3e\n", max, avg); \
-			} while (0);
-
 			#ifdef CHECK_G_WRP
 			if (recalc) {
-				matdiff(gu, guwrp);
-				matdiff(gd, gdwrp);
+				matdiff(N, N, gu, N, guwrp, N);
+				matdiff(N, N, gd, N, gdwrp, N);
 			}
 			#endif
 			#ifdef CHECK_G_ACC
 			if (recalc) {
-				matdiff(gu, guacc);
-				matdiff(gd, gdacc);
+				matdiff(N, N, gu, N, guacc, N);
+				matdiff(N, N, gd, N, gdacc, N);
 			}
 			#endif
 			#if defined(CHECK_G_WRP) && defined(CHECK_G_ACC)
 			if (recalc) {
-				matdiff(guwrp, guacc);
-				matdiff(gdwrp, gdacc);
+				matdiff(N, N, guwrp, N, guacc, N);
+				matdiff(N, N, gdwrp, N, gdacc, N);
 			}
 			#endif
-
-			#undef matdiff
 
 			if (recalc) sign = signu*signd;
 
@@ -330,16 +332,21 @@ static void dqmc(struct sim_data *sim)
 			#pragma omp parallel sections
 			{
 			#pragma omp section
-			{
 			calc_ue_g(N, stride, L, F, Bu, iBu, Cu,
 			          ueGu, Gredu, tauu, Qu, worku, lwork);
-			}
 			#pragma omp section
-			{
 			calc_ue_g(N, stride, L, F, Bd, iBd, Cd,
 			          ueGd, Gredd, taud, Qd, workd, lwork);
 			}
-			}
+
+			#ifdef CHECK_G_UE
+			matdiff(N, N, gu, N, ueGu, N*L);
+			matdiff(N, N, gd, N, ueGd, N*L);
+			#endif
+			#if defined(CHECK_G_UE) && defined(CHECK_G_ACC)
+			matdiff(N, N, ueGu, N*L, guacc, N);
+			matdiff(N, N, ueGd, N*L, gdacc, N);
+			#endif
 
 			profile_begin(meas_uneq);
 			measure_uneqlt(&sim->p, sign, ueGu, ueGd, &sim->m_ue);
