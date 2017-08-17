@@ -9,7 +9,7 @@ int get_lwork_ue_g(const int N, const int L)
 {
 	double lwork;
 	int info = 0;
-	int max_lwork = N*N; // can be smaller if mul_seq doesn't use work
+	int max_lwork = N*N; // can start smaller if mul_seq doesn't use work
 
 	const int NL = N*L;
 	const int N2 = 2*N;
@@ -100,9 +100,16 @@ static void bsofi(const int N, const int L,
 {
 	_aa(G); _aa(tau); _aa(Q); _aa(work);
 
+	int info;
+
+	if (L == 1) {
+		dgetrf(&N, &N, G, &N, (int *)tau, &info);
+		dgetri(&N, G, &N, (int *)tau, work, &lwork, &info);
+		return;
+	}
+
 	const int NL = N*L;
 	const int N2 = 2*N;
-	int info;
 
 	// block qr
 	for (int l = 0; l < L - 2; l++) {
@@ -536,7 +543,12 @@ int main(void)
 	test3(23, 20, 4, 2);
 	test3(23, 20, 5, 2);
 	test3(16, 27, 9, 2);
+	test3(16, 6, 3, 2);
 	test3(16, 8, 4, 2);
+	test3(16, 8, 1, 1);
+	test3(16, 8, 1, 2);
+	test3(16, 8, 1, 3);
+	test3(16, 8, 2, 11);
 	return 0;
 }
 
