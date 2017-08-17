@@ -13,6 +13,8 @@
 #include "updates.h"
 #include "util.h"
 
+#define N_MUL 2 // input parameter to calc_eq_g() and calc_ue_g()
+
 // uncomment to check recalculated g against wrapped g
 // #define CHECK_G_WRP
 
@@ -173,7 +175,7 @@ static void dqmc(struct sim_data *sim)
 			matmul(Cu + stride*f, Bu + stride*l, tmpNN1u);
 		}
 	}
-	signu = calc_eq_g(0, N, stride, F, 2, Cu, gu, tmpNN1u, tmpNN2u,
+	signu = calc_eq_g(0, N, stride, F, N_MUL, Cu, gu, tmpNN1u, tmpNN2u,
 	                  tmpN1u, tmpN2u, tmpN3u, pvtu, worku, lwork);
 	}
 	#pragma omp section
@@ -190,7 +192,7 @@ static void dqmc(struct sim_data *sim)
 			matmul(Cd + stride*f, Bd + stride*l, tmpNN1d);
 		}
 	}
-	signd = calc_eq_g(0, N, stride, F, 2, Cd, gd, tmpNN1d, tmpNN2d,
+	signd = calc_eq_g(0, N, stride, F, N_MUL, Cd, gd, tmpNN1d, tmpNN2d,
 	                  tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
 	}
 	}
@@ -244,7 +246,7 @@ static void dqmc(struct sim_data *sim)
 				          tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				          tmpN3u, pvtu, worku, lwork);
 				#endif
-				signu = calc_eq_g((f + 1) % F, N, stride, F, 2, Cu, gu,
+				signu = calc_eq_g((f + 1) % F, N, stride, F, N_MUL, Cu, gu,
 				                  tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				                  tmpN3u, pvtu, worku, lwork);
 				profile_end(recalc);
@@ -284,7 +286,7 @@ static void dqmc(struct sim_data *sim)
 				          tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				          tmpN3d, pvtd, workd, lwork);
 				#endif
-				signd = calc_eq_g((f + 1) % F, N, stride, F, 2, Cd, gd,
+				signd = calc_eq_g((f + 1) % F, N, stride, F, N_MUL, Cd, gd,
 				                  tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				                  tmpN3d, pvtd, workd, lwork);
 				profile_end(recalc);
@@ -332,10 +334,10 @@ static void dqmc(struct sim_data *sim)
 			#pragma omp parallel sections
 			{
 			#pragma omp section
-			calc_ue_g(N, stride, L, F, Bu, iBu, Cu,
+			calc_ue_g(N, stride, L, F, N_MUL, Bu, iBu, Cu,
 			          ueGu, Gredu, tauu, Qu, worku, lwork);
 			#pragma omp section
-			calc_ue_g(N, stride, L, F, Bd, iBd, Cd,
+			calc_ue_g(N, stride, L, F, N_MUL, Bd, iBd, Cd,
 			          ueGd, Gredd, taud, Qd, workd, lwork);
 			}
 
