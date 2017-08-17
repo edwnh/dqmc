@@ -193,19 +193,18 @@ static void expand_g(const int N, const int stride, const int L, const int E, co
 	const int n_up = n_left;
 	const int n_down = n_right;
 
+	const int rstop_last = ((E - 1)*n_matmul + L)/2;
+	const int lstop_first = (rstop_last + 1) % L;
+	const int dstop_last = rstop_last;
+	const int ustop_first = lstop_first;
+
 	// left and right
 	for (int f = 0; f < E; f++)
 	for (int e = 0; e < E; e++) {
 		const int l = f*n_matmul;
 		const int k = e*n_matmul;
-		int lstop = l - n_left;
-		if (f == 0) {
-			lstop = (E - 1)*n_matmul + n_right;
-			if (lstop >= L) lstop = L - 1;
-			lstop = (lstop + 1) % L;
-		}
-		int rstop = l + n_right;
-		if (rstop >= L) rstop = L - 1;
+		const int lstop = (f == 0) ? lstop_first : l - n_left;
+		const int rstop = (f == E - 1) ? rstop_last : l + n_right;
 		for (int m = l; m != lstop;) {
 			const int next = (m - 1 + L) % L;
 			const double alpha = (m == 0) ? -1.0 : 1.0;
@@ -234,14 +233,8 @@ static void expand_g(const int N, const int stride, const int L, const int E, co
 	for (int e = 0; e < E; e++)
 	for (int l = 0; l < L; l++) {
 		const int k = e*n_matmul;
-		int ustop = k - n_up;
-		if (e == 0) {
-			ustop = (E - 1)*n_matmul + n_down;
-			if (ustop >= L) ustop = L - 1;
-			ustop = (ustop + 1) % L;
-		}
-		int dstop = k + n_down;
-		if (dstop >= L) dstop = L - 1;
+		const int ustop = (e == 0) ? ustop_first : k - n_up;
+		const int dstop = (e == E - 1) ? dstop_last : k + n_down;
 		for (int m = k; m != ustop;) {
 			const int next = (m - 1 + L) % L;
 			const double alpha = (m == 0) ? -1.0 : 1.0;
