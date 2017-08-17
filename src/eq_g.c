@@ -31,7 +31,7 @@ static inline void mul_seq(const int N, const int stride, const int L,
 	__assume(stride % DBL_ALIGN == 0);
 	_aa(B); _aa(A); _aa(work);
 
-	const int n_mul = (L + maxp1 - min) % L;
+	const int n_mul = (min == maxp1) ? L : (L + maxp1 - min) % L;
 	if (n_mul == 1) {
 		my_copy(A, B + stride*min, N*N);
 		return;

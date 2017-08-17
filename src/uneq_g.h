@@ -2,7 +2,7 @@
 
 int get_lwork_ue_g(const int N, const int L);
 
-void calc_ue_g(const int N, const int stride, const int L, const int F,
+void calc_ue_g(const int N, const int stride, const int L, const int F, const int n_mul,
 		const double *const restrict B, const double *const restrict iB,
 		const double *const restrict C,
 		double *const restrict G, // NL * NL
