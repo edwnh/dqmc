@@ -16,7 +16,7 @@
 // uncomment to check recalculated g against wrapped g
 // #define CHECK_G_WRP
 
-// uncomment to check recalculated g against using QR for every 2nd multiply
+// uncomment to check recalculated g against g from using QR for every multiply
 // #define CHECK_G_ACC
 
 // uncomment to check 0,0 block of unequal-time G against recalculated g
@@ -173,7 +173,7 @@ static void dqmc(struct sim_data *sim)
 			matmul(Cu + stride*f, Bu + stride*l, tmpNN1u);
 		}
 	}
-	signu = calc_eq_g(0, N, stride, F, Cu, gu, tmpNN1u, tmpNN2u,
+	signu = calc_eq_g(0, N, stride, F, 2, Cu, gu, tmpNN1u, tmpNN2u,
 	                  tmpN1u, tmpN2u, tmpN3u, pvtu, worku, lwork);
 	}
 	#pragma omp section
@@ -190,7 +190,7 @@ static void dqmc(struct sim_data *sim)
 			matmul(Cd + stride*f, Bd + stride*l, tmpNN1d);
 		}
 	}
-	signd = calc_eq_g(0, N, stride, F, Cd, gd, tmpNN1d, tmpNN2d,
+	signd = calc_eq_g(0, N, stride, F, 2, Cd, gd, tmpNN1d, tmpNN2d,
 	                  tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
 	}
 	}
@@ -240,11 +240,11 @@ static void dqmc(struct sim_data *sim)
 				matmul(guwrp, Bu + stride*l, tmpNN1u);
 				#endif
 				#ifdef CHECK_G_ACC
-				calc_eq_g((l + 1) % L, N, stride, L, Bu, guacc,
+				calc_eq_g((l + 1) % L, N, stride, L, 1, Bu, guacc,
 				          tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				          tmpN3u, pvtu, worku, lwork);
 				#endif
-				signu = calc_eq_g((f + 1) % F, N, stride, F, Cu, gu,
+				signu = calc_eq_g((f + 1) % F, N, stride, F, 2, Cu, gu,
 				                  tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				                  tmpN3u, pvtu, worku, lwork);
 				profile_end(recalc);
@@ -280,11 +280,11 @@ static void dqmc(struct sim_data *sim)
 				matmul(gdwrp, Bd + stride*l, tmpNN1d);
 				#endif
 				#ifdef CHECK_G_ACC
-				calc_eq_g((l + 1) % L, N, stride, L, Bd, gdacc,
+				calc_eq_g((l + 1) % L, N, stride, L, 1, Bd, gdacc,
 				          tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				          tmpN3d, pvtd, workd, lwork);
 				#endif
-				signd = calc_eq_g((f + 1) % F, N, stride, F, Cd, gd,
+				signd = calc_eq_g((f + 1) % F, N, stride, F, 2, Cd, gd,
 				                  tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				                  tmpN3d, pvtd, workd, lwork);
 				profile_end(recalc);

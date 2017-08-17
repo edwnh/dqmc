@@ -7,7 +7,7 @@ int get_lwork_eq_g(const int N)
 {
 	double lwork;
 	int info = 0;
-	int max_lwork = N;
+	int max_lwork = N*N; // can be smaller if mul_seq doesn't use work
 
 	dgeqp3(&N, &N, NULL, &N, NULL, NULL, &lwork, cint(-1), &info);
 	if (lwork > max_lwork) max_lwork = (int)lwork;
@@ -24,7 +24,41 @@ int get_lwork_eq_g(const int N)
 	return max_lwork;
 }
 
-int calc_eq_g(const int l, const int N, const int stride, const int L,
+static inline void mul_seq(const int N, const int stride, const int L,
+		const int min, const int maxp1, const double *const restrict B,
+		double *const restrict A, double *const restrict work)
+{
+	__assume(stride % DBL_ALIGN == 0);
+	_aa(B); _aa(A); _aa(work);
+
+	const int n_mul = (L + maxp1 - min) % L;
+	if (n_mul == 1) {
+		my_copy(A, B + stride*min, N*N);
+		return;
+	}
+
+	int l = min;
+	if (n_mul % 2 == 0) {
+		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*((l + 1)%L),
+		      &N, B + stride*l, &N, cdbl(0.0), A, &N);
+		l = (l + 2) % L;
+	} else {
+		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*((l + 1)%L),
+		      &N, B + stride*l, &N, cdbl(0.0), work, &N);
+		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*((l + 2)%L),
+		      &N, work, &N, cdbl(0.0), A, &N);
+		l = (l + 3) % L;
+	}
+
+	for (; l != maxp1; l = (l + 2) % L) {
+		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*l,
+		      &N, A, &N, cdbl(0.0), work, &N);
+		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*((l + 1)%L),
+		      &N, work, &N, cdbl(0.0), A, &N);
+	}
+}
+
+int calc_eq_g(const int l, const int N, const int stride, const int L, const int n_mul,
 		const double *const restrict B, double *const restrict g,
 		double *const restrict Q, double *const restrict T,
 		double *const restrict tau, double *const restrict d,
@@ -37,19 +71,14 @@ int calc_eq_g(const int l, const int N, const int stride, const int L,
 	int info = 0;
 
 	// algorithm 3 of 10.1109/IPDPS.2012.37
-	// slightly modified; pairs of matrices are multiplied with dgemm
+	// slightly modified; groups of n_mul matrices are multiplied with dgemm
+	// if n_mul == 2 && l == 0:
 	// like (B5 B4)(B3 B2)(B1 B0) if L is even
 	// or (B6 B5)(B4 B3)(B2 B1)(B0) if L is odd
 	// (1)
-	int m;
-	if (L % 2 == 1) { // odd
-		my_copy(Q, B + stride*l, N*N);
-		m = 1;
-	} else { // even
-		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*((l + 1)%L),
-		      &N, B + stride*l, &N, cdbl(0.0), Q, &N);
-		m = 2;
-	}
+
+	int m = (l + 1 + (L - 1) % n_mul) % L;
+	mul_seq(N, stride, L, l, m, B, Q, work);
 
 	for (int i = 0; i < N; i++) pvt[i] = 0;
 	dgeqp3(&N, &N, Q, &N, pvt, tau, work, &lwork, &info);
@@ -67,11 +96,12 @@ int calc_eq_g(const int l, const int N, const int stride, const int L,
 			T[i + (pvt[j]-1)*N] = v[i] * Q[i + j*N];
 
 
-	for (; m < L; m += 2) {
-		// (3a)
-		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*((l + m + 1)%L),
-		      &N, B + stride*((l + m)%L), &N, cdbl(0.0), g, &N);
+	while (m != l) {
+		const int next = (m + n_mul) % L;
+		mul_seq(N, stride, L, m, next, B, g, work);
+		m = next;
 
+		// (3a)
 		dormqr("R", "N", &N, &N, &N, Q, &N, tau, g, &N, work, &lwork, &info);
 
 		for (int j = 0; j < N; j++)
