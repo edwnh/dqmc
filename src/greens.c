@@ -186,8 +186,6 @@ int calc_eq_g(const int l, const int N, const int stride, const int L, const int
 	return sign;
 }
 
-#define G_BLK(i, j) (G + N*(i) + NL*N*(j))
-
 int get_lwork_ue_g(const int N, const int L)
 {
 	double lwork;
@@ -256,6 +254,7 @@ static void bsofi(const int N, const int L,
 	const int NL = N*L;
 	const int N2 = 2*N;
 
+	#define G_BLK(i, j) (G + N*(i) + NL*N*(j))
 	// block qr
 	for (int l = 0; l < L - 2; l++) {
 		dgeqrf(&N2, &N, G_BLK(l, l), &NL, tau + N*l, work, &lwork, &info);
@@ -308,6 +307,7 @@ static void bsofi(const int N, const int L,
 		dormqr("R", "T", &NL, &N2, &N, Q, &N2, tau + N*l,
 		       G_BLK(0, l), &NL, work, &lwork, &info);
 	}
+	#undef G_BLK
 }
 
 static void expand_g(const int N, const int stride, const int L, const int E, const int n_matmul,
@@ -319,8 +319,9 @@ static void expand_g(const int N, const int stride, const int L, const int E, co
 	__assume(stride % DBL_ALIGN == 0);
 	_aa(B); _aa(iB); _aa(Gred); _aa(G);
 
-	const int NL = N*L;
+	const int ldG = N;
 
+	#define G_BLK(i, j) (G + N*N*((i) +  L*(j)))
 	// copy Gred to G
 	for (int f = 0; f < E; f++)
 	for (int e = 0; e < E; e++) {
@@ -328,7 +329,7 @@ static void expand_g(const int N, const int stride, const int L, const int E, co
 		const int k = e*n_matmul;
 		for (int j = 0; j < N; j++)
 		for (int i = 0; i < N; i++)
-			G_BLK(k, l)[i + NL*j] = Gred[(i + N*e) + N*E*(j + N*f)];
+			G_BLK(k, l)[i + ldG*j] = Gred[(i + N*e) + N*E*(j + N*f)];
 	}
 
 	// number of steps to move in each direction
@@ -354,8 +355,8 @@ static void expand_g(const int N, const int stride, const int L, const int E, co
 			const int next = (m - 1 + L) % L;
 			const double alpha = (m == 0) ? -1.0 : 1.0;
 			dgemm("N", "N", &N, &N, &N, &alpha,
-			      G_BLK(k, m), &NL, B + stride*next, &N, cdbl(0.0),
-			      G_BLK(k, next), &NL);
+			      G_BLK(k, m), &ldG, B + stride*next, &N, cdbl(0.0),
+			      G_BLK(k, next), &ldG);
 			m = next;
 		}
 		for (int m = l; m != rstop;) {
@@ -365,11 +366,11 @@ static void expand_g(const int N, const int stride, const int L, const int E, co
 			if (k == m) {
 				for (int j = 0; j < N; j++)
 				for (int i = 0; i < N; i++)
-					G_BLK(k, next)[i + NL*j] = iB[i + N*j + stride*m];
+					G_BLK(k, next)[i + ldG*j] = iB[i + N*j + stride*m];
 			}
 			dgemm("N", "N", &N, &N, &N, &alpha,
-			      G_BLK(k, m), &NL, iB + stride*m, &N, &beta,
-			      G_BLK(k, next), &NL);
+			      G_BLK(k, m), &ldG, iB + stride*m, &N, &beta,
+			      G_BLK(k, next), &ldG);
 			m = next;
 		}
 	}
@@ -387,24 +388,25 @@ static void expand_g(const int N, const int stride, const int L, const int E, co
 			if (m == l)
 				for (int j = 0; j < N; j++)
 				for (int i = 0; i < N; i++)
-					G_BLK(next, l)[i + NL*j] = iB[i + N*j + stride*next];
+					G_BLK(next, l)[i + ldG*j] = iB[i + N*j + stride*next];
 			dgemm("N", "N", &N, &N, &N, &alpha,
-			      iB + stride*next, &N, G_BLK(m, l), &NL, &beta,
-			      G_BLK(next, l), &NL);
+			      iB + stride*next, &N, G_BLK(m, l), &ldG, &beta,
+			      G_BLK(next, l), &ldG);
 			m = next;
 		}
 		for (int m = k; m != dstop;) {
 			const int next = (m + 1) % L;
 			const double alpha = (next == 0) ? -1.0 : 1.0;
 			dgemm("N", "N", &N, &N, &N, &alpha,
-			      B + stride*m, &N, G_BLK(m, l), &NL, cdbl(0.0),
-			      G_BLK(next, l), &NL);
+			      B + stride*m, &N, G_BLK(m, l), &ldG, cdbl(0.0),
+			      G_BLK(next, l), &ldG);
 			if (next == l)
 				for (int i = 0; i < N; i++)
-					G_BLK(next, l)[i + NL*i] += 1.0;
+					G_BLK(next, l)[i + ldG*i] += 1.0;
 			m = next;
 		}
 	}
+	#undef G_BLK
 }
 
 void calc_ue_g(const int N, const int stride, const int L, const int F, const int n_mul,

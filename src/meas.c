@@ -52,8 +52,8 @@ void measure_uneqlt(const struct params *const restrict p, const int sign,
 
 	// 2-site measurements
 	for (int l = 0; l < L; l++)
-	for (int j = 0; j < N; j++)
 	for (int k = 0; k < L; k++)
+	for (int j = 0; j < N; j++)
 	for (int i = 0; i < N; i++) {
 		const int t = (L + k - l) % L;
 		const int t_sign = ((k >= l) ? 1.0 : -1.0);  // for fermionic
@@ -61,14 +61,14 @@ void measure_uneqlt(const struct params *const restrict p, const int sign,
 		const int r = p->map_ij[i + j*N];
 		const int delta_tij = delta_t * (i == j);
 		const double pre = (double)sign / p->degen_ij[r] / L;
-		const double guii = Gu[(i + N*k) + NL*(i + N*k)];
-		const double guij = Gu[(i + N*k) + NL*(j + N*l)];
-		const double guji = Gu[(j + N*l) + NL*(i + N*k)];
-		const double gujj = Gu[(j + N*l) + NL*(j + N*l)];
-		const double gdii = Gd[(i + N*k) + NL*(i + N*k)];
-		const double gdij = Gd[(i + N*k) + NL*(j + N*l)];
-		const double gdji = Gd[(j + N*l) + NL*(i + N*k)];
-		const double gdjj = Gd[(j + N*l) + NL*(j + N*l)];
+		const double guii = Gu[(i + N*i) + N*N*(k + L*k)];
+		const double guij = Gu[(i + N*j) + N*N*(k + L*l)];
+		const double guji = Gu[(j + N*i) + N*N*(l + L*k)];
+		const double gujj = Gu[(j + N*j) + N*N*(l + L*l)];
+		const double gdii = Gd[(i + N*i) + N*N*(k + L*k)];
+		const double gdij = Gd[(i + N*j) + N*N*(k + L*l)];
+		const double gdji = Gd[(j + N*i) + N*N*(l + L*k)];
+		const double gdjj = Gd[(j + N*j) + N*N*(l + L*l)];
 		m->gt0[r + N*t] += 0.5*t_sign*pre*(guij + gdij);
 		const double x = delta_tij*(guii + gdii) - (guji*guij + gdji*gdij);
 		m->nn[r + N*t] += pre*((2.*delta_t - guii - gdii)*(2.*delta_t - gujj - gdjj) + x);

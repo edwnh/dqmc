@@ -146,8 +146,8 @@ static int dqmc(struct sim_data *sim)
 		taud = my_calloc(N*E * sizeof(double)); _aa(taud);
 		Qd = my_calloc(4*N*N * sizeof(double)); _aa(Qd);
 
-		ueGu = my_calloc(N*L*N*L * sizeof(double)); _aa(ueGu);
-		ueGd = my_calloc(N*L*N*L * sizeof(double)); _aa(ueGd);
+		ueGu = my_calloc(N*N*L*L * sizeof(double)); _aa(ueGu);
+		ueGd = my_calloc(N*N*L*L * sizeof(double)); _aa(ueGd);
 		if (ueGu == NULL || ueGd == NULL) return -1;
 	}
 
