@@ -84,10 +84,9 @@ static void calc_o(const int N, const int stride, const int L, const int n_mul,
 	for (int e = 0; e < E - 1; e++) // subdiagonal blocks
 		mul_seq(N, stride, L, e*n_mul, (e + 1)*n_mul, B, -1.0,
 		        G + N*(e + 1) + NE*N*e, NE, work);
-	for (int j = 0; j < N; j++) // top right corner
-	for (int i = 0; i < N; i++)
-		mul_seq(N, stride, L, (E - 1)*n_mul, 0, B, 1.0,
-		        G + NE*N*(E - 1), NE, work);
+
+	mul_seq(N, stride, L, (E - 1)*n_mul, 0, B, 1.0, // top right corner
+		G + NE*N*(E - 1), NE, work);
 
 	for (int i = 0; i < NE; i++) G[i + NE*i] += 1.0; // 1 on diagonal
 }
@@ -230,8 +229,8 @@ static void expand_g(const int N, const int stride, const int L, const int E, co
 	}
 
 	// up and down
-	for (int e = 0; e < E; e++)
-	for (int l = 0; l < L; l++) {
+	for (int l = 0; l < L; l++)
+	for (int e = 0; e < E; e++) {
 		const int k = e*n_matmul;
 		const int ustop = (e == 0) ? ustop_first : k - n_up;
 		const int dstop = (e == E - 1) ? dstop_last : k + n_down;
