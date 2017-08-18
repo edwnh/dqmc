@@ -8,6 +8,7 @@
 #define PROFILE_LIST \
 	X(wall) \
 	X(updates) \
+	X(calcb) \
 	X(multb) \
 	X(recalc) \
 	X(wrap) \

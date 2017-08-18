@@ -165,15 +165,11 @@ static void dqmc(struct sim_data *sim)
 	if (sim->p.period_uneqlt > 0)
 		for (int l = 0; l < L; l++)
 			calciBu(iBu + stride*l, l);
-	for (int f = 0; f < F; f++) {
-		calcBu(Bu + stride*f*n_matmul, f*n_matmul);
-		my_copy(Cu + stride*f, Bu + stride*f*n_matmul, N*N);
-		for (int l = f*n_matmul + 1 ; l < (f + 1) * n_matmul; l++) {
-			calcBu(Bu + stride*l, l);
-			my_copy(tmpNN1u, Cu + stride*f, N*N);
-			matmul(Cu + stride*f, Bu + stride*l, tmpNN1u);
-		}
-	}
+	for (int l = 0; l < L; l++)
+		calcBu(Bu + stride*l, l);
+	for (int f = 0; f < F; f++)
+		mul_seq(N, stride, L, f*n_matmul, ((f + 1)*n_matmul) % L, 1.0,
+		        Bu, Cu + stride*f, N, tmpNN1u);
 	signu = calc_eq_g(0, N, stride, F, N_MUL, Cu, gu, tmpNN1u, tmpNN2u,
 	                  tmpN1u, tmpN2u, tmpN3u, pvtu, worku, lwork);
 	}
@@ -182,15 +178,11 @@ static void dqmc(struct sim_data *sim)
 	if (sim->p.period_uneqlt > 0)
 		for (int l = 0; l < L; l++)
 			calciBu(iBu + stride*l, l);
-	for (int f = 0; f < F; f++) {
-		calcBd(Bd + stride*f*n_matmul, f*n_matmul);
-		my_copy(Cd + stride*f, Bd + stride*f*n_matmul, N*N);
-		for (int l = f*n_matmul + 1 ; l < (f + 1) * n_matmul; l++) {
-			calcBd(Bd + stride*l, l);
-			my_copy(tmpNN1d, Cd + stride*f, N*N);
-			matmul(Cd + stride*f, Bd + stride*l, tmpNN1d);
-		}
-	}
+	for (int l = 0; l < L; l++)
+		calcBd(Bd + stride*l, l);
+	for (int f = 0; f < F; f++)
+		mul_seq(N, stride, L, f*n_matmul, ((f + 1)*n_matmul) % L, 1.0,
+		        Bd, Cd + stride*f, N, tmpNN1d);
 	signd = calc_eq_g(0, N, stride, F, N_MUL, Cd, gd, tmpNN1d, tmpNN2d,
 	                  tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
 	}
@@ -218,21 +210,19 @@ static void dqmc(struct sim_data *sim)
 			{
 			#pragma omp section
 			{
-			profile_begin(multb);
 			double *const restrict Bul = Bu + stride*l; _aa(Bul);
 			double *const restrict iBul = iBu + stride*l; _aa(iBul);
 			double *const restrict Cuf = Cu + stride*f; _aa(Cuf);
+			profile_begin(calcb);
 			calcBu(Bul, l);
-			if (l % n_matmul == 0) {
-				my_copy(Cuf, Bul, N*N);
-			} else {
-				my_copy(tmpNN1u, Cuf, N*N);
-				matmul(Cuf, Bul, tmpNN1u);
-			}
 			if (!recalc || sim->p.period_uneqlt > 0)
 				calciBu(iBul, l);
-			profile_end(multb);
+			profile_end(calcb);
 			if (recalc) {
+				profile_begin(multb);
+				mul_seq(N, stride, L, f*n_matmul, ((f + 1)*n_matmul) % L,
+				        1.0, Bu, Cuf, N, tmpNN1u);
+				profile_end(multb);
 				profile_begin(recalc);
 				#ifdef CHECK_G_WRP
 				if (sim->p.period_uneqlt == 0)
@@ -258,21 +248,19 @@ static void dqmc(struct sim_data *sim)
 			}
 			#pragma omp section
 			{
-			profile_begin(multb);
 			double *const restrict Bdl = Bd + stride*l; _aa(Bdl);
 			double *const restrict iBdl = iBd + stride*l; _aa(iBdl);
 			double *const restrict Cdf = Cd + stride*f; _aa(Cdf);
-			calcBd(Bdl, l)
-			if (l % n_matmul == 0) {
-				my_copy(Cdf, Bdl, N*N);
-			} else {
-				my_copy(tmpNN1d, Cdf, N*N);
-				matmul(Cdf, Bdl, tmpNN1d);
-			}
+			profile_begin(calcb);
+			calcBd(Bdl, l);
 			if (!recalc || sim->p.period_uneqlt > 0)
 				calciBd(iBdl, l);
-			profile_end(multb);
+			profile_end(calcb);
 			if (recalc) {
+				profile_begin(multb);
+				mul_seq(N, stride, L, f*n_matmul, ((f + 1)*n_matmul) % L,
+				        1.0, Bd, Cdf, N, tmpNN1d);
+				profile_end(multb);
 				profile_begin(recalc);
 				#ifdef CHECK_G_WRP
 				if (sim->p.period_uneqlt == 0)
