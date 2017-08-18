@@ -390,7 +390,7 @@ static void dqmc(struct sim_data *sim)
 }
 
 int dqmc_wrapper(const char *sim_file, const char *log_file,
-		const tick_t max_time)
+		const tick_t max_time, const int bench)
 {
 	const tick_t wall_start = time_wall();
 	profile_clear();
@@ -432,13 +432,15 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 	dqmc(sim);
 	fprintf(log, "%d/%d sweeps completed\n", sim->s.sweep, sim->p.n_sweep);
 
-	// save to simulation file
-	fprintf(log, "saving data\n");
-	status = sim_data_save(sim, sim_file);
-	if (status < 0) {
-		fprintf(stderr, "save_file() failed: %d\n", status);
-		status = -1;
-		goto cleanup;
+	// save to simulation file (if not in benchmarking mode)
+	if (!bench) {
+		fprintf(log, "saving data\n");
+		status = sim_data_save(sim, sim_file);
+		if (status < 0) {
+			fprintf(stderr, "save_file() failed: %d\n", status);
+			status = -1;
+			goto cleanup;
+		}
 	}
 
 	status = (sim->s.sweep == sim->p.n_sweep) ? 0 : 1;

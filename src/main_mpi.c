@@ -289,7 +289,7 @@ int main(int argc, char **argv)
 			t_remain = 0;
 
 		mpi_printf("starting: %s\n", sim_file);
-		status = dqmc_wrapper(sim_file, log_file, t_remain);
+		status = dqmc_wrapper(sim_file, log_file, t_remain, 0);
 
 		if (status > 0) {
 			mpi_printf("checkpointed: %s\n", sim_file);
