@@ -72,7 +72,7 @@
 	printf(#A " - " #B ":\tmax %.3e\tavg %.3e\n", max, avg); \
 } while (0);
 
-static void dqmc(struct sim_data *sim)
+static int dqmc(struct sim_data *sim)
 {
 	const int N = sim->p.N;
 	const int L = sim->p.L;
@@ -138,15 +138,17 @@ static void dqmc(struct sim_data *sim)
 	if (sim->p.period_uneqlt > 0) {
 		const int E = 1 + (F - 1) / N_MUL;
 
-		ueGu = my_calloc(N*L*N*L * sizeof(double)); _aa(ueGu);
 		Gredu = my_calloc(N*E*N*E * sizeof(double)); _aa(Gredu);
 		tauu = my_calloc(N*E * sizeof(double)); _aa(tauu);
 		Qu = my_calloc(4*N*N * sizeof(double)); _aa(Qu);
 
-		ueGd = my_calloc(N*L*N*L * sizeof(double)); _aa(ueGd);
 		Gredd = my_calloc(N*E*N*E * sizeof(double)); _aa(Gredd);
 		taud = my_calloc(N*E * sizeof(double)); _aa(taud);
 		Qd = my_calloc(4*N*N * sizeof(double)); _aa(Qd);
+
+		ueGu = my_calloc(N*L*N*L * sizeof(double)); _aa(ueGu);
+		ueGd = my_calloc(N*L*N*L * sizeof(double)); _aa(ueGd);
+		if (ueGu == NULL || ueGd == NULL) return -1;
 	}
 
 	// lapack work arrays
@@ -387,6 +389,8 @@ static void dqmc(struct sim_data *sim)
 	my_free(iBu);
 	my_free(Bd);
 	my_free(Bu);
+
+	return 0;
 }
 
 int dqmc_wrapper(const char *sim_file, const char *log_file,
@@ -429,7 +433,12 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 
 	// run dqmc
 	fprintf(log, "starting dqmc\n");
-	dqmc(sim);
+	status = dqmc(sim);
+	if (status < 0) {
+		fprintf(stderr, "dqmc() failed to allocate memory\n");
+		status = -1;
+		goto cleanup;
+	}
 	fprintf(log, "%d/%d sweeps completed\n", sim->s.sweep, sim->p.n_sweep);
 
 	// save to simulation file (if not in benchmarking mode)
