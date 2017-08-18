@@ -175,7 +175,6 @@ def create_1(filename=None, overwrite=False, init_rng=None,
             f.create_group("meas_uneqlt")
             f["meas_uneqlt"]["n_sample"] = np.array(0, dtype=np.int32)
             f["meas_uneqlt"]["sign"] = np.array(0.0, dtype=np.float64)
-            f["meas_uneqlt"]["g0t"] = np.zeros(num_ij*L, dtype=np.float64)
             f["meas_uneqlt"]["gt0"] = np.zeros(num_ij*L, dtype=np.float64)
             f["meas_uneqlt"]["nn"] = np.zeros(num_ij*L, dtype=np.float64)
             f["meas_uneqlt"]["xx"] = np.zeros(num_ij*L, dtype=np.float64)

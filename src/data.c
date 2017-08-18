@@ -47,7 +47,6 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	sim->m_eq.zz         = my_calloc(num_ij   * sizeof(double));
 	sim->m_eq.pair_sw    = my_calloc(num_ij   * sizeof(double));
 	if (sim->p.period_uneqlt > 0) {
-		sim->m_ue.g0t     = my_calloc(num_ij*L * sizeof(double));
 		sim->m_ue.gt0     = my_calloc(num_ij*L * sizeof(double));
 		sim->m_ue.nn      = my_calloc(num_ij*L * sizeof(double));
 		sim->m_ue.xx      = my_calloc(num_ij*L * sizeof(double));
@@ -89,7 +88,6 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	if (sim->p.period_uneqlt > 0) {
 		my_read(_int,    "/meas_uneqlt/n_sample", &sim->m_ue.n_sample);
 		my_read(_double, "/meas_uneqlt/sign",     &sim->m_ue.sign);
-		my_read(_double, "/meas_uneqlt/g0t",       sim->m_ue.g0t);
 		my_read(_double, "/meas_uneqlt/gt0",       sim->m_ue.gt0);
 		my_read(_double, "/meas_uneqlt/nn",        sim->m_ue.nn);
 		my_read(_double, "/meas_uneqlt/xx",        sim->m_ue.xx);
@@ -136,7 +134,6 @@ int sim_data_save(const struct sim_data *sim, const char *file)
 	if (sim->p.period_uneqlt > 0) {
 		my_write("/meas_uneqlt/n_sample", H5T_NATIVE_INT,    &sim->m_ue.n_sample);
 		my_write("/meas_uneqlt/sign",     H5T_NATIVE_DOUBLE, &sim->m_ue.sign);
-		my_write("/meas_uneqlt/g0t",      H5T_NATIVE_DOUBLE,  sim->m_ue.g0t);
 		my_write("/meas_uneqlt/gt0",      H5T_NATIVE_DOUBLE,  sim->m_ue.gt0);
 		my_write("/meas_uneqlt/nn",       H5T_NATIVE_DOUBLE,  sim->m_ue.nn);
 		my_write("/meas_uneqlt/xx",       H5T_NATIVE_DOUBLE,  sim->m_ue.xx);
@@ -159,7 +156,6 @@ void sim_data_free(const struct sim_data *sim)
 		my_free(sim->m_ue.xx);
 		my_free(sim->m_ue.nn);
 		my_free(sim->m_ue.gt0);
-		my_free(sim->m_ue.g0t);
 	}
 	my_free(sim->m_eq.pair_sw);
 	my_free(sim->m_eq.zz);

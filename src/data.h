@@ -43,7 +43,6 @@ struct meas_uneqlt {
 	int n_sample;
 	double sign;
 
-	double *g0t;
 	double *gt0;
 	double *nn;
 	double *xx;
