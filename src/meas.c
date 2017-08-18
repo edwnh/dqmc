@@ -51,13 +51,14 @@ void measure_uneqlt(const struct params *const restrict p, const int sign,
 	const int NL = N*L;
 
 	// 2-site measurements
+	#pragma omp parallel for
+	for (int t = 0; t < L; t++)
 	for (int l = 0; l < L; l++)
-	for (int k = 0; k < L; k++)
 	for (int j = 0; j < N; j++)
 	for (int i = 0; i < N; i++) {
-		const int t = (L + k - l) % L;
-		const int t_sign = ((k >= l) ? 1.0 : -1.0);  // for fermionic
-		const int delta_t = (k == l);
+		const int k = (l + t) % L;
+		const int T_sign = ((k >= l) ? 1.0 : -1.0); // for fermionic
+		const int delta_t = (t == 0);
 		const int r = p->map_ij[i + j*N];
 		const int delta_tij = delta_t * (i == j);
 		const double pre = (double)sign / p->degen_ij[r] / L;
@@ -69,10 +70,10 @@ void measure_uneqlt(const struct params *const restrict p, const int sign,
 		const double gdij = Gd[(i + N*j) + N*N*(k + L*l)];
 		const double gdji = Gd[(j + N*i) + N*N*(l + L*k)];
 		const double gdjj = Gd[(j + N*j) + N*N*(l + L*l)];
-		m->gt0[r + N*t] += 0.5*t_sign*pre*(guij + gdij);
+		m->gt0[r + num_ij*t] += 0.5*T_sign*pre*(guij + gdij);
 		const double x = delta_tij*(guii + gdii) - (guji*guij + gdji*gdij);
-		m->nn[r + N*t] += pre*((2.*delta_t - guii - gdii)*(2.*delta_t - gujj - gdjj) + x);
-		m->xx[r + N*t] += 0.25*pre*(delta_tij*(guii + gdii) - (guji*gdij + gdji*guij));
-		m->zz[r + N*t] += 0.25*pre*((gdii - guii)*(gdjj - gujj) + x);
+		m->nn[r + num_ij*t] += pre*((2.*delta_t - guii - gdii)*(2.*delta_t - gujj - gdjj) + x);
+		m->xx[r + num_ij*t] += 0.25*pre*(delta_tij*(guii + gdii) - (guji*gdij + gdji*guij));
+		m->zz[r + num_ij*t] += 0.25*pre*((gdii - guii)*(gdjj - gujj) + x);
 	}
 }
