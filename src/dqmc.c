@@ -3,13 +3,12 @@
 #include <stdio.h>
 #include <mkl.h>
 #include "data.h"
-#include "eq_g.h"
+#include "greens.h"
 #include "meas.h"
 #include "prof.h"
 #include "rand.h"
 #include "sig.h"
 #include "time_.h"
-#include "uneq_g.h"
 #include "updates.h"
 #include "util.h"
 
