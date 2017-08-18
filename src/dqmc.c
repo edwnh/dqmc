@@ -136,14 +136,16 @@ static void dqmc(struct sim_data *sim)
 	double *restrict Qd = NULL;
 
 	if (sim->p.period_uneqlt > 0) {
+		const int E = 1 + (F - 1) / N_MUL;
+
 		ueGu = my_calloc(N*L*N*L * sizeof(double)); _aa(ueGu);
-		Gredu = my_calloc(N*F*N*F * sizeof(double)); _aa(Gredu);
-		tauu = my_calloc(N*F * sizeof(double)); _aa(tauu);
+		Gredu = my_calloc(N*E*N*E * sizeof(double)); _aa(Gredu);
+		tauu = my_calloc(N*E * sizeof(double)); _aa(tauu);
 		Qu = my_calloc(4*N*N * sizeof(double)); _aa(Qu);
 
 		ueGd = my_calloc(N*L*N*L * sizeof(double)); _aa(ueGd);
-		Gredd = my_calloc(N*F*N*F * sizeof(double)); _aa(Gredd);
-		taud = my_calloc(N*F * sizeof(double)); _aa(taud);
+		Gredd = my_calloc(N*E*N*E * sizeof(double)); _aa(Gredd);
+		taud = my_calloc(N*E * sizeof(double)); _aa(taud);
 		Qd = my_calloc(4*N*N * sizeof(double)); _aa(Qd);
 	}
 
