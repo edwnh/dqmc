@@ -192,6 +192,7 @@ def create_1(filename=None, overwrite=False, seed=None,
             f["meas_uneqlt"]["xx"] = np.zeros(num_ij*L, dtype=np.float64)
             f["meas_uneqlt"]["zz"] = np.zeros(num_ij*L, dtype=np.float64)
             f["meas_uneqlt"]["pair_sw"] = np.zeros(num_ij*L, dtype=np.float64)
+    return filename
 
 
 def create_batch(Nfiles=1, fileprefix=None, seed=None, Nx=16, Ny=4, L=40, **kwargs):
@@ -237,7 +238,7 @@ def main(argv):
             except ValueError:
                 val = float(val)
         kwargs[key] = val
-    create_1(**kwargs)
+    print("created simulation file:", create_1(**kwargs))
 
 if __name__ == "__main__":
     main(sys.argv)
