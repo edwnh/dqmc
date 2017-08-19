@@ -333,12 +333,12 @@ static int dqmc(struct sim_data *sim)
 			}
 
 			#ifdef CHECK_G_UE
-			matdiff(N, N, gu, N, ueGu, N*L);
-			matdiff(N, N, gd, N, ueGd, N*L);
+			matdiff(N, N, gu, N, ueGu, N);
+			matdiff(N, N, gd, N, ueGd, N);
 			#endif
 			#if defined(CHECK_G_UE) && defined(CHECK_G_ACC)
-			matdiff(N, N, ueGu, N*L, guacc, N);
-			matdiff(N, N, ueGd, N*L, gdacc, N);
+			matdiff(N, N, ueGu, N, guacc, N);
+			matdiff(N, N, ueGd, N, gdacc, N);
 			#endif
 
 			profile_begin(meas_uneq);
