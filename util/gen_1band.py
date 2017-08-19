@@ -1,4 +1,5 @@
 import shutil
+import sys
 import time
 
 import h5py
@@ -56,16 +57,16 @@ def rand_jump(rng):
         rng[(np.uint64(j) + rng[16]) & np.uint64(15)] = t[j]
 
 
-def create_1(filename=None, overwrite=False, init_rng=None,
+def create_1(filename=None, overwrite=False, seed=None,
              Nx=16, Ny=4, mu=0.0, tp=0.0, U=6.0, dt=0.115, L=40,
              n_delay=16, n_matmul=8, n_sweep_warm=200, n_sweep_meas=2000,
              period_eqlt=8, period_uneqlt=0):
     assert L % n_matmul == 0 and L % period_eqlt == 0
     N = Nx * Ny
 
-    init_time = int(time.time())
-    if init_rng is None:
-        init_rng = rand_seed(init_time)
+    if seed is None:
+        seed = int(time.time())
+    init_rng = rand_seed(seed)
     init_hs = np.zeros((L, N), dtype=np.int32)
 
     for l in range(L):
@@ -120,8 +121,18 @@ def create_1(filename=None, overwrite=False, init_rng=None,
     delll = np.array((exp_lmbd[map_i]**2 - 1, exp_lmbd[map_i]**-2 - 1))
 
     if filename is None:
-        filename = "{}.h5".format(init_time)
+        filename = "{}.h5".format(seed)
     with h5py.File(filename, "w" if overwrite else "x") as f:
+        f.create_group("metadata")
+        f["metadata"]["version"] = 0.0
+        f["metadata"]["model"] = "Hubbard"
+        f["metadata"]["Nx"] = Nx
+        f["metadata"]["Ny"] = Ny
+        f["metadata"]["U"] = U
+        f["metadata"]["t'"] = tp
+        f["metadata"]["mu"] = mu
+        f["metadata"]["beta"] = L*dt
+
         f.create_group("params")
         # model parameters
         f["params"]["N"] = np.array(N, dtype=np.int32)
@@ -139,6 +150,7 @@ def create_1(filename=None, overwrite=False, init_rng=None,
         f["params"]["n_sweep_meas"] = np.array(n_sweep_meas, dtype=np.int32)
         f["params"]["period_eqlt"] = np.array(period_eqlt, dtype=np.int32)
         f["params"]["period_uneqlt"] = np.array(period_uneqlt, dtype=np.int32)
+        f["params"]["init_rng"] = init_rng  # save if need to replicate data
 
         # precalculated stuff
         f["params"]["num_i"] = num_i
@@ -182,17 +194,16 @@ def create_1(filename=None, overwrite=False, init_rng=None,
             f["meas_uneqlt"]["pair_sw"] = np.zeros(num_ij*L, dtype=np.float64)
 
 
-def create_batch(Nfiles, fileprefix=None, seed=None, Nx=16, Ny=4, L=40, **kwargs):
+def create_batch(Nfiles=1, fileprefix=None, seed=None, Nx=16, Ny=4, L=40, **kwargs):
     if seed is None:
         seed = int(time.time())
     if fileprefix is None:
         fileprefix = str(seed)
     rng = rand_seed(seed)
-    rand_jump(rng)
 
     file_0 = "{}_{}.h5".format(fileprefix, 0)
 
-    create_1(filename=file_0, init_rng=rng.copy(), Nx=Nx, Ny=Ny, L=L, **kwargs)
+    create_1(filename=file_0, seed=seed, Nx=Nx, Ny=Ny, L=L, **kwargs)
 
     for i in range(1, Nfiles):
         rand_jump(rng)
@@ -206,5 +217,27 @@ def create_batch(Nfiles, fileprefix=None, seed=None, Nx=16, Ny=4, L=40, **kwargs
         file_i = "{}_{}.h5".format(fileprefix, i)
         shutil.copy2(file_0, file_i)
         with h5py.File(file_i, "r+") as f:
+            f["params"]["init_rng"][...] = init_rng
             f["state"]["rng"][...] = init_rng
             f["state"]["hs"][...] = init_hs
+
+
+def main(argv):
+    kwargs = {}
+    for arg in argv[1:]:
+        eq = arg.find("=")
+        if eq == -1:
+            print("couldn't find \"=\" in argument " + arg)
+            return
+        key = arg[:eq]
+        val = arg[(eq + 1):]
+        if key != "filename":
+            try:
+                val = int(val)
+            except ValueError:
+                val = float(val)
+        kwargs[key] = val
+    create_1(**kwargs)
+
+if __name__ == "__main__":
+    main(sys.argv)
