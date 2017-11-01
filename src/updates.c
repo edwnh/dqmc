@@ -10,8 +10,6 @@ void update_delayed(const int N, const int n_delay, const double *const restrict
 		double *const restrict au, double *const restrict bu, double *const restrict du,
 		double *const restrict ad, double *const restrict bd, double *const restrict dd)
 {
-	_aa(gu); _aa(gd); _aa(au); _aa(bu); _aa(du); _aa(ad); _aa(bd); _aa(dd);
-
 	int k = 0;
 	for (int j = 0; j < N; j++) du[j] = gu[j + N*j];
 	for (int j = 0; j < N; j++) dd[j] = gd[j + N*j];
@@ -90,8 +88,6 @@ void update_shermor(const int N, const double *const restrict del,
 		double *const restrict cu, double *const restrict du,
 		double *const restrict cd, double *const restrict dd)
 {
-	_aa(gu); _aa(gd); _aa(cu); _aa(du); _aa(cd); _aa(dd);
-
 	for (int ii = 0; ii < N; ii++) {
 		const int i = site_order[ii];
 		const double delu = del[i + N*hs[i]];

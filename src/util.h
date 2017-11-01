@@ -4,9 +4,6 @@
 #include <mkl.h>
 
 #define MEM_ALIGN 64
-#define DBL_ALIGN (MEM_ALIGN/sizeof(double))
-
-#define _aa(a) __assume_aligned((a), MEM_ALIGN);
 
 #define my_malloc(size) _mm_malloc((size), MEM_ALIGN)
 

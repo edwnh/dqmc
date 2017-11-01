@@ -4,40 +4,37 @@
 #include "prof.h"
 #include "util.h"
 
-void mul_seq(const int N, const int stride, const int L,
+void mul_seq(const int N, const int L,
 		const int min, const int maxp1,
 		const double alpha, const double *const restrict B,
 		double *const restrict A, const int ldA,
 		double *const restrict work)
 {
-	__assume(stride % DBL_ALIGN == 0);
-	_aa(B); _aa(work);
-
 	const int n_mul = (min == maxp1) ? L : (L + maxp1 - min) % L;
 	if (n_mul == 1) {
 		for (int j = 0; j < N; j++)
 		for (int i = 0; i < N; i++)
-			A[i + ldA*j] = alpha*B[i + N*j + stride*min];
+			A[i + ldA*j] = alpha*B[i + N*j + N*N*min];
 		return;
 	}
 
 	int l = min;
 	if (n_mul % 2 == 0) {
-		dgemm("N", "N", &N, &N, &N, &alpha, B + stride*((l + 1)%L),
-		      &N, B + stride*l, &N, cdbl(0.0), A, &ldA);
+		dgemm("N", "N", &N, &N, &N, &alpha, B + N*N*((l + 1)%L),
+		      &N, B + N*N*l, &N, cdbl(0.0), A, &ldA);
 		l = (l + 2) % L;
 	} else {
-		dgemm("N", "N", &N, &N, &N, &alpha, B + stride*((l + 1)%L),
-		      &N, B + stride*l, &N, cdbl(0.0), work, &N);
-		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*((l + 2)%L),
+		dgemm("N", "N", &N, &N, &N, &alpha, B + N*N*((l + 1)%L),
+		      &N, B + N*N*l, &N, cdbl(0.0), work, &N);
+		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + N*N*((l + 2)%L),
 		      &N, work, &N, cdbl(0.0), A, &ldA);
 		l = (l + 3) % L;
 	}
 
 	for (; l != maxp1; l = (l + 2) % L) {
-		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*l,
+		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + N*N*l,
 		      &N, A, &ldA, cdbl(0.0), work, &N);
-		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + stride*((l + 1)%L),
+		dgemm("N", "N", &N, &N, &N, cdbl(1.0), B + N*N*((l + 1)%L),
 		      &N, work, &N, cdbl(0.0), A, &ldA);
 	}
 }
@@ -63,16 +60,13 @@ int get_lwork_eq_g(const int N)
 	return max_lwork;
 }
 
-int calc_eq_g(const int l, const int N, const int stride, const int L, const int n_mul,
+int calc_eq_g(const int l, const int N, const int L, const int n_mul,
 		const double *const restrict B, double *const restrict g,
 		double *const restrict Q, double *const restrict T,
 		double *const restrict tau, double *const restrict d,
 		double *const restrict v, int *const restrict pvt,
 		double *const restrict work, const int lwork)
 {
-	__assume(stride % DBL_ALIGN == 0);
-	_aa(B); _aa(g); _aa(Q); _aa(T); _aa(tau); _aa(d); _aa(v); _aa(pvt);
-
 	int info = 0;
 
 	// algorithm 3 of 10.1109/IPDPS.2012.37
@@ -83,7 +77,7 @@ int calc_eq_g(const int l, const int N, const int stride, const int L, const int
 	// (1)
 
 	int m = (l + 1 + (L - 1) % n_mul) % L;
-	mul_seq(N, stride, L, l, m, 1.0, B, Q, N, work);
+	mul_seq(N, L, l, m, 1.0, B, Q, N, work);
 
 	for (int i = 0; i < N; i++) pvt[i] = 0;
 	dgeqp3(&N, &N, Q, &N, pvt, tau, work, &lwork, &info);
@@ -103,7 +97,7 @@ int calc_eq_g(const int l, const int N, const int stride, const int L, const int
 
 	while (m != l) {
 		const int next = (m + n_mul) % L;
-		mul_seq(N, stride, L, m, next, 1.0, B, g, N, work);
+		mul_seq(N, L, m, next, 1.0, B, g, N, work);
 		m = next;
 
 		// (3a)
@@ -163,7 +157,7 @@ int calc_eq_g(const int l, const int N, const int stride, const int L, const int
 		} else {
 			v[i] = 1.0;
 		}
-		g[i+i*N] = v[i];
+		g[i + i*N] = v[i];
 	}
 
 	dormqr("R", "T", &N, &N, &N, Q, &N, tau, g, &N, work, &lwork, &info);
@@ -213,23 +207,20 @@ int get_lwork_ue_g(const int N, const int L)
 	return max_lwork;
 }
 
-static void calc_o(const int N, const int stride, const int L, const int n_mul,
+static void calc_o(const int N, const int L, const int n_mul,
 		const double *const restrict B, double *const restrict G,
 		double *const restrict work)
 {
-	__assume(stride % DBL_ALIGN == 0);
-	_aa(B); _aa(G);
-
 	const int E = 1 + (L - 1) / n_mul;
 	const int NE = N*E;
 
 	for (int i = 0; i < NE * NE; i++) G[i] = 0.0;
 
 	for (int e = 0; e < E - 1; e++) // subdiagonal blocks
-		mul_seq(N, stride, L, e*n_mul, (e + 1)*n_mul, -1.0, B,
+		mul_seq(N, L, e*n_mul, (e + 1)*n_mul, -1.0, B,
 		        G + N*(e + 1) + NE*N*e, NE, work);
 
-	mul_seq(N, stride, L, (E - 1)*n_mul, 0, 1.0, B, // top right corner
+	mul_seq(N, L, (E - 1)*n_mul, 0, 1.0, B, // top right corner
 		G + NE*N*(E - 1), NE, work);
 
 	for (int i = 0; i < NE; i++) G[i + NE*i] += 1.0; // 1 on diagonal
@@ -241,8 +232,6 @@ static void bsofi(const int N, const int L,
 		double *const restrict Q, // 2*N * 2*N
 		double *const restrict work, const int lwork)
 {
-	_aa(G); _aa(tau); _aa(Q); _aa(work);
-
 	int info;
 
 	if (L == 1) {
@@ -310,15 +299,12 @@ static void bsofi(const int N, const int L,
 	#undef G_BLK
 }
 
-static void expand_g(const int N, const int stride, const int L, const int E, const int n_matmul,
+static void expand_g(const int N, const int L, const int E, const int n_matmul,
 		const double *const restrict B,
 		const double *const restrict iB,
 		const double *const restrict Gred,
 		double *const restrict G)
 {
-	__assume(stride % DBL_ALIGN == 0);
-	_aa(B); _aa(iB); _aa(Gred); _aa(G);
-
 	const int ldG = N;
 
 	#define G_BLK(i, j) (G + N*N*((i) +  L*(j)))
@@ -355,7 +341,7 @@ static void expand_g(const int N, const int stride, const int L, const int E, co
 			const int next = (m - 1 + L) % L;
 			const double alpha = (m == 0) ? -1.0 : 1.0;
 			dgemm("N", "N", &N, &N, &N, &alpha,
-			      G_BLK(k, m), &ldG, B + stride*next, &N, cdbl(0.0),
+			      G_BLK(k, m), &ldG, B + N*N*next, &N, cdbl(0.0),
 			      G_BLK(k, next), &ldG);
 			m = next;
 		}
@@ -366,10 +352,10 @@ static void expand_g(const int N, const int stride, const int L, const int E, co
 			if (k == m) {
 				for (int j = 0; j < N; j++)
 				for (int i = 0; i < N; i++)
-					G_BLK(k, next)[i + ldG*j] = iB[i + N*j + stride*m];
+					G_BLK(k, next)[i + ldG*j] = iB[i + N*j + N*N*m];
 			}
 			dgemm("N", "N", &N, &N, &N, &alpha,
-			      G_BLK(k, m), &ldG, iB + stride*m, &N, &beta,
+			      G_BLK(k, m), &ldG, iB + N*N*m, &N, &beta,
 			      G_BLK(k, next), &ldG);
 			m = next;
 		}
@@ -388,9 +374,9 @@ static void expand_g(const int N, const int stride, const int L, const int E, co
 			if (m == l)
 				for (int j = 0; j < N; j++)
 				for (int i = 0; i < N; i++)
-					G_BLK(next, l)[i + ldG*j] = iB[i + N*j + stride*next];
+					G_BLK(next, l)[i + ldG*j] = iB[i + N*j + N*N*next];
 			dgemm("N", "N", &N, &N, &N, &alpha,
-			      iB + stride*next, &N, G_BLK(m, l), &ldG, &beta,
+			      iB + N*N*next, &N, G_BLK(m, l), &ldG, &beta,
 			      G_BLK(next, l), &ldG);
 			m = next;
 		}
@@ -398,7 +384,7 @@ static void expand_g(const int N, const int stride, const int L, const int E, co
 			const int next = (m + 1) % L;
 			const double alpha = (next == 0) ? -1.0 : 1.0;
 			dgemm("N", "N", &N, &N, &N, &alpha,
-			      B + stride*m, &N, G_BLK(m, l), &ldG, cdbl(0.0),
+			      B + N*N*m, &N, G_BLK(m, l), &ldG, cdbl(0.0),
 			      G_BLK(next, l), &ldG);
 			if (next == l)
 				for (int i = 0; i < N; i++)
@@ -409,7 +395,7 @@ static void expand_g(const int N, const int stride, const int L, const int E, co
 	#undef G_BLK
 }
 
-void calc_ue_g(const int N, const int stride, const int L, const int F, const int n_mul,
+void calc_ue_g(const int N, const int L, const int F, const int n_mul,
 		const double *const restrict B, const double *const restrict iB,
 		const double *const restrict C,
 		double *const restrict G,
@@ -421,7 +407,7 @@ void calc_ue_g(const int N, const int stride, const int L, const int F, const in
 	const int E = 1 + (F - 1) / n_mul;
 
 	profile_begin(calc_o);
-	calc_o(N, stride, F, n_mul, C, Gred, work);
+	calc_o(N, F, n_mul, C, Gred, work);
 	profile_end(calc_o);
 
 	profile_begin(bsofi);
@@ -429,6 +415,6 @@ void calc_ue_g(const int N, const int stride, const int L, const int F, const in
 	profile_end(bsofi);
 
 	profile_begin(expand_g);
-	expand_g(N, stride, L, E, (L/F) * n_mul, B, iB, Gred, G);
+	expand_g(N, L, E, (L/F) * n_mul, B, iB, Gred, G);
 	profile_end(expand_g);
 }

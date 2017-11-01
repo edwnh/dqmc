@@ -1,6 +1,6 @@
 #pragma once
 
-void mul_seq(const int N, const int stride, const int L,
+void mul_seq(const int N, const int L,
 		const int min, const int maxp1,
 		const double alpha, const double *const restrict B,
 		double *const restrict A, const int ldA,
@@ -8,7 +8,7 @@ void mul_seq(const int N, const int stride, const int L,
 
 int get_lwork_eq_g(const int N);
 
-int calc_eq_g(const int l, const int N, const int stride, const int L, const int n_mul,
+int calc_eq_g(const int l, const int N, const int L, const int n_mul,
 		const double *const restrict B, double *const restrict g,
 		// work arrays
 		double *const restrict Q, double *const restrict T,
@@ -18,7 +18,7 @@ int calc_eq_g(const int l, const int N, const int stride, const int L, const int
 
 int get_lwork_ue_g(const int N, const int L);
 
-void calc_ue_g(const int N, const int stride, const int L, const int F, const int n_mul,
+void calc_ue_g(const int N, const int L, const int F, const int n_mul,
 		const double *const restrict B, const double *const restrict iB,
 		const double *const restrict C,
 		double *const restrict G, // NL * NL

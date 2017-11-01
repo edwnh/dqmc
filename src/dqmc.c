@@ -23,7 +23,7 @@
 // uncomment to check 0,0 block of unequal-time G against recalculated g
 // #define CHECK_G_UE
 
-// who needs function calls
+// who needs function calls :D
 #define matmul(C, A, B) do { \
 	dgemm("N", "N", &N, &N, &N, cdbl(1.0), (A), &N, (B), &N, cdbl(0.0), (C), &N); \
 } while (0);
@@ -79,50 +79,46 @@ static int dqmc(struct sim_data *sim)
 	const int n_matmul = sim->p.n_matmul;
 	const int n_delay = sim->p.n_delay;
 	const int F = sim->p.F;
-	const double *const restrict exp_K = sim->p.exp_K; _aa(exp_K);
-	const double *const restrict inv_exp_K = sim->p.inv_exp_K; _aa(inv_exp_K);
-	const double *const restrict exp_lambda = sim->p.exp_lambda; _aa(exp_lambda);
-	const double *const restrict del = sim->p.del; _aa(del);
-	uint64_t *const restrict rng = sim->s.rng; _aa(rng);
+	const double *const restrict exp_K = sim->p.exp_K;
+	const double *const restrict inv_exp_K = sim->p.inv_exp_K;
+	const double *const restrict exp_lambda = sim->p.exp_lambda;
+	const double *const restrict del = sim->p.del;
+	uint64_t *const restrict rng = sim->s.rng;
 	int *const restrict hs = sim->s.hs;
 
-	// stride for time index in arrays of B or C matrices
-	const int stride = DBL_ALIGN * ((N*N + DBL_ALIGN - 1) / DBL_ALIGN);
-	__assume(stride % DBL_ALIGN == 0);
-
-	double *const Bu = my_calloc(stride*L * sizeof(double)); _aa(Bu);
-	double *const Bd = my_calloc(stride*L * sizeof(double)); _aa(Bd);
-	double *const iBu = my_calloc(stride*L * sizeof(double)); _aa(iBu);
-	double *const iBd = my_calloc(stride*L * sizeof(double)); _aa(iBd);
-	double *const Cu = my_calloc(stride*F * sizeof(double)); _aa(Cu);
-	double *const Cd = my_calloc(stride*F * sizeof(double)); _aa(Cd);
-	double *const restrict gu = my_calloc(N*N * sizeof(double)); _aa(gu);
-	double *const restrict gd = my_calloc(N*N * sizeof(double)); _aa(gd);
+	double *const Bu = my_calloc(N*N*L * sizeof(double));
+	double *const Bd = my_calloc(N*N*L * sizeof(double));
+	double *const iBu = my_calloc(N*N*L * sizeof(double));
+	double *const iBd = my_calloc(N*N*L * sizeof(double));
+	double *const Cu = my_calloc(N*N*F * sizeof(double));
+	double *const Cd = my_calloc(N*N*F * sizeof(double));
+	double *const restrict gu = my_calloc(N*N * sizeof(double));
+	double *const restrict gd = my_calloc(N*N * sizeof(double));
 	#ifdef CHECK_G_WRP
-	double *const restrict guwrp = my_calloc(N*N * sizeof(double)); _aa(guwrp);
-	double *const restrict gdwrp = my_calloc(N*N * sizeof(double)); _aa(gdwrp);
+	double *const restrict guwrp = my_calloc(N*N * sizeof(double));
+	double *const restrict gdwrp = my_calloc(N*N * sizeof(double));
 	#endif
 	#ifdef CHECK_G_ACC
-	double *const restrict guacc = my_calloc(N*N * sizeof(double)); _aa(guacc);
-	double *const restrict gdacc = my_calloc(N*N * sizeof(double)); _aa(gdacc);
+	double *const restrict guacc = my_calloc(N*N * sizeof(double));
+	double *const restrict gdacc = my_calloc(N*N * sizeof(double));
 	#endif
 	int sign = 0;
-	int *const site_order = my_calloc(N * sizeof(double)); _aa(site_order);
+	int *const site_order = my_calloc(N * sizeof(double));
 
 	// work arrays for calc_eq_g and stuff. two sets for easy 2x parallelization
-	double *const restrict tmpNN1u = my_calloc(N*N * sizeof(double)); _aa(tmpNN1u);
-	double *const restrict tmpNN2u = my_calloc(N*N * sizeof(double)); _aa(tmpNN2u);
-	double *const restrict tmpN1u = my_calloc(N * sizeof(double)); _aa(tmpN1u);
-	double *const restrict tmpN2u = my_calloc(N * sizeof(double)); _aa(tmpN2u);
-	double *const restrict tmpN3u = my_calloc(N * sizeof(double)); _aa(tmpN3u);
-	int *const restrict pvtu = my_calloc(N * sizeof(int)); _aa(pvtu);
+	double *const restrict tmpNN1u = my_calloc(N*N * sizeof(double));
+	double *const restrict tmpNN2u = my_calloc(N*N * sizeof(double));
+	double *const restrict tmpN1u = my_calloc(N * sizeof(double));
+	double *const restrict tmpN2u = my_calloc(N * sizeof(double));
+	double *const restrict tmpN3u = my_calloc(N * sizeof(double));
+	int *const restrict pvtu = my_calloc(N * sizeof(int));
 
-	double *const restrict tmpNN1d = my_calloc(N*N * sizeof(double)); _aa(tmpNN1d);
-	double *const restrict tmpNN2d = my_calloc(N*N * sizeof(double)); _aa(tmpNN2d);
-	double *const restrict tmpN1d = my_calloc(N * sizeof(double)); _aa(tmpN1d);
-	double *const restrict tmpN2d = my_calloc(N * sizeof(double)); _aa(tmpN2d);
-	double *const restrict tmpN3d = my_calloc(N * sizeof(double)); _aa(tmpN3d);
-	int *const restrict pvtd = my_calloc(N * sizeof(int)); _aa(pvtd);
+	double *const restrict tmpNN1d = my_calloc(N*N * sizeof(double));
+	double *const restrict tmpNN2d = my_calloc(N*N * sizeof(double));
+	double *const restrict tmpN1d = my_calloc(N * sizeof(double));
+	double *const restrict tmpN2d = my_calloc(N * sizeof(double));
+	double *const restrict tmpN3d = my_calloc(N * sizeof(double));
+	int *const restrict pvtd = my_calloc(N * sizeof(int));
 
 	// arrays for calc_ue_g
 	double *restrict ueGu = NULL;
@@ -138,16 +134,16 @@ static int dqmc(struct sim_data *sim)
 	if (sim->p.period_uneqlt > 0) {
 		const int E = 1 + (F - 1) / N_MUL;
 
-		Gredu = my_calloc(N*E*N*E * sizeof(double)); _aa(Gredu);
-		tauu = my_calloc(N*E * sizeof(double)); _aa(tauu);
-		Qu = my_calloc(4*N*N * sizeof(double)); _aa(Qu);
+		Gredu = my_calloc(N*E*N*E * sizeof(double));
+		tauu = my_calloc(N*E * sizeof(double));
+		Qu = my_calloc(4*N*N * sizeof(double));
 
-		Gredd = my_calloc(N*E*N*E * sizeof(double)); _aa(Gredd);
-		taud = my_calloc(N*E * sizeof(double)); _aa(taud);
-		Qd = my_calloc(4*N*N * sizeof(double)); _aa(Qd);
+		Gredd = my_calloc(N*E*N*E * sizeof(double));
+		taud = my_calloc(N*E * sizeof(double));
+		Qd = my_calloc(4*N*N * sizeof(double));
 
-		ueGu = my_calloc(N*N*L*L * sizeof(double)); _aa(ueGu);
-		ueGd = my_calloc(N*N*L*L * sizeof(double)); _aa(ueGd);
+		ueGu = my_calloc(N*N*L*L * sizeof(double));
+		ueGd = my_calloc(N*N*L*L * sizeof(double));
 		if (ueGu == NULL || ueGd == NULL) return -1;
 	}
 
@@ -157,8 +153,8 @@ static int dqmc(struct sim_data *sim)
 		const int lwork_ue = get_lwork_ue_g(N, F);
 		if (lwork_ue > lwork) lwork = lwork_ue;
 	}
-	double *const restrict worku = my_calloc(lwork * sizeof(double)); _aa(worku);
-	double *const restrict workd = my_calloc(lwork * sizeof(double)); _aa(workd);
+	double *const restrict worku = my_calloc(lwork * sizeof(double));
+	double *const restrict workd = my_calloc(lwork * sizeof(double));
 
 	{
 	int signu, signd;
@@ -168,26 +164,26 @@ static int dqmc(struct sim_data *sim)
 	{
 	if (sim->p.period_uneqlt > 0)
 		for (int l = 0; l < L; l++)
-			calciBu(iBu + stride*l, l);
+			calciBu(iBu + N*N*l, l);
 	for (int l = 0; l < L; l++)
-		calcBu(Bu + stride*l, l);
+		calcBu(Bu + N*N*l, l);
 	for (int f = 0; f < F; f++)
-		mul_seq(N, stride, L, f*n_matmul, ((f + 1)*n_matmul) % L, 1.0,
-		        Bu, Cu + stride*f, N, tmpNN1u);
-	signu = calc_eq_g(0, N, stride, F, N_MUL, Cu, gu, tmpNN1u, tmpNN2u,
+		mul_seq(N, L, f*n_matmul, ((f + 1)*n_matmul) % L, 1.0,
+		        Bu, Cu + N*N*f, N, tmpNN1u);
+	signu = calc_eq_g(0, N, F, N_MUL, Cu, gu, tmpNN1u, tmpNN2u,
 	                  tmpN1u, tmpN2u, tmpN3u, pvtu, worku, lwork);
 	}
 	#pragma omp section
 	{
 	if (sim->p.period_uneqlt > 0)
 		for (int l = 0; l < L; l++)
-			calciBu(iBu + stride*l, l);
+			calciBu(iBu + N*N*l, l);
 	for (int l = 0; l < L; l++)
-		calcBd(Bd + stride*l, l);
+		calcBd(Bd + N*N*l, l);
 	for (int f = 0; f < F; f++)
-		mul_seq(N, stride, L, f*n_matmul, ((f + 1)*n_matmul) % L, 1.0,
-		        Bd, Cd + stride*f, N, tmpNN1d);
-	signd = calc_eq_g(0, N, stride, F, N_MUL, Cd, gd, tmpNN1d, tmpNN2d,
+		mul_seq(N, L, f*n_matmul, ((f + 1)*n_matmul) % L, 1.0,
+		        Bd, Cd + N*N*f, N, tmpNN1d);
+	signd = calc_eq_g(0, N, F, N_MUL, Cd, gd, tmpNN1d, tmpNN2d,
 	                  tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
 	}
 	}
@@ -214,9 +210,9 @@ static int dqmc(struct sim_data *sim)
 			{
 			#pragma omp section
 			{
-			double *const restrict Bul = Bu + stride*l; _aa(Bul);
-			double *const restrict iBul = iBu + stride*l; _aa(iBul);
-			double *const restrict Cuf = Cu + stride*f; _aa(Cuf);
+			double *const restrict Bul = Bu + N*N*l;
+			double *const restrict iBul = iBu + N*N*l;
+			double *const restrict Cuf = Cu + N*N*f;
 			profile_begin(calcb);
 			calcBu(Bul, l);
 			if (!recalc || sim->p.period_uneqlt > 0)
@@ -224,22 +220,22 @@ static int dqmc(struct sim_data *sim)
 			profile_end(calcb);
 			if (recalc) {
 				profile_begin(multb);
-				mul_seq(N, stride, L, f*n_matmul, ((f + 1)*n_matmul) % L,
+				mul_seq(N, L, f*n_matmul, ((f + 1)*n_matmul) % L,
 				        1.0, Bu, Cuf, N, tmpNN1u);
 				profile_end(multb);
 				profile_begin(recalc);
 				#ifdef CHECK_G_WRP
 				if (sim->p.period_uneqlt == 0)
-					calciBu(iBu + stride*l, l);
-				matmul(tmpNN1u, gu, iBu + stride*l);
-				matmul(guwrp, Bu + stride*l, tmpNN1u);
+					calciBu(iBu + N*N*l, l);
+				matmul(tmpNN1u, gu, iBu + N*N*l);
+				matmul(guwrp, Bu + N*N*l, tmpNN1u);
 				#endif
 				#ifdef CHECK_G_ACC
-				calc_eq_g((l + 1) % L, N, stride, L, 1, Bu, guacc,
+				calc_eq_g((l + 1) % L, N, L, 1, Bu, guacc,
 				          tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				          tmpN3u, pvtu, worku, lwork);
 				#endif
-				signu = calc_eq_g((f + 1) % F, N, stride, F, N_MUL, Cu, gu,
+				signu = calc_eq_g((f + 1) % F, N, F, N_MUL, Cu, gu,
 				                  tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				                  tmpN3u, pvtu, worku, lwork);
 				profile_end(recalc);
@@ -252,9 +248,9 @@ static int dqmc(struct sim_data *sim)
 			}
 			#pragma omp section
 			{
-			double *const restrict Bdl = Bd + stride*l; _aa(Bdl);
-			double *const restrict iBdl = iBd + stride*l; _aa(iBdl);
-			double *const restrict Cdf = Cd + stride*f; _aa(Cdf);
+			double *const restrict Bdl = Bd + N*N*l;
+			double *const restrict iBdl = iBd + N*N*l;
+			double *const restrict Cdf = Cd + N*N*f;
 			profile_begin(calcb);
 			calcBd(Bdl, l);
 			if (!recalc || sim->p.period_uneqlt > 0)
@@ -262,22 +258,22 @@ static int dqmc(struct sim_data *sim)
 			profile_end(calcb);
 			if (recalc) {
 				profile_begin(multb);
-				mul_seq(N, stride, L, f*n_matmul, ((f + 1)*n_matmul) % L,
+				mul_seq(N, L, f*n_matmul, ((f + 1)*n_matmul) % L,
 				        1.0, Bd, Cdf, N, tmpNN1d);
 				profile_end(multb);
 				profile_begin(recalc);
 				#ifdef CHECK_G_WRP
 				if (sim->p.period_uneqlt == 0)
-					calciBd(iBd + stride*l, l);
-				matmul(tmpNN1d, gd, iBd + stride*l);
-				matmul(gdwrp, Bd + stride*l, tmpNN1d);
+					calciBd(iBd + N*N*l, l);
+				matmul(tmpNN1d, gd, iBd + N*N*l);
+				matmul(gdwrp, Bd + N*N*l, tmpNN1d);
 				#endif
 				#ifdef CHECK_G_ACC
-				calc_eq_g((l + 1) % L, N, stride, L, 1, Bd, gdacc,
+				calc_eq_g((l + 1) % L, N, L, 1, Bd, gdacc,
 				          tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				          tmpN3d, pvtd, workd, lwork);
 				#endif
-				signd = calc_eq_g((f + 1) % F, N, stride, F, N_MUL, Cd, gd,
+				signd = calc_eq_g((f + 1) % F, N, F, N_MUL, Cd, gd,
 				                  tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				                  tmpN3d, pvtd, workd, lwork);
 				profile_end(recalc);
@@ -325,10 +321,10 @@ static int dqmc(struct sim_data *sim)
 			#pragma omp parallel sections
 			{
 			#pragma omp section
-			calc_ue_g(N, stride, L, F, N_MUL, Bu, iBu, Cu,
+			calc_ue_g(N, L, F, N_MUL, Bu, iBu, Cu,
 			          ueGu, Gredu, tauu, Qu, worku, lwork);
 			#pragma omp section
-			calc_ue_g(N, stride, L, F, N_MUL, Bd, iBd, Cd,
+			calc_ue_g(N, L, F, N_MUL, Bd, iBd, Cd,
 			          ueGd, Gredd, taud, Qd, workd, lwork);
 			}
 
