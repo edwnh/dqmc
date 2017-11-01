@@ -446,6 +446,8 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 			status = -1;
 			goto cleanup;
 		}
+	} else {
+		fprintf(log, "benchmark mode enabled; not saving data\n");
 	}
 
 	status = (sim->s.sweep == sim->p.n_sweep) ? 0 : 1;
