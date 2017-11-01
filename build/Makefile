@@ -1,7 +1,7 @@
 CC = icc
 CC_MPI = mpiicc
 
-CFLAGS = -std=gnu11 -Wall -Wextra -Ofast -xHost
+CFLAGS = -std=gnu11 -Wall -Wextra -wd3948 -Ofast -xHost
 CFLAGS += -DMKL_DIRECT_CALL_SEQ -mkl=sequential
 CFLAGS += -DGIT_ID=\"$(shell git describe --always)\"
 CFLAGS += -DPROFILE_ENABLE
