@@ -34,7 +34,7 @@ void measure_eqlt(const struct params *const restrict p, const int sign,
 		m->nn[r] += pre*((2. - guii - gdii)*(2. - gujj - gdjj) + x);
 		m->xx[r] += 0.25*pre*(delta*(guii + gdii) - (guji*gdij + gdji*guij));
 		m->zz[r] += 0.25*pre*((gdii - guii)*(gdjj - gujj) + x);
-		m->pair_sw[r] += pre*(delta*(1. - guii - gdii) + 2.*guij*gdij);
+		m->pair_sw[r] += pre*guij*gdij;
 	}
 
 	// 2-bond measurements
@@ -72,8 +72,9 @@ void measure_uneqlt(const struct params *const restrict p, const int sign,
 		const double gdjj = Gd[(j + N*j) + N*N*(l + L*l)];
 		m->gt0[r + num_ij*t] += 0.5*T_sign*pre*(guij + gdij);
 		const double x = delta_tij*(guii + gdii) - (guji*guij + gdji*gdij);
-		m->nn[r + num_ij*t] += pre*((2.*delta_t - guii - gdii)*(2.*delta_t - gujj - gdjj) + x);
+		m->nn[r + num_ij*t] += pre*((2. - guii - gdii)*(2. - gujj - gdjj) + x);
 		m->xx[r + num_ij*t] += 0.25*pre*(delta_tij*(guii + gdii) - (guji*gdij + gdji*guij));
 		m->zz[r + num_ij*t] += 0.25*pre*((gdii - guii)*(gdjj - gujj) + x);
+		m->pair_sw[r + num_ij*t] += pre*guij*gdij;
 	}
 }
