@@ -5,6 +5,7 @@
 struct params {
 	int N, L;
 	int *map_i, *map_ij;
+	int *bonds, *map_bb;
 //	double *K, *U;
 //	double dt;
 
@@ -13,7 +14,8 @@ struct params {
 	int period_eqlt, period_uneqlt;
 
 	int num_i, num_ij;
-	int *degen_i, *degen_ij;
+	int num_b, num_bb;
+	int *degen_i, *degen_ij, *degen_bb;
 	double *exp_K, *inv_exp_K;
 	double *exp_lambda, *del;
 	int F, n_sweep;
@@ -48,6 +50,9 @@ struct meas_uneqlt {
 	double *xx;
 	double *zz;
 	double *pair_sw;
+	double *pair_bb;
+	double *jj;
+	double *rhorho;
 };
 
 struct sim_data {

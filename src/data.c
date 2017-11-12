@@ -23,17 +23,23 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	my_read(_int, "/params/L",      &sim->p.L);
 	my_read(_int, "/params/num_i",  &sim->p.num_i);
 	my_read(_int, "/params/num_ij", &sim->p.num_ij);
+	my_read(_int, "/params/num_b", &sim->p.num_b);
+	my_read(_int, "/params/num_bb", &sim->p.num_bb);
 	my_read(_int, "/params/period_uneqlt", &sim->p.period_uneqlt);
 
 	const int N = sim->p.N, L = sim->p.L;
 	const int num_i = sim->p.num_i, num_ij = sim->p.num_ij;
+	const int num_b = sim->p.num_b, num_bb = sim->p.num_bb;
 
 	sim->p.map_i         = my_calloc(N        * sizeof(int));
 	sim->p.map_ij        = my_calloc(N*N      * sizeof(int));
+	sim->p.bonds         = my_calloc(num_b*2  * sizeof(int));
+	sim->p.map_bb        = my_calloc(num_b*num_b * sizeof(int));
 //	sim->p.K             = my_calloc(N*N      * sizeof(double));
 //	sim->p.U             = my_calloc(num_i    * sizeof(double));
 	sim->p.degen_i       = my_calloc(num_i    * sizeof(int));
 	sim->p.degen_ij      = my_calloc(num_ij   * sizeof(int));
+	sim->p.degen_bb      = my_calloc(num_bb   * sizeof(int));
 	sim->p.exp_K         = my_calloc(N*N      * sizeof(double));
 	sim->p.inv_exp_K     = my_calloc(N*N      * sizeof(double));
 	sim->p.exp_lambda    = my_calloc(N*2      * sizeof(double));
@@ -52,11 +58,16 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 		sim->m_ue.xx      = my_calloc(num_ij*L * sizeof(double));
 		sim->m_ue.zz      = my_calloc(num_ij*L * sizeof(double));
 		sim->m_ue.pair_sw = my_calloc(num_ij*L * sizeof(double));
+		sim->m_ue.pair_bb = my_calloc(num_bb*L * sizeof(double));
+		sim->m_ue.jj      = my_calloc(num_bb*L * sizeof(double));
+		sim->m_ue.rhorho  = my_calloc(num_bb*L * sizeof(double));
 	}
 	// make sure anything appended here is free'd in sim_data_free()
 
 	my_read(_int,    "/params/map_i",          sim->p.map_i);
 	my_read(_int,    "/params/map_ij",         sim->p.map_ij);
+	my_read(_int,    "/params/bonds",          sim->p.bonds);
+	my_read(_int,    "/params/map_bb",         sim->p.map_bb);
 //	my_read(_double, "/params/K",              sim->p.K);
 //	my_read(_double, "/params/U",              sim->p.U);
 //	my_read(_double, "/params/dt",            &sim->p.dt);
@@ -67,6 +78,7 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	my_read(_int,    "/params/period_eqlt",   &sim->p.period_eqlt);
 	my_read(_int,    "/params/degen_i",        sim->p.degen_i);
 	my_read(_int,    "/params/degen_ij",       sim->p.degen_ij);
+	my_read(_int,    "/params/degen_bb",       sim->p.degen_bb);
 	my_read(_double, "/params/exp_K",          sim->p.exp_K);
 	my_read(_double, "/params/inv_exp_K",      sim->p.inv_exp_K);
 	my_read(_double, "/params/exp_lambda",     sim->p.exp_lambda);
@@ -93,6 +105,9 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 		my_read(_double, "/meas_uneqlt/xx",        sim->m_ue.xx);
 		my_read(_double, "/meas_uneqlt/zz",        sim->m_ue.zz);
 		my_read(_double, "/meas_uneqlt/pair_sw",   sim->m_ue.pair_sw);
+		my_read(_double, "/meas_uneqlt/pair_bb",   sim->m_ue.pair_bb);
+		my_read(_double, "/meas_uneqlt/jj",        sim->m_ue.jj);
+		my_read(_double, "/meas_uneqlt/rhorho",    sim->m_ue.rhorho);
 	}
 
 #undef my_read
@@ -139,6 +154,9 @@ int sim_data_save(const struct sim_data *sim, const char *file)
 		my_write("/meas_uneqlt/xx",       H5T_NATIVE_DOUBLE,  sim->m_ue.xx);
 		my_write("/meas_uneqlt/zz",       H5T_NATIVE_DOUBLE,  sim->m_ue.zz);
 		my_write("/meas_uneqlt/pair_sw",  H5T_NATIVE_DOUBLE,  sim->m_ue.pair_sw);
+		my_write("/meas_uneqlt/pair_bb",  H5T_NATIVE_DOUBLE,  sim->m_ue.pair_bb);
+		my_write("/meas_uneqlt/jj",       H5T_NATIVE_DOUBLE,  sim->m_ue.jj);
+		my_write("/meas_uneqlt/rhorho",   H5T_NATIVE_DOUBLE,  sim->m_ue.rhorho);
 	}
 
 #undef my_write
@@ -151,6 +169,9 @@ int sim_data_save(const struct sim_data *sim, const char *file)
 void sim_data_free(const struct sim_data *sim)
 {
 	if (sim->p.period_uneqlt > 0) {
+		my_free(sim->m_ue.rhorho);
+		my_free(sim->m_ue.jj);
+		my_free(sim->m_ue.pair_bb);
 		my_free(sim->m_ue.pair_sw);
 		my_free(sim->m_ue.zz);
 		my_free(sim->m_ue.xx);
@@ -169,10 +190,13 @@ void sim_data_free(const struct sim_data *sim)
 	my_free(sim->p.exp_lambda);
 	my_free(sim->p.inv_exp_K);
 	my_free(sim->p.exp_K);
+	my_free(sim->p.degen_bb);
 	my_free(sim->p.degen_ij);
 	my_free(sim->p.degen_i);
 //	my_free(sim->p.U);
 //	my_free(sim->p.K);
+	my_free(sim->p.map_bb);
+	my_free(sim->p.bonds);
 	my_free(sim->p.map_ij);
 	my_free(sim->p.map_i);
 }

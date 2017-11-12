@@ -91,6 +91,40 @@ def create_1(filename=None, overwrite=False, seed=None,
     num_ij = map_ij.max() + 1
     assert num_ij == degen_ij.size
 
+    num_b = 4*N
+    bonds = np.zeros((2, num_b), dtype=np.int32)
+    for iy in range(Ny):
+        for ix in range(Nx):
+            i = ix + Nx*iy
+            iy1 = (iy + 1) % Ny
+            ix1 = (ix + 1) % Nx
+            bonds[0, i] = i            # i0 = i
+            bonds[1, i] = ix1 + Nx*iy  # i1 = i + x
+            bonds[0, i + N] = i            # i0 = i
+            bonds[1, i + N] = ix + Nx*iy1  # i1 = i + y
+            bonds[0, i + 2*N] = i             # i0 = i
+            bonds[1, i + 2*N] = ix1 + Nx*iy1  # i1 = i + x + y
+            bonds[0, i + 3*N] = ix1 + Nx*iy   # i0 = i + x
+            bonds[1, i + 3*N] = ix + Nx*iy1   # i1 = i + y
+
+    num_bb = 16*N
+    map_bb = np.zeros((num_b, num_b), dtype=np.int32)
+    degen_bb = np.zeros(num_bb, dtype = np.int32)
+    for jy in range(Ny):
+        for jx in range(Nx):
+            for iy in range(Ny):
+                for ix in range(Nx):
+                    ky = (jy - iy) % Ny
+                    kx = (jx - ix) % Nx
+                    i = ix + Nx*iy
+                    j = jx + Nx*jy
+                    k = kx + Nx*ky
+                    for jj in range(4):
+                        for ii in range(4):
+                            map_bb[j + jj*N, i + ii*N] = k
+                            degen_bb[k] += 1
+                            k += N
+
     K = np.zeros((N, N), dtype=np.float64)
     for iy in range(Ny):
         for ix in range(Nx):
@@ -139,6 +173,8 @@ def create_1(filename=None, overwrite=False, seed=None,
         f["params"]["L"] = np.array(L, dtype=np.int32)
         f["params"]["map_i"] = map_i
         f["params"]["map_ij"] = map_ij
+        f["params"]["bonds"] = bonds
+        f["params"]["map_bb"] = map_bb
         f["params"]["K"] = K
         f["params"]["U"] = U_i
         f["params"]["dt"] = np.array(dt, dtype=np.float64)
@@ -155,8 +191,11 @@ def create_1(filename=None, overwrite=False, seed=None,
         # precalculated stuff
         f["params"]["num_i"] = num_i
         f["params"]["num_ij"] = num_ij
+        f["params"]["num_b"] = num_b
+        f["params"]["num_bb"] = num_bb
         f["params"]["degen_i"] = degen_i
         f["params"]["degen_ij"] = degen_ij
+        f["params"]["degen_bb"] = degen_bb
         f["params"]["exp_K"] = exp_K
         f["params"]["inv_exp_K"] = inv_exp_K
         f["params"]["exp_lambda"] = exp_lambda
@@ -192,6 +231,9 @@ def create_1(filename=None, overwrite=False, seed=None,
             f["meas_uneqlt"]["xx"] = np.zeros(num_ij*L, dtype=np.float64)
             f["meas_uneqlt"]["zz"] = np.zeros(num_ij*L, dtype=np.float64)
             f["meas_uneqlt"]["pair_sw"] = np.zeros(num_ij*L, dtype=np.float64)
+            f["meas_uneqlt"]["pair_bb"] = np.zeros(num_bb*L, dtype=np.float64)
+            f["meas_uneqlt"]["jj"] = np.zeros(num_bb*L, dtype=np.float64)
+            f["meas_uneqlt"]["rhorho"] = np.zeros(num_bb*L, dtype=np.float64)
     return filename
 
 
