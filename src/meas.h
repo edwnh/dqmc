@@ -8,12 +8,12 @@ void measure_eqlt(const struct params *const restrict p, const int sign,
 		struct meas_eqlt *const restrict m);
 
 void measure_uneqlt(const struct params *const restrict p, const int sign,
-		const double *const restrict Gu0t,
-		const double *const restrict Gutt,
-		const double *const restrict Gut0,
-		const double *const restrict Gd0t,
-		const double *const restrict Gdtt,
-		const double *const restrict Gdt0,
+		const double *const Gu0t,
+		const double *const Gutt,
+		const double *const Gut0,
+		const double *const Gd0t,
+		const double *const Gdtt,
+		const double *const Gdt0,
 		struct meas_uneqlt *const restrict m);
 
 /*
