@@ -40,6 +40,110 @@ void measure_eqlt(const struct params *const restrict p, const int sign,
 }
 
 void measure_uneqlt(const struct params *const restrict p, const int sign,
+		const double *const restrict Gu0t,
+		const double *const restrict Gutt,
+		const double *const restrict Gut0,
+		const double *const restrict Gd0t,
+		const double *const restrict Gdtt,
+		const double *const restrict Gdt0,
+		struct meas_uneqlt *const restrict m)
+{
+	m->n_sample++;
+	m->sign += sign;
+	const int N = p->N, L = p->L, num_i = p->num_i, num_ij = p->num_ij;
+	const int num_b = p->num_b, num_bb = p->num_bb;
+
+	// 2-site measurements
+	#pragma omp parallel for
+	for (int t = 0; t < L; t++) {
+		const int delta_t = (t == 0);
+	for (int j = 0; j < N; j++)
+	for (int i = 0; i < N; i++) {
+		const int r = p->map_ij[i + j*N];
+		const int delta_tij = delta_t * (i == j);
+		const double pre = (double)sign / p->degen_ij[r];
+		const double guii = Gutt[i + N*i + N*N*t];
+		const double guij = Gut0[i + N*j + N*N*t];
+		const double guji = Gu0t[j + N*i + N*N*t];
+		const double gujj = Gutt[j + N*j];
+		const double gdii = Gdtt[i + N*i + N*N*t];
+		const double gdij = Gdt0[i + N*j + N*N*t];
+		const double gdji = Gd0t[j + N*i + N*N*t];
+		const double gdjj = Gdtt[j + N*j];
+		m->gt0[r + num_ij*t] += 0.5*pre*(guij + gdij);
+		const double x = delta_tij*(guii + gdii) - (guji*guij + gdji*gdij);
+		m->nn[r + num_ij*t] += pre*((2. - guii - gdii)*(2. - gujj - gdjj) + x);
+		m->xx[r + num_ij*t] += 0.25*pre*(delta_tij*(guii + gdii) - (guji*gdij + gdji*guij));
+		m->zz[r + num_ij*t] += 0.25*pre*((gdii - guii)*(gdjj - gujj) + x);
+		m->pair_sw[r + num_ij*t] += pre*guij*gdij;
+	}
+	}
+
+	// 2-bond measurements: pairing
+	#pragma omp parallel for
+	for (int t = 0; t < L; t++) {
+		const int delta_t = (t == 0);
+	for (int c = 0; c < num_b; c++) {
+		const int j0 = p->bonds[c];
+		const int j1 = p->bonds[c + num_b];
+	for (int b = 0; b < num_b; b++) {
+		const int i0 = p->bonds[b];
+		const int i1 = p->bonds[b + num_b];
+		const int bb = p->map_bb[b + c*num_b];
+		const double pre = (double)sign / p->degen_bb[bb];
+		const int delta_ti0j0 = delta_t * (i0 == j0);
+		const int delta_ti1j0 = delta_t * (i1 == j0);
+		const int delta_ti0j1 = delta_t * (i0 == j1);
+		const int delta_ti1j1 = delta_t * (i1 == j1);
+		const double gui0i0 = Gutt[i0 + i0*N + N*N*t];
+		const double gui1i0 = Gutt[i1 + i0*N + N*N*t];
+		const double gui0i1 = Gutt[i0 + i1*N + N*N*t];
+		const double gui1i1 = Gutt[i1 + i1*N + N*N*t];
+		const double gui0j0 = Gut0[i0 + j0*N + N*N*t];
+		const double gui1j0 = Gut0[i1 + j0*N + N*N*t];
+		const double gui0j1 = Gut0[i0 + j1*N + N*N*t];
+		const double gui1j1 = Gut0[i1 + j1*N + N*N*t];
+		const double guj0i0 = Gu0t[j0 + i0*N + N*N*t];
+		const double guj1i0 = Gu0t[j1 + i0*N + N*N*t];
+		const double guj0i1 = Gu0t[j0 + i1*N + N*N*t];
+		const double guj1i1 = Gu0t[j1 + i1*N + N*N*t];
+		const double guj0j0 = Gutt[j0 + j0*N];
+		const double guj1j0 = Gutt[j1 + j0*N];
+		const double guj0j1 = Gutt[j0 + j1*N];
+		const double guj1j1 = Gutt[j1 + j1*N];
+		const double gdi0i0 = Gdtt[i0 + i0*N + N*N*t];
+		const double gdi1i0 = Gdtt[i1 + i0*N + N*N*t];
+		const double gdi0i1 = Gdtt[i0 + i1*N + N*N*t];
+		const double gdi1i1 = Gdtt[i1 + i1*N + N*N*t];
+		const double gdi0j0 = Gdt0[i0 + j0*N + N*N*t];
+		const double gdi1j0 = Gdt0[i1 + j0*N + N*N*t];
+		const double gdi0j1 = Gdt0[i0 + j1*N + N*N*t];
+		const double gdi1j1 = Gdt0[i1 + j1*N + N*N*t];
+		const double gdj0i0 = Gd0t[j0 + i0*N + N*N*t];
+		const double gdj1i0 = Gd0t[j1 + i0*N + N*N*t];
+		const double gdj0i1 = Gd0t[j0 + i1*N + N*N*t];
+		const double gdj1i1 = Gd0t[j1 + i1*N + N*N*t];
+		const double gdj0j0 = Gdtt[j0 + j0*N];
+		const double gdj1j0 = Gdtt[j1 + j0*N];
+		const double gdj0j1 = Gdtt[j0 + j1*N];
+		const double gdj1j1 = Gdtt[j1 + j1*N];
+		m->pair_bb[bb + num_bb*t] += 0.5*pre*(gui0j0*gdi1j1 + gui1j0*gdi0j1 + gui0j1*gdi1j0 + gui1j1*gdi0j0);
+		m->jj[bb + num_bb*t] += pre*((gui0i1 - gui1i0 + gdi0i1 - gdi1i0)*(guj0j1 - guj1j0 + gdj0j1 - gdj1j0)
+		                             + (delta_ti0j1 - guj1i0)*gui1j0 - (delta_ti0j0 - guj0i0)*gui1j1
+		                             - (delta_ti1j1 - guj1i1)*gui0j0 + (delta_ti1j0 - guj0i1)*gui0j1
+		                             + (delta_ti0j1 - gdj1i0)*gdi1j0 - (delta_ti0j0 - gdj0i0)*gdi1j1
+		                             - (delta_ti1j1 - gdj1i1)*gdi0j0 + (delta_ti1j0 - gdj0i1)*gdi0j1);
+		m->rhorho[bb + num_bb*t] += pre*((gui0i1 + gui1i0 + gdi0i1 + gdi1i0)*(guj0j1 + guj1j0 + gdj0j1 + gdj1j0)
+		                                 + (delta_ti0j1 - guj1i0)*gui1j0 + (delta_ti0j0 - guj0i0)*gui1j1
+		                                 + (delta_ti1j1 - guj1i1)*gui0j0 + (delta_ti1j0 - guj0i1)*gui0j1
+		                                 + (delta_ti0j1 - gdj1i0)*gdi1j0 + (delta_ti0j0 - gdj0i0)*gdi1j1
+		                                 + (delta_ti1j1 - gdj1i1)*gdi0j0 + (delta_ti1j0 - gdj0i1)*gdi0j1);
+	}
+	}
+	}
+}
+
+void measure_uneqlt_full(const struct params *const restrict p, const int sign,
 		const double *const restrict Gu,
 		const double *const restrict Gd,
 		struct meas_uneqlt *const restrict m)

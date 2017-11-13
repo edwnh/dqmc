@@ -303,6 +303,163 @@ static void expand_g(const int N, const int L, const int E, const int n_matmul,
 		const double *const restrict B,
 		const double *const restrict iB,
 		const double *const restrict Gred,
+		double *const restrict G0t, double *const restrict Gtt,
+		double *const restrict Gt0)
+{
+	// number of steps to move in each direction
+	// except for boundaries, when L % n_matmul != 0
+	const int n_left = (n_matmul - 1)/2;
+	const int n_right = n_matmul/2;
+	const int n_up = n_left;
+	const int n_down = n_right;
+
+	const int rstop_last = ((E - 1)*n_matmul + L)/2;
+	const int lstop_first = (rstop_last + 1) % L;
+	const int dstop_last = rstop_last;
+	const int ustop_first = lstop_first;
+
+	// copy Gred to G0t
+	for (int f = 0; f < E; f++) {
+		const int t = f*n_matmul;
+		for (int j = 0; j < N; j++)
+		for (int i = 0; i < N; i++)
+			G0t[i + N*j + N*N*t] = Gred[i + N*E*(j + N*f)];
+	}
+
+	// expand G0t
+	for (int f = 0; f < E; f++) {
+		const int l = f*n_matmul;
+		const int lstop = (f == 0) ? lstop_first : l - n_left;
+		const int rstop = (f == E - 1) ? rstop_last : l + n_right;
+		for (int m = l; m != lstop;) {
+			const int next = (m - 1 + L) % L;
+			const double alpha = (m == 0) ? -1.0 : 1.0;
+			dgemm("N", "N", &N, &N, &N, &alpha,
+			      G0t + N*N*m, &N, B + N*N*next, &N, cdbl(0.0),
+			      G0t + N*N*next, &N);
+			m = next;
+		}
+		for (int m = l; m != rstop;) {
+			const int next = (m + 1) % L;
+			const double alpha = (next == 0) ? -1.0 : 1.0;
+			const double beta = (m == 0) ? -alpha : 0.0;
+			if (m == 0)
+				for (int j = 0; j < N; j++)
+				for (int i = 0; i < N; i++)
+					G0t[i + N*j + N*N*next] = iB[i + N*j + N*N*m];
+			dgemm("N", "N", &N, &N, &N, &alpha,
+			      G0t + N*N*m, &N, iB + N*N*m, &N, &beta,
+			      G0t + N*N*next, &N);
+			m = next;
+		}
+	}
+
+
+	// copy Gred to Gtt
+	for (int e = 0; e < E; e++) {
+		const int k = e*n_matmul;
+		for (int j = 0; j < N; j++)
+		for (int i = 0; i < N; i++)
+			Gtt[i + N*j + N*N*k] = Gred[(i + N*e) + N*E*(j + N*e)];
+	}
+
+	// expand Gtt
+	// possible to save 2 dgemm's here by using Gt0 and G0t but whatever
+	for (int e = 0; e < E; e++) {
+		const int k = e*n_matmul;
+		const int ustop = (e == 0) ? ustop_first : k - n_up;
+		const int dstop = (e == E - 1) ? dstop_last : k + n_down;
+		for (int m = k; m != ustop;) {
+			const int next = (m - 1 + L) % L;
+			dgemm("N", "N", &N, &N, &N, cdbl(1.0),
+			      Gtt + N*N*m, &N, B + N*N*next, &N, cdbl(0.0),
+			      Gt0, &N); // use Gt0 as temporary
+			dgemm("N", "N", &N, &N, &N, cdbl(1.0),
+			      iB + N*N*next, &N, Gt0, &N, cdbl(0.0),
+			      Gtt + N*N*next, &N);
+			m = next;
+		}
+		for (int m = k; m != dstop;) {
+			const int next = (m + 1) % L;
+			dgemm("N", "N", &N, &N, &N, cdbl(1.0),
+			      Gtt + N*N*m, &N, iB + N*N*m, &N, cdbl(0.0),
+			      Gt0, &N);
+			dgemm("N", "N", &N, &N, &N, cdbl(1.0),
+			      B + N*N*m, &N, Gt0, &N, cdbl(0.0),
+			      Gtt + N*N*next, &N);
+			m = next;
+		}
+	}
+
+	// copy Gred to Gt0
+	for (int e = 0; e < E; e++) {
+		const int t = e*n_matmul;
+		for (int j = 0; j < N; j++)
+		for (int i = 0; i < N; i++)
+			Gt0[i + N*j + N*N*t] = Gred[(i + N*e) + N*E*j];
+	}
+
+	// expand Gt0
+	for (int e = 0; e < E; e++) {
+		const int k = e*n_matmul;
+		const int ustop = (e == 0) ? ustop_first : k - n_up;
+		const int dstop = (e == E - 1) ? dstop_last : k + n_down;
+		for (int m = k; m != ustop;) {
+			const int next = (m - 1 + L) % L;
+			const double alpha = (m == 0) ? -1.0 : 1.0;
+			const double beta = (m == 0) ? -alpha : 0.0;
+			if (m == 0)
+				for (int j = 0; j < N; j++)
+				for (int i = 0; i < N; i++)
+					Gt0[i + N*j + N*N*next] = iB[i + N*j + N*N*next];
+			dgemm("N", "N", &N, &N, &N, &alpha,
+			      iB + N*N*next, &N, Gt0 + N*N*m, &N, &beta,
+			      Gt0 + N*N*next, &N);
+			m = next;
+		}
+		for (int m = k; m != dstop;) {
+			const int next = (m + 1) % L;
+			const double alpha = (next == 0) ? -1.0 : 1.0;
+			dgemm("N", "N", &N, &N, &N, &alpha,
+			      B + N*N*m, &N, Gt0 + N*N*m, &N, cdbl(0.0),
+			      Gt0 + N*N*next, &N);
+			if (next == 0) // should never happen
+				for (int i = 0; i < N; i++)
+					Gt0[i + N*i + N*N*next] += 1.0;
+			m = next;
+		}
+	}
+}
+
+void calc_ue_g(const int N, const int L, const int F, const int n_mul,
+		const double *const restrict B, const double *const restrict iB,
+		const double *const restrict C,
+		double *const restrict G0t, double *const restrict Gtt,
+		double *const restrict Gt0,
+		double *const restrict Gred,
+		double *const restrict tau,
+		double *const restrict Q,
+		double *const restrict work, const int lwork)
+{
+	const int E = 1 + (F - 1) / n_mul;
+
+	profile_begin(calc_o);
+	calc_o(N, F, n_mul, C, Gred, work);
+	profile_end(calc_o);
+
+	profile_begin(bsofi);
+	bsofi(N, E, Gred, tau, Q, work, lwork);
+	profile_end(bsofi);
+
+	profile_begin(expand_g);
+	expand_g(N, L, E, (L/F) * n_mul, B, iB, Gred, G0t, Gtt, Gt0);
+	profile_end(expand_g);
+}
+
+static void expand_g_full(const int N, const int L, const int E, const int n_matmul,
+		const double *const restrict B,
+		const double *const restrict iB,
+		const double *const restrict Gred,
 		double *const restrict G)
 {
 	const int ldG = N;
@@ -349,11 +506,10 @@ static void expand_g(const int N, const int L, const int E, const int n_matmul,
 			const int next = (m + 1) % L;
 			const double alpha = (next == 0) ? -1.0 : 1.0;
 			const double beta = (k == m) ? -alpha : 0.0;
-			if (k == m) {
+			if (k == m)
 				for (int j = 0; j < N; j++)
 				for (int i = 0; i < N; i++)
 					G_BLK(k, next)[i + ldG*j] = iB[i + N*j + N*N*m];
-			}
 			dgemm("N", "N", &N, &N, &N, &alpha,
 			      G_BLK(k, m), &ldG, iB + N*N*m, &N, &beta,
 			      G_BLK(k, next), &ldG);
@@ -395,7 +551,7 @@ static void expand_g(const int N, const int L, const int E, const int n_matmul,
 	#undef G_BLK
 }
 
-void calc_ue_g(const int N, const int L, const int F, const int n_mul,
+void calc_ue_g_full(const int N, const int L, const int F, const int n_mul,
 		const double *const restrict B, const double *const restrict iB,
 		const double *const restrict C,
 		double *const restrict G,
@@ -415,6 +571,6 @@ void calc_ue_g(const int N, const int L, const int F, const int n_mul,
 	profile_end(bsofi);
 
 	profile_begin(expand_g);
-	expand_g(N, L, E, (L/F) * n_mul, B, iB, Gred, G);
+	expand_g_full(N, L, E, (L/F) * n_mul, B, iB, Gred, G);
 	profile_end(expand_g);
 }

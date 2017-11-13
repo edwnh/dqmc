@@ -121,12 +121,18 @@ static int dqmc(struct sim_data *sim)
 	int *const restrict pvtd = my_calloc(N * sizeof(int));
 
 	// arrays for calc_ue_g
-	double *restrict ueGu = NULL;
+	double *restrict Gu0t = NULL;
+	double *restrict Gutt = NULL;
+	double *restrict Gut0 = NULL;
+	// double *restrict ueGu = NULL;
 	double *restrict Gredu = NULL;
 	double *restrict tauu = NULL;
 	double *restrict Qu = NULL;
 
-	double *restrict ueGd = NULL;
+	double *restrict Gd0t = NULL;
+	double *restrict Gdtt = NULL;
+	double *restrict Gdt0 = NULL;
+	// double *restrict ueGd = NULL;
 	double *restrict Gredd = NULL;
 	double *restrict taud = NULL;
 	double *restrict Qd = NULL;
@@ -142,9 +148,15 @@ static int dqmc(struct sim_data *sim)
 		taud = my_calloc(N*E * sizeof(double));
 		Qd = my_calloc(4*N*N * sizeof(double));
 
-		ueGu = my_calloc(N*N*L*L * sizeof(double));
-		ueGd = my_calloc(N*N*L*L * sizeof(double));
-		if (ueGu == NULL || ueGd == NULL) return -1;
+		Gu0t = my_calloc(N*N*L * sizeof(double));
+		Gutt = my_calloc(N*N*L * sizeof(double));
+		Gut0 = my_calloc(N*N*L * sizeof(double));
+		Gd0t = my_calloc(N*N*L * sizeof(double));
+		Gdtt = my_calloc(N*N*L * sizeof(double));
+		Gdt0 = my_calloc(N*N*L * sizeof(double));
+		// ueGu = my_calloc(N*N*L*L * sizeof(double));
+		// ueGd = my_calloc(N*N*L*L * sizeof(double));
+		// if (ueGu == NULL || ueGd == NULL) return -1;
 	}
 
 	// lapack work arrays
@@ -321,25 +333,49 @@ static int dqmc(struct sim_data *sim)
 			#pragma omp parallel sections
 			{
 			#pragma omp section
-			calc_ue_g(N, L, F, N_MUL, Bu, iBu, Cu,
-			          ueGu, Gredu, tauu, Qu, worku, lwork);
+			calc_ue_g(N, L, F, N_MUL, Bu, iBu, Cu, Gu0t, Gutt, Gut0,
+			          Gredu, tauu, Qu, worku, lwork);
 			#pragma omp section
-			calc_ue_g(N, L, F, N_MUL, Bd, iBd, Cd,
-			          ueGd, Gredd, taud, Qd, workd, lwork);
+			calc_ue_g(N, L, F, N_MUL, Bd, iBd, Cd, Gd0t, Gdtt, Gdt0,
+			          Gredd, taud, Qd, workd, lwork);
 			}
 
 			#ifdef CHECK_G_UE
-			matdiff(N, N, gu, N, ueGu, N);
-			matdiff(N, N, gd, N, ueGd, N);
+			matdiff(N, N, gu, N, Gutt, N);
+			matdiff(N, N, gd, N, Gdtt, N);
 			#endif
 			#if defined(CHECK_G_UE) && defined(CHECK_G_ACC)
-			matdiff(N, N, ueGu, N, guacc, N);
-			matdiff(N, N, ueGd, N, gdacc, N);
+			matdiff(N, N, Gutt, N, guacc, N);
+			matdiff(N, N, Gutt, N, gdacc, N);
 			#endif
 
 			profile_begin(meas_uneq);
-			measure_uneqlt(&sim->p, sign, ueGu, ueGd, &sim->m_ue);
+			measure_uneqlt(&sim->p, sign,
+			               Gu0t, Gutt, Gut0, Gd0t, Gdtt, Gdt0,
+			               &sim->m_ue);
 			profile_end(meas_uneq);
+			// #pragma omp parallel sections
+			// {
+			// #pragma omp section
+			// calc_ue_g(N, L, F, N_MUL, Bu, iBu, Cu,
+			          // ueGu, Gredu, tauu, Qu, worku, lwork);
+			// #pragma omp section
+			// calc_ue_g(N, L, F, N_MUL, Bd, iBd, Cd,
+			          // ueGd, Gredd, taud, Qd, workd, lwork);
+			// }
+
+			// #ifdef CHECK_G_UE
+			// matdiff(N, N, gu, N, ueGu, N);
+			// matdiff(N, N, gd, N, ueGd, N);
+			// #endif
+			// #if defined(CHECK_G_UE) && defined(CHECK_G_ACC)
+			// matdiff(N, N, ueGu, N, guacc, N);
+			// matdiff(N, N, ueGd, N, gdacc, N);
+			// #endif
+
+			// profile_begin(meas_uneq);
+			// measure_uneqlt(&sim->p, sign, ueGu, ueGd, &sim->m_ue);
+			// profile_end(meas_uneq);
 		}
 	}
 
@@ -350,11 +386,17 @@ static int dqmc(struct sim_data *sim)
 		my_free(Qd);
 		my_free(taud);
 		my_free(Gredd);
-		my_free(ueGd);
+		// my_free(ueGd);
+		my_free(Gdt0);
+		my_free(Gdtt);
+		my_free(Gd0t);
 		my_free(Qu);
 		my_free(tauu);
 		my_free(Gredu);
-		my_free(ueGu);
+		// my_free(ueGu);
+		my_free(Gut0);
+		my_free(Gutt);
+		my_free(Gu0t);
 	}
 	my_free(pvtd);
 	my_free(tmpN3d);
