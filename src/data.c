@@ -10,7 +10,7 @@
 int sim_data_read_alloc(struct sim_data *sim, const char *file)
 {
 	const hid_t file_id = H5Fopen(file, H5F_ACC_RDONLY, H5P_DEFAULT);
-	return_if(file_id < 0, -1, "H5Fopen() failed: %d\n", file_id);
+	return_if(file_id < 0, -1, "H5Fopen() failed: %ld\n", file_id);
 
 	herr_t status;
 
@@ -120,14 +120,14 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 int sim_data_save(const struct sim_data *sim, const char *file)
 {
 	const hid_t file_id = H5Fopen(file, H5F_ACC_RDWR, H5P_DEFAULT);
-	return_if(file_id < 0, -1, "H5Fopen() failed: %d\n", file_id);
+	return_if(file_id < 0, -1, "H5Fopen() failed: %ld\n", file_id);
 
 	herr_t status;
 	hid_t dset_id;
 
 #define my_write(name, type, data) do { \
 	dset_id = H5Dopen2(file_id, (name), H5P_DEFAULT); \
-	return_if(dset_id < 0, -1, "H5Dopen2() failed for %s: %d\n", name, dset_id); \
+	return_if(dset_id < 0, -1, "H5Dopen2() failed for %s: %ld\n", name, dset_id); \
 	status = H5Dwrite(dset_id, (type), H5S_ALL, H5S_ALL, H5P_DEFAULT, (data)); \
 	return_if(status < 0, -1, "H5Dwrite() failed for %s: %d\n", name, status); \
 	status = H5Dclose(dset_id); \
