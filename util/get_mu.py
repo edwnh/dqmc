@@ -9,8 +9,10 @@ def get_mu(path):
 
 
 def get_n(path):
-    sign = util.load(path, "meas_eqlt/sign")
-    n = util.load(path, "meas_eqlt/density")
+    n_sample = util.load(path, "meas_eqlt/n_sample")
+    mask = (n_sample == n_sample.max())
+    sign = util.load(path, "meas_eqlt/sign")[mask]
+    n = util.load(path, "meas_eqlt/density")[mask]
     return util.jackknife(sign, n)[:, 0]
 
 

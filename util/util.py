@@ -11,7 +11,7 @@ def load_1(filename, x):
 
 
 def load(path, x):
-    files = glob(path + "*.h5")
+    files = sorted(glob(path + "*.h5"))
     if not files:
         return np.zeros((0,))
 
