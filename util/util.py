@@ -32,7 +32,7 @@ def jackknife(signs, sx):
     # sx is <s X>, not <s X>/<s>
     n = signs.shape[0]
     if n == 1:
-        return np.stack((sx[0]/signs[0], np.zeros_like(sx[0])))
+        return np.stack((sx/signs, np.zeros_like(sx)))
 
     if signs.ndim == 1:
         signs = signs[:, np.newaxis]
