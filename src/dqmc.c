@@ -189,7 +189,7 @@ static int dqmc(struct sim_data *sim)
 	{
 	if (sim->p.period_uneqlt > 0)
 		for (int l = 0; l < L; l++)
-			calciBu(iBu + N*N*l, l);
+			calciBd(iBd + N*N*l, l);
 	for (int l = 0; l < L; l++)
 		calcBd(Bd + N*N*l, l);
 	for (int f = 0; f < F; f++)
