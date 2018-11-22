@@ -1,20 +1,19 @@
 import sys
-import h5py
 import util
 
 
 def info(path):
-    n_sample = util.load(path, "meas_eqlt/n_sample")
+    n_sample, sign, density = \
+        util.load(path, "meas_eqlt/n_sample", "meas_eqlt/sign",
+                        "meas_eqlt/density")
     if n_sample.max() == 0:
         print("no data")
         return
     mask = (n_sample == n_sample.max())
-    sign = util.load(path, "meas_eqlt/sign")[mask]
-    density = util.load(path, "meas_eqlt/density")[mask]
-
-    print(mask.sum(), "/", len(n_sample), " complete bins", sep="")
-    print("<sign>=", util.jackknife(n_sample[mask], sign)[:, 0])
-    print("<n>=", util.jackknife(sign, density)[:, 0])
+    sign, density = sign[mask], density[mask]
+    print(f"complete: {mask.sum()}/{len(n_sample)}")
+    print(f"<sign>={util.jackknife(n_sample[mask], sign)}")
+    print(f"<n>={util.jackknife(sign, density.sum(1))}")
 
 
 def main(argv):

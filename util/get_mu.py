@@ -1,19 +1,18 @@
 from glob import glob
 import sys
-# import h5py
 import numpy as np
 import util
 
 
 def get_mu_n(path):
-    n_sample = util.load(path, "meas_eqlt/n_sample")
+    n_sample, sign, density = \
+        util.load(path, "meas_eqlt/n_sample", "meas_eqlt/sign",
+                        "meas_eqlt/density")
     mask = (n_sample == n_sample.max())
-    print(path, "complete:", sum(mask))
-    sign = util.load(path, "meas_eqlt/sign")[mask]
-    n = util.load(path, "meas_eqlt/density")[mask]
-    nj = util.jackknife(sign, n)[:, 0]
-    mu = util.load_1(glob(path + "/*.h5")[0], "metadata/mu")
-    return mu, nj[0], nj[1]
+    print(f"complete: {mask.sum()}/{len(n_sample)}")
+    sign, density = sign[mask], density[mask]
+    nj = util.jackknife(sign, density.sum(1))
+    return util.load_firstfile(path, "metadata/mu")[0], nj[0], nj[1]
 
 
 def main(argv):

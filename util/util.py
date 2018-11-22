@@ -1,51 +1,40 @@
 from glob import glob
-from math import fsum
-
 import h5py
 import numpy as np
 
 
-def load_1(filename, x):
-    with h5py.File(filename, "r") as f:
-        return f[x][...]
+def load_file(path, *args):
+    with h5py.File(path, "r") as f:
+        return tuple(f[x][...] for x in args)
 
 
-def load(path, x):
+def load_firstfile(path, *args):
+    return load_file(sorted(glob(path + "*.h5"))[0], *args)
+
+
+def load(path, *args):
     files = sorted(glob(path + "*.h5"))
-    if not files:
-        return np.zeros((0,))
-
-    nbin = len(files)
-
-    a_last = load_1(files.pop(), x)
-    shape = a_last.shape
-    a = np.zeros((nbin,) + shape)
-    a[-1, ...] = a_last
-
-    for i, filename in enumerate(files):
-        a[i, ...] = load_1(filename, x)
-
-    return a
+    nbins = len(files)
+    if nbins == 0:
+        print(f"no files matching: {path}*.h5")
+        return
+    last = load_file(files.pop(), *args)
+    data = tuple(np.zeros((nbins,) + a.shape) for a in last)
+    for a, a_last in zip(data, last):
+        a[-1, ...] = a_last
+    for i, f in enumerate(files):
+        for a, a_i in zip(data, load_file(f, *args)):
+            a[i, ...] = a_i
+    return data
 
 
-def jackknife(signs, sx):
-    # sx is <s X>, not <s X>/<s>
-    n = signs.shape[0]
+def jackknife(*args, f=lambda s, sx: (sx.T/s.T).T):
+    n = args[0].shape[0]
+    sums = tuple(a.sum(0) for a in args)
+    res_all = f(*sums)
     if n == 1:
-        return np.stack((sx/signs, np.zeros_like(sx)))
-
-    if signs.ndim == 1:
-        signs = signs[:, np.newaxis]
-    if sx.ndim == 1:
-        sx = sx[:, np.newaxis]
-
-    sum_s = np.apply_along_axis(fsum, 0, signs)
-    sum_sx = np.apply_along_axis(fsum, 0, sx)
-    jk_vals = ((sum_sx - sx).T / (sum_s - signs).ravel()).T
-
-    jk_sum = np.apply_along_axis(fsum, 0, jk_vals)
-    jk_diff = jk_vals - jk_sum / n
-    jk_sumdiffsq = np.apply_along_axis(fsum, 0, jk_diff * jk_diff)
-
-    return np.stack((sum_sx * (n/sum_s) - ((n - 1)/n) * jk_sum,
-                     (((n - 1)/n) * jk_sumdiffsq) ** 0.5))
+        return np.stack((res_all, np.zeros_like(res_all)))
+    res_jk = f(*(s - a for s, a in zip(sums, args)))
+    res_jk_mean = res_jk.mean(0)
+    res_jk_var = ((res_jk - res_jk_mean)**2).mean(0)
+    return np.stack(((n*res_all - (n-1)*res_jk_mean), ((n-1)*res_jk_var)**0.5))

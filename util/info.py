@@ -1,10 +1,9 @@
 import sys
 import h5py
-#import numpy as np
 
 
-def info(filename):
-    with h5py.File(filename, "r") as f:
+def info(path):
+    with h5py.File(path, "r") as f:
         first = ("version", "model")
         for k in first:
             print("{} = {}".format(k, f["metadata"][k][...]))
