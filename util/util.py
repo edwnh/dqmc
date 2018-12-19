@@ -9,7 +9,7 @@ def load_file(path, *args):
 
 
 def load_firstfile(path, *args):
-    return load_file(sorted(glob(path + "*.h5"))[0], *args)
+    return load_file(min(glob(path + "*.h5")), *args)
 
 
 def load(path, *args):
