@@ -8,10 +8,6 @@ from scipy.linalg import expm
 
 np.seterr(over="ignore")
 
-#def expm(A):
-#    D, P = np.linalg.eigh(A)
-#    return np.dot(P*np.exp(D), P.T)
-
 
 # http://xoroshiro.di.unimi.it/splitmix64.c
 def rand_seed(x):
@@ -84,8 +80,8 @@ def create_1(filename=None, overwrite=False, seed=None,
         for jx in range(Nx):
             for iy in range(Ny):
                 for ix in range(Nx):
-                    ky = (jy - iy) % Ny
-                    kx = (jx - ix) % Nx
+                    ky = (iy - jy) % Ny
+                    kx = (ix - jx) % Nx
                     map_ij[jx + Nx*jy, ix + Nx*iy] = kx + Nx*ky
                     degen_ij[kx + Nx*ky] += 1
     num_ij = map_ij.max() + 1
@@ -114,8 +110,8 @@ def create_1(filename=None, overwrite=False, seed=None,
         for jx in range(Nx):
             for iy in range(Ny):
                 for ix in range(Nx):
-                    ky = (jy - iy) % Ny
-                    kx = (jx - ix) % Nx
+                    ky = (iy - jy) % Ny
+                    kx = (ix - jx) % Nx
                     i = ix + Nx*iy
                     j = jx + Nx*jy
                     k = kx + Nx*ky
