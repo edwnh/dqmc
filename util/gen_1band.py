@@ -233,14 +233,14 @@ def create_1(filename=None, overwrite=False, seed=None,
     return filename
 
 
-def create_batch(Nfiles=1, fileprefix=None, seed=None, Nx=16, Ny=4, L=40, **kwargs):
+def create_batch(Nfiles=1, prefix=None, seed=None, Nx=16, Ny=4, L=40, **kwargs):
     if seed is None:
         seed = int(time.time())
-    if fileprefix is None:
-        fileprefix = str(seed)
+    if prefix is None:
+        prefix = str(seed)
     rng = rand_seed(seed)
 
-    file_0 = "{}_{}.h5".format(fileprefix, 0)
+    file_0 = "{}_{}.h5".format(prefix, 0)
 
     create_1(filename=file_0, seed=seed, Nx=Nx, Ny=Ny, L=L, **kwargs)
 
@@ -253,7 +253,7 @@ def create_batch(Nfiles=1, fileprefix=None, seed=None, Nx=16, Ny=4, L=40, **kwar
             for r in range(Nx*Ny):
                 init_hs[l, r] = rand_uint(init_rng) >> np.uint64(63)
 
-        file_i = "{}_{}.h5".format(fileprefix, i)
+        file_i = "{}_{}.h5".format(prefix, i)
         shutil.copy2(file_0, file_i)
         with h5py.File(file_i, "r+") as f:
             f["params"]["init_rng"][...] = init_rng
@@ -270,13 +270,15 @@ def main(argv):
             return
         key = arg[:eq]
         val = arg[(eq + 1):]
-        if key != "filename":
+        try:
+            val = int(val)
+        except ValueError:
             try:
-                val = int(val)
-            except ValueError:
                 val = float(val)
+            except:
+                pass
         kwargs[key] = val
-    print("created simulation file:", create_1(**kwargs))
+    print("created simulation file:", create_batch(**kwargs))
 
 if __name__ == "__main__":
     main(sys.argv)
