@@ -346,7 +346,7 @@ static int dqmc(struct sim_data *sim)
 			#endif
 			#if defined(CHECK_G_UE) && defined(CHECK_G_ACC)
 			matdiff(N, N, Gutt, N, guacc, N);
-			matdiff(N, N, Gutt, N, gdacc, N);
+			matdiff(N, N, Gdtt, N, gdacc, N);
 			#endif
 
 			profile_begin(meas_uneq);
