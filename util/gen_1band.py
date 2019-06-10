@@ -259,6 +259,7 @@ def create_batch(Nfiles=1, prefix=None, seed=None, Nx=16, Ny=4, L=40, **kwargs):
             f["params"]["init_rng"][...] = init_rng
             f["state"]["rng"][...] = init_rng
             f["state"]["hs"][...] = init_hs
+    return file_0 if Nfiles == 1 else "{} ... {}".format(file_0, file_i)
 
 
 def main(argv):
@@ -278,7 +279,7 @@ def main(argv):
             except:
                 pass
         kwargs[key] = val
-    print("created simulation file:", create_batch(**kwargs))
+    print("created simulation files:", create_batch(**kwargs))
 
 if __name__ == "__main__":
     main(sys.argv)
