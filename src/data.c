@@ -61,6 +61,9 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 		sim->m_ue.pair_bb = my_calloc(num_bb*L * sizeof(double));
 		sim->m_ue.jj      = my_calloc(num_bb*L * sizeof(double));
 		sim->m_ue.rhorho  = my_calloc(num_bb*L * sizeof(double));
+		sim->m_ue.rhosrhos = my_calloc(num_bb*L * sizeof(double));
+		sim->m_ue.nem_nnnn = my_calloc(num_bb*L * sizeof(double));
+		sim->m_ue.nem_ssss = my_calloc(num_bb*L * sizeof(double));
 	}
 	// make sure anything appended here is free'd in sim_data_free()
 
@@ -108,6 +111,9 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 		my_read(_double, "/meas_uneqlt/pair_bb",   sim->m_ue.pair_bb);
 		my_read(_double, "/meas_uneqlt/jj",        sim->m_ue.jj);
 		my_read(_double, "/meas_uneqlt/rhorho",    sim->m_ue.rhorho);
+		my_read(_double, "/meas_uneqlt/rhosrhos",  sim->m_ue.rhosrhos);
+		my_read(_double, "/meas_uneqlt/nem_nnnn",  sim->m_ue.nem_nnnn);
+		my_read(_double, "/meas_uneqlt/nem_ssss",  sim->m_ue.nem_ssss);
 	}
 
 #undef my_read
@@ -157,6 +163,9 @@ int sim_data_save(const struct sim_data *sim, const char *file)
 		my_write("/meas_uneqlt/pair_bb",  H5T_NATIVE_DOUBLE,  sim->m_ue.pair_bb);
 		my_write("/meas_uneqlt/jj",       H5T_NATIVE_DOUBLE,  sim->m_ue.jj);
 		my_write("/meas_uneqlt/rhorho",   H5T_NATIVE_DOUBLE,  sim->m_ue.rhorho);
+		my_write("/meas_uneqlt/rhosrhos", H5T_NATIVE_DOUBLE,  sim->m_ue.rhosrhos);
+		my_write("/meas_uneqlt/nem_nnnn", H5T_NATIVE_DOUBLE,  sim->m_ue.nem_nnnn);
+		my_write("/meas_uneqlt/nem_ssss", H5T_NATIVE_DOUBLE,  sim->m_ue.nem_ssss);
 	}
 
 #undef my_write
@@ -169,6 +178,9 @@ int sim_data_save(const struct sim_data *sim, const char *file)
 void sim_data_free(const struct sim_data *sim)
 {
 	if (sim->p.period_uneqlt > 0) {
+		my_free(sim->m_ue.nem_ssss);
+		my_free(sim->m_ue.nem_nnnn);
+		my_free(sim->m_ue.rhosrhos);
 		my_free(sim->m_ue.rhorho);
 		my_free(sim->m_ue.jj);
 		my_free(sim->m_ue.pair_bb);

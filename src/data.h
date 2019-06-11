@@ -53,6 +53,9 @@ struct meas_uneqlt {
 	double *pair_bb;
 	double *jj;
 	double *rhorho;
+	double *rhosrhos;
+	double *nem_nnnn;
+	double *nem_ssss;
 };
 
 struct sim_data {

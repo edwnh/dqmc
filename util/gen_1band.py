@@ -230,6 +230,9 @@ def create_1(filename=None, overwrite=False, seed=None,
             f["meas_uneqlt"]["pair_bb"] = np.zeros(num_bb*L, dtype=np.float64)
             f["meas_uneqlt"]["jj"] = np.zeros(num_bb*L, dtype=np.float64)
             f["meas_uneqlt"]["rhorho"] = np.zeros(num_bb*L, dtype=np.float64)
+            f["meas_uneqlt"]["rhosrhos"] = np.zeros(num_bb*L, dtype=np.float64)
+            f["meas_uneqlt"]["nem_nnnn"] = np.zeros(num_bb*L, dtype=np.float64)
+            f["meas_uneqlt"]["nem_ssss"] = np.zeros(num_bb*L, dtype=np.float64)
     return filename
 
 
