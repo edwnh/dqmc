@@ -55,6 +55,12 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	sim->m_eq.xx         = my_calloc(num_ij   * sizeof(double));
 	sim->m_eq.zz         = my_calloc(num_ij   * sizeof(double));
 	sim->m_eq.pair_sw    = my_calloc(num_ij   * sizeof(double));
+	sim->m_eq.kk         = my_calloc(num_bb   * sizeof(double));
+	sim->m_eq.kv         = my_calloc(num_bs   * sizeof(double));
+	sim->m_eq.kn         = my_calloc(num_bs   * sizeof(double));
+	sim->m_eq.vk         = my_calloc(num_bs   * sizeof(double));
+	sim->m_eq.vv         = my_calloc(num_ij   * sizeof(double));
+	sim->m_eq.vn         = my_calloc(num_ij   * sizeof(double));
 	if (sim->p.period_uneqlt > 0) {
 		sim->m_ue.gt0     = my_calloc(num_ij*L * sizeof(double));
 		sim->m_ue.nn      = my_calloc(num_ij*L * sizeof(double));
@@ -110,6 +116,12 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	my_read(_double, "/meas_eqlt/xx",          sim->m_eq.xx);
 	my_read(_double, "/meas_eqlt/zz",          sim->m_eq.zz);
 	my_read(_double, "/meas_eqlt/pair_sw",     sim->m_eq.pair_sw);
+	my_read(_double, "/meas_eqlt/kk",          sim->m_eq.kk);
+	my_read(_double, "/meas_eqlt/kv",          sim->m_eq.kv);
+	my_read(_double, "/meas_eqlt/kn",          sim->m_eq.kn);
+	my_read(_double, "/meas_eqlt/vk",          sim->m_eq.vk);
+	my_read(_double, "/meas_eqlt/vv",          sim->m_eq.vv);
+	my_read(_double, "/meas_eqlt/vn",          sim->m_eq.vn);
 	if (sim->p.period_uneqlt > 0) {
 		my_read(_int,    "/meas_uneqlt/n_sample", &sim->m_ue.n_sample);
 		my_read(_double, "/meas_uneqlt/sign",     &sim->m_ue.sign);
@@ -167,6 +179,12 @@ int sim_data_save(const struct sim_data *sim, const char *file)
 	my_write("/meas_eqlt/xx",         H5T_NATIVE_DOUBLE,  sim->m_eq.xx);
 	my_write("/meas_eqlt/zz",         H5T_NATIVE_DOUBLE,  sim->m_eq.zz);
 	my_write("/meas_eqlt/pair_sw",    H5T_NATIVE_DOUBLE,  sim->m_eq.pair_sw);
+	my_write("/meas_eqlt/kk",         H5T_NATIVE_DOUBLE,  sim->m_eq.kk);
+	my_write("/meas_eqlt/kv",         H5T_NATIVE_DOUBLE,  sim->m_eq.kv);
+	my_write("/meas_eqlt/kn",         H5T_NATIVE_DOUBLE,  sim->m_eq.kn);
+	my_write("/meas_eqlt/vk",         H5T_NATIVE_DOUBLE,  sim->m_eq.vk);
+	my_write("/meas_eqlt/vv",         H5T_NATIVE_DOUBLE,  sim->m_eq.vv);
+	my_write("/meas_eqlt/vn",         H5T_NATIVE_DOUBLE,  sim->m_eq.vn);
 	if (sim->p.period_uneqlt > 0) {
 		my_write("/meas_uneqlt/n_sample", H5T_NATIVE_INT,    &sim->m_ue.n_sample);
 		my_write("/meas_uneqlt/sign",     H5T_NATIVE_DOUBLE, &sim->m_ue.sign);
@@ -215,6 +233,12 @@ void sim_data_free(const struct sim_data *sim)
 		my_free(sim->m_ue.nn);
 		my_free(sim->m_ue.gt0);
 	}
+	my_free(sim->m_eq.vn);
+	my_free(sim->m_eq.vv);
+	my_free(sim->m_eq.vk);
+	my_free(sim->m_eq.kn);
+	my_free(sim->m_eq.kv);
+	my_free(sim->m_eq.kk);
 	my_free(sim->m_eq.pair_sw);
 	my_free(sim->m_eq.zz);
 	my_free(sim->m_eq.xx);
