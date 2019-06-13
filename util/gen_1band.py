@@ -69,11 +69,13 @@ def create_1(filename=None, overwrite=False, seed=None,
         for i in range(N):
             init_hs[l, i] = rand_uint(init_rng) >> np.uint64(63)
 
+    # 1 site mapping
     map_i = np.zeros(N, dtype=np.int32)
     degen_i = np.array((N,), dtype=np.int32)
     num_i = map_i.max() + 1
     assert num_i == degen_i.size
 
+    # 2 site mapping
     map_ij = np.zeros((N, N), dtype=np.int32)
     degen_ij = np.zeros(N, dtype=np.int32)
     for jy in range(Ny):
@@ -87,7 +89,9 @@ def create_1(filename=None, overwrite=False, seed=None,
     num_ij = map_ij.max() + 1
     assert num_ij == degen_ij.size
 
-    num_b = 4*N
+    # bond definitions
+    bps = 4 if tp != 0.0 else 2  # bonds per site
+    num_b = bps*N  # total bonds in cluster
     bonds = np.zeros((2, num_b), dtype=np.int32)
     for iy in range(Ny):
         for ix in range(Nx):
@@ -98,12 +102,32 @@ def create_1(filename=None, overwrite=False, seed=None,
             bonds[1, i] = ix1 + Nx*iy  # i1 = i + x
             bonds[0, i + N] = i            # i0 = i
             bonds[1, i + N] = ix + Nx*iy1  # i1 = i + y
-            bonds[0, i + 2*N] = i             # i0 = i
-            bonds[1, i + 2*N] = ix1 + Nx*iy1  # i1 = i + x + y
-            bonds[0, i + 3*N] = ix1 + Nx*iy   # i0 = i + x
-            bonds[1, i + 3*N] = ix + Nx*iy1   # i1 = i + y
+            if bps == 4:
+                bonds[0, i + 2*N] = i             # i0 = i
+                bonds[1, i + 2*N] = ix1 + Nx*iy1  # i1 = i + x + y
+                bonds[0, i + 3*N] = ix1 + Nx*iy   # i0 = i + x
+                bonds[1, i + 3*N] = ix + Nx*iy1   # i1 = i + y
 
-    num_bb = 16*N
+    # 1 bond 1 site mapping
+    num_bs = bps*N
+    map_bs = np.zeros((N, num_b), dtype=np.int32)
+    degen_bs = np.zeros(num_bs, dtype=np.int32)
+    for jy in range(Ny):
+        for jx in range(Nx):
+            for iy in range(Ny):
+                for ix in range(Nx):
+                    ky = (iy - jy) % Ny
+                    kx = (ix - jx) % Nx
+                    i = ix + Nx*iy
+                    j = jx + Nx*jy
+                    k = kx + Nx*ky
+                    for ii in range(bps):
+                        kk = k + N*ii
+                        map_bs[j, i + N*ii] = kk
+                        degen_bs[kk] += 1
+
+    # 2 bond mapping
+    num_bb = bps*bps*N
     map_bb = np.zeros((num_b, num_b), dtype=np.int32)
     degen_bb = np.zeros(num_bb, dtype = np.int32)
     for jy in range(Ny):
@@ -115,11 +139,11 @@ def create_1(filename=None, overwrite=False, seed=None,
                     i = ix + Nx*iy
                     j = jx + Nx*jy
                     k = kx + Nx*ky
-                    for jj in range(4):
-                        for ii in range(4):
-                            map_bb[j + jj*N, i + ii*N] = k
-                            degen_bb[k] += 1
-                            k += N
+                    for jj in range(bps):
+                        for ii in range(bps):
+                            kk =  k + N*(ii + bps*jj)
+                            map_bb[j + N*jj, i + N*ii] = kk
+                            degen_bb[kk] += 1
 
     K = np.zeros((N, N), dtype=np.float64)
     for iy in range(Ny):
@@ -153,16 +177,19 @@ def create_1(filename=None, overwrite=False, seed=None,
     if filename is None:
         filename = "{}.h5".format(seed)
     with h5py.File(filename, "w" if overwrite else "x") as f:
+        # parameters not used by dqmc code, but useful for analysis
         f.create_group("metadata")
         f["metadata"]["version"] = 0.0
         f["metadata"]["model"] = "Hubbard"
         f["metadata"]["Nx"] = Nx
         f["metadata"]["Ny"] = Ny
+        f["metadata"]["bps"] = bps
         f["metadata"]["U"] = U
         f["metadata"]["t'"] = tp
         f["metadata"]["mu"] = mu
         f["metadata"]["beta"] = L*dt
 
+        # parameters used by dqmc code
         f.create_group("params")
         # model parameters
         f["params"]["N"] = np.array(N, dtype=np.int32)
@@ -170,6 +197,7 @@ def create_1(filename=None, overwrite=False, seed=None,
         f["params"]["map_i"] = map_i
         f["params"]["map_ij"] = map_ij
         f["params"]["bonds"] = bonds
+        f["params"]["map_bs"] = map_bs
         f["params"]["map_bb"] = map_bb
         f["params"]["K"] = K
         f["params"]["U"] = U_i
@@ -188,9 +216,11 @@ def create_1(filename=None, overwrite=False, seed=None,
         f["params"]["num_i"] = num_i
         f["params"]["num_ij"] = num_ij
         f["params"]["num_b"] = num_b
+        f["params"]["num_bs"] = num_bs
         f["params"]["num_bb"] = num_bb
         f["params"]["degen_i"] = degen_i
         f["params"]["degen_ij"] = degen_ij
+        f["params"]["degen_bs"] = degen_bs
         f["params"]["degen_bb"] = degen_bb
         f["params"]["exp_K"] = exp_K
         f["params"]["inv_exp_K"] = inv_exp_K
@@ -229,10 +259,15 @@ def create_1(filename=None, overwrite=False, seed=None,
             f["meas_uneqlt"]["pair_sw"] = np.zeros(num_ij*L, dtype=np.float64)
             f["meas_uneqlt"]["pair_bb"] = np.zeros(num_bb*L, dtype=np.float64)
             f["meas_uneqlt"]["jj"] = np.zeros(num_bb*L, dtype=np.float64)
-            f["meas_uneqlt"]["rhorho"] = np.zeros(num_bb*L, dtype=np.float64)
-            f["meas_uneqlt"]["rhosrhos"] = np.zeros(num_bb*L, dtype=np.float64)
+            f["meas_uneqlt"]["jsjs"] = np.zeros(num_bb*L, dtype=np.float64)
+            f["meas_uneqlt"]["kk"] = np.zeros(num_bb*L, dtype=np.float64)
+            f["meas_uneqlt"]["ksks"] = np.zeros(num_bb*L, dtype=np.float64)
             f["meas_uneqlt"]["nem_nnnn"] = np.zeros(num_bb*L, dtype=np.float64)
             f["meas_uneqlt"]["nem_ssss"] = np.zeros(num_bb*L, dtype=np.float64)
+            f["meas_uneqlt"]["kv"] = np.zeros(num_bs*L, dtype=np.float64)
+            f["meas_uneqlt"]["kn"] = np.zeros(num_bs*L, dtype=np.float64)
+            f["meas_uneqlt"]["vv"] = np.zeros(num_ij*L, dtype=np.float64)
+            f["meas_uneqlt"]["vn"] = np.zeros(num_ij*L, dtype=np.float64)
     return filename
 
 

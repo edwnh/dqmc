@@ -1,7 +1,8 @@
 #include "meas.h"
 #include "data.h"
 
-#define NEM_BONDS 0  // number of bonds kept for nematic correlators
+// number of bonds kept for nematic correlators. 2 by default
+#define NEM_BONDS 2
 
 void measure_eqlt(const struct params *const restrict p, const int sign,
 		const double *const restrict gu,
@@ -13,7 +14,7 @@ void measure_eqlt(const struct params *const restrict p, const int sign,
 	const int N = p->N, num_i = p->num_i, num_ij = p->num_ij;
 	const int num_b = p->num_b;
 
-	// 1-site measurements
+	// 1 site measurements
 	for (int i = 0; i < N; i++) {
 		const int r = p->map_i[i];
 		const double pre = (double)sign / p->degen_i[r];
@@ -22,7 +23,7 @@ void measure_eqlt(const struct params *const restrict p, const int sign,
 		m->double_occ[r] += pre*(1. - guii)*(1. - gdii);
 	}
 
-	// 2-site measurements
+	// 2 site measurements
 	for (int j = 0; j < N; j++)
 	for (int i = 0; i < N; i++) {
 		const int delta = (i == j);
@@ -53,12 +54,12 @@ void measure_uneqlt(const struct params *const restrict p, const int sign,
 	m->n_sample++;
 	m->sign += sign;
 	const int N = p->N, L = p->L, num_i = p->num_i, num_ij = p->num_ij;
-	const int num_b = p->num_b, num_bb = p->num_bb;
+	const int num_b = p->num_b, num_bs = p->num_bs, num_bb = p->num_bb;
 
 	const double *const restrict Gu00 = Gutt;
 	const double *const restrict Gd00 = Gdtt;
 
-	// 2-site measurements
+	// 2 site measurements
 	#pragma omp parallel for
 	for (int t = 0; t < L; t++) {
 		const int delta_t = (t == 0);
@@ -87,10 +88,57 @@ void measure_uneqlt(const struct params *const restrict p, const int sign,
 		m->xx[r + num_ij*t] += 0.25*pre*(delta_tij*(guii + gdii) - (guji*gdij + gdji*guij));
 		m->zz[r + num_ij*t] += 0.25*pre*((gdii - guii)*(gdjj - gujj) + x);
 		m->pair_sw[r + num_ij*t] += pre*guij*gdij;
+		const double nuinuj = (1. - guii)*(1. - gujj) + (delta_tij - guji)*guij;
+		const double ndindj = (1. - gdii)*(1. - gdjj) + (delta_tij - gdji)*gdij;
+		m->vv[r + num_ij*t] += pre*nuinuj*ndindj;
+		m->vn[r + num_ij*t] += pre*(nuinuj*(1. - gdii) + (1. - guii)*ndindj);
 	}
 	}
 
-	// 2-bond measurements
+	#pragma omp parallel for
+	for (int t = 0; t < L; t++) {
+		const int delta_t = (t == 0);
+		const double *const restrict Gu0t_t = Gu0t + N*N*t;
+		const double *const restrict Gutt_t = Gutt + N*N*t;
+		const double *const restrict Gut0_t = Gut0 + N*N*t;
+		const double *const restrict Gd0t_t = Gd0t + N*N*t;
+		const double *const restrict Gdtt_t = Gdtt + N*N*t;
+		const double *const restrict Gdt0_t = Gdt0 + N*N*t;
+	for (int j = 0; j < N; j++)
+	for (int b = 0; b < num_b; b++) {
+		const int i0 = p->bonds[b];
+		const int i1 = p->bonds[b + num_b];
+		const int bs = p->map_bs[b + num_b*j];
+		const double pre = (double)sign / p->degen_bs[bs];
+		const int delta_i0i1 = 0;
+		const int delta_i0j = delta_t*(i0 == j);
+		const int delta_i1j = delta_t*(i1 == j);
+		const double gui0j = Gut0_t[i0 + N*j];
+		const double guji0 = Gu0t_t[j + N*i0];
+		const double gdi0j = Gdt0_t[i0 + N*j];
+		const double gdji0 = Gd0t_t[j + N*i0];
+		const double gui1j = Gut0_t[i1 + N*j];
+		const double guji1 = Gu0t_t[j + N*i1];
+		const double gdi1j = Gdt0_t[i1 + N*j];
+		const double gdji1 = Gd0t_t[j + N*i1];
+		const double gui0i1 = Gutt_t[i0 + N*i1];
+		const double gui1i0 = Gutt_t[i1 + N*i0];
+		const double gdi0i1 = Gdtt_t[i0 + N*i1];
+		const double gdi1i0 = Gdtt_t[i1 + N*i0];
+		const double gujj = Gu00[j + N*j];
+		const double gdjj = Gd00[j + N*j];
+
+		const double ku = 2.*delta_i0i1 - gui0i1 - gui1i0;
+		const double kd = 2.*delta_i0i1 - gdi0i1 - gdi1i0;
+		const double xu = (delta_i0j - guji0)*gui1j + (delta_i1j - guji1)*gui0j;
+		const double xd = (delta_i0j - gdji0)*gdi1j + (delta_i1j - gdji1)*gdi0j;
+		m->kv[bs + num_bs*t] += pre*((ku*(1. - gujj) + xu)*(1. - gdjj)
+		                           + (kd*(1. - gdjj) + xd)*(1. - gujj));
+		m->kn[bs + num_bs*t] += pre*((ku + kd)*(2. - gujj - gdjj) + xu + xd);
+	}
+	}
+
+	// 2 bond measurements
 	// minor optimization: handle t = 0 separately, since there are no delta
 	// functions for t > 0. not really needed in 2-site measurements above
 	// as those are fast anyway
@@ -143,12 +191,10 @@ void measure_uneqlt(const struct params *const restrict p, const int sign,
 		                + (delta_i0j1 - gdj1i0)*gdi1j0 + (delta_i1j0 - gdj0i1)*gdi0j1);
 		const double y = ((delta_i0j0 - guj0i0)*gui1j1 + (delta_i1j1 - guj1i1)*gui0j0
                         + (delta_i0j0 - gdj0i0)*gdi1j1 + (delta_i1j1 - gdj1i1)*gdi0j0);
-		m->jj[bb] += pre*((gui0i1 - gui1i0 + gdi0i1 - gdi1i0)*(guj0j1 - guj1j0 + gdj0j1 - gdj1j0)
-		                + x - y);
-		m->rhorho[bb] += pre*((gui0i1 + gui1i0 + gdi0i1 + gdi1i0)*(guj0j1 + guj1j0 + gdj0j1 + gdj1j0)
-		                    + x + y);
-		m->rhosrhos[bb] += pre*((gui0i1 + gui1i0 - gdi0i1 - gdi1i0)*(guj0j1 + guj1j0 - gdj0j1 - gdj1j0)
-		                      + x + y);
+		m->jj[bb]   += pre*((gui0i1 - gui1i0 + gdi0i1 - gdi1i0)*(guj0j1 - guj1j0 + gdj0j1 - gdj1j0) + x - y);
+		// m->jsjs[bb] += pre*((gui0i1 - gui1i0 - gdi0i1 + gdi1i0)*(guj0j1 - guj1j0 - gdj0j1 + gdj1j0) + x - y);
+		m->kk[bb]   += pre*((gui0i1 + gui1i0 + gdi0i1 + gdi1i0)*(guj0j1 + guj1j0 + gdj0j1 + gdj1j0) + x + y);
+		// m->ksks[bb] += pre*((gui0i1 + gui1i0 - gdi0i1 - gdi1i0)*(guj0j1 + guj1j0 - gdj0j1 - gdj1j0) + x + y);
 
 		const int delta_i0i1 = 0;
 		const int delta_j0j1 = 0;
@@ -233,12 +279,10 @@ void measure_uneqlt(const struct params *const restrict p, const int sign,
 		m->pair_bb[bb + num_bb*t] += 0.5*pre*(gui0j0*gdi1j1 + gui1j0*gdi0j1 + gui0j1*gdi1j0 + gui1j1*gdi0j0);
 		const double x = -guj1i0*gui1j0 - guj0i1*gui0j1 - gdj1i0*gdi1j0 - gdj0i1*gdi0j1;
 		const double y = -guj0i0*gui1j1 - guj1i1*gui0j0 - gdj0i0*gdi1j1 - gdj1i1*gdi0j0;
-		m->jj[bb + num_bb*t] += pre*((gui0i1 - gui1i0 + gdi0i1 - gdi1i0)*(guj0j1 - guj1j0 + gdj0j1 - gdj1j0)
-		                           + x - y);
-		m->rhorho[bb + num_bb*t] += pre*((gui0i1 + gui1i0 + gdi0i1 + gdi1i0)*(guj0j1 + guj1j0 + gdj0j1 + gdj1j0)
-		                               + x + y);
-		m->rhosrhos[bb + num_bb*t] += pre*((gui0i1 + gui1i0 - gdi0i1 - gdi1i0)*(guj0j1 + guj1j0 - gdj0j1 - gdj1j0)
-		                                 + x + y);
+		m->jj[bb + num_bb*t]   += pre*((gui0i1 - gui1i0 + gdi0i1 - gdi1i0)*(guj0j1 - guj1j0 + gdj0j1 - gdj1j0) + x - y);
+		m->jsjs[bb + num_bb*t] += pre*((gui0i1 - gui1i0 - gdi0i1 + gdi1i0)*(guj0j1 - guj1j0 - gdj0j1 + gdj1j0) + x - y);
+		m->kk[bb + num_bb*t]   += pre*((gui0i1 + gui1i0 + gdi0i1 + gdi1i0)*(guj0j1 + guj1j0 + gdj0j1 + gdj1j0) + x + y);
+		m->ksks[bb + num_bb*t] += pre*((gui0i1 + gui1i0 - gdi0i1 - gdi1i0)*(guj0j1 + guj1j0 - gdj0j1 - gdj1j0) + x + y);
 
 		const int delta_i0i1 = 0;
 		const int delta_j0j1 = 0;
@@ -372,11 +416,11 @@ void measure_uneqlt_full(const struct params *const restrict p, const int sign,
 		                             - (delta_ti1j1 - guj1i1)*gui0j0 + (delta_ti1j0 - guj0i1)*gui0j1
 		                             + (delta_ti0j1 - gdj1i0)*gdi1j0 - (delta_ti0j0 - gdj0i0)*gdi1j1
 		                             - (delta_ti1j1 - gdj1i1)*gdi0j0 + (delta_ti1j0 - gdj0i1)*gdi0j1);
-		m->rhorho[bb + num_bb*t] += pre*((gui0i1 + gui1i0 + gdi0i1 + gdi1i0)*(guj0j1 + guj1j0 + gdj0j1 + gdj1j0)
-		                                 + (delta_ti0j1 - guj1i0)*gui1j0 + (delta_ti0j0 - guj0i0)*gui1j1
-		                                 + (delta_ti1j1 - guj1i1)*gui0j0 + (delta_ti1j0 - guj0i1)*gui0j1
-		                                 + (delta_ti0j1 - gdj1i0)*gdi1j0 + (delta_ti0j0 - gdj0i0)*gdi1j1
-		                                 + (delta_ti1j1 - gdj1i1)*gdi0j0 + (delta_ti1j0 - gdj0i1)*gdi0j1);
+		m->kk[bb + num_bb*t] += pre*((gui0i1 + gui1i0 + gdi0i1 + gdi1i0)*(guj0j1 + guj1j0 + gdj0j1 + gdj1j0)
+		                             + (delta_ti0j1 - guj1i0)*gui1j0 + (delta_ti0j0 - guj0i0)*gui1j1
+		                             + (delta_ti1j1 - guj1i1)*gui0j0 + (delta_ti1j0 - guj0i1)*gui0j1
+		                             + (delta_ti0j1 - gdj1i0)*gdi1j0 + (delta_ti0j0 - gdj0i0)*gdi1j1
+		                             + (delta_ti1j1 - gdj1i1)*gdi0j0 + (delta_ti1j0 - gdj0i1)*gdi0j1);
 	}
 	}
 	}
