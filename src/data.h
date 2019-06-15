@@ -12,6 +12,7 @@ struct params {
 	int n_matmul, n_delay;
 	int n_sweep_warm, n_sweep_meas;
 	int period_eqlt, period_uneqlt;
+	int meas_bond_corr, meas_energy_corr, meas_nematic_corr;
 
 	int num_i, num_ij;
 	int num_b, num_bs, num_bb;
@@ -54,8 +55,8 @@ struct meas_uneqlt {
 	double *pair_bb;
 	double *jj, *jsjs;
 	double *kk, *ksks;
-	double *nem_nnnn, *nem_ssss;
 	double *kv, *kn, *vv, *vn;
+	double *nem_nnnn, *nem_ssss;
 };
 
 struct sim_data {

@@ -56,7 +56,8 @@ def rand_jump(rng):
 def create_1(filename=None, overwrite=False, seed=None,
              Nx=16, Ny=4, mu=0.0, tp=0.0, U=6.0, dt=0.115, L=40,
              n_delay=16, n_matmul=8, n_sweep_warm=200, n_sweep_meas=2000,
-             period_eqlt=8, period_uneqlt=0):
+             period_eqlt=8, period_uneqlt=0,
+             meas_bond_corr=1, meas_energy_corr=0, meas_nematic_corr=0):
     assert L % n_matmul == 0 and L % period_eqlt == 0
     N = Nx * Ny
 
@@ -210,6 +211,9 @@ def create_1(filename=None, overwrite=False, seed=None,
         f["params"]["n_sweep_meas"] = np.array(n_sweep_meas, dtype=np.int32)
         f["params"]["period_eqlt"] = np.array(period_eqlt, dtype=np.int32)
         f["params"]["period_uneqlt"] = np.array(period_uneqlt, dtype=np.int32)
+        f["params"]["meas_bond_corr"] = meas_bond_corr
+        f["params"]["meas_energy_corr"] = meas_energy_corr
+        f["params"]["meas_nematic_corr"] = meas_nematic_corr
         f["params"]["init_rng"] = init_rng  # save if need to replicate data
 
         # precalculated stuff
@@ -247,12 +251,13 @@ def create_1(filename=None, overwrite=False, seed=None,
         f["meas_eqlt"]["xx"] = np.zeros(num_ij, dtype=np.float64)
         f["meas_eqlt"]["zz"] = np.zeros(num_ij, dtype=np.float64)
         f["meas_eqlt"]["pair_sw"] = np.zeros(num_ij, dtype=np.float64)
-        f["meas_eqlt"]["kk"] = np.zeros(num_bb, dtype=np.float64)
-        f["meas_eqlt"]["kv"] = np.zeros(num_bs, dtype=np.float64)
-        f["meas_eqlt"]["kn"] = np.zeros(num_bs, dtype=np.float64)
-        f["meas_eqlt"]["vk"] = np.zeros(num_bs, dtype=np.float64)
-        f["meas_eqlt"]["vv"] = np.zeros(num_ij, dtype=np.float64)
-        f["meas_eqlt"]["vn"] = np.zeros(num_ij, dtype=np.float64)
+        if meas_energy_corr:
+            f["meas_eqlt"]["kk"] = np.zeros(num_bb, dtype=np.float64)
+            f["meas_eqlt"]["kv"] = np.zeros(num_bs, dtype=np.float64)
+            f["meas_eqlt"]["kn"] = np.zeros(num_bs, dtype=np.float64)
+            f["meas_eqlt"]["vk"] = np.zeros(num_bs, dtype=np.float64)
+            f["meas_eqlt"]["vv"] = np.zeros(num_ij, dtype=np.float64)
+            f["meas_eqlt"]["vn"] = np.zeros(num_ij, dtype=np.float64)
 
         if period_uneqlt > 0:
             f.create_group("meas_uneqlt")
@@ -263,17 +268,20 @@ def create_1(filename=None, overwrite=False, seed=None,
             f["meas_uneqlt"]["xx"] = np.zeros(num_ij*L, dtype=np.float64)
             f["meas_uneqlt"]["zz"] = np.zeros(num_ij*L, dtype=np.float64)
             f["meas_uneqlt"]["pair_sw"] = np.zeros(num_ij*L, dtype=np.float64)
-            f["meas_uneqlt"]["pair_bb"] = np.zeros(num_bb*L, dtype=np.float64)
-            f["meas_uneqlt"]["jj"] = np.zeros(num_bb*L, dtype=np.float64)
-            f["meas_uneqlt"]["jsjs"] = np.zeros(num_bb*L, dtype=np.float64)
-            f["meas_uneqlt"]["kk"] = np.zeros(num_bb*L, dtype=np.float64)
-            f["meas_uneqlt"]["ksks"] = np.zeros(num_bb*L, dtype=np.float64)
-            f["meas_uneqlt"]["nem_nnnn"] = np.zeros(num_bb*L, dtype=np.float64)
-            f["meas_uneqlt"]["nem_ssss"] = np.zeros(num_bb*L, dtype=np.float64)
-            f["meas_uneqlt"]["kv"] = np.zeros(num_bs*L, dtype=np.float64)
-            f["meas_uneqlt"]["kn"] = np.zeros(num_bs*L, dtype=np.float64)
-            f["meas_uneqlt"]["vv"] = np.zeros(num_ij*L, dtype=np.float64)
-            f["meas_uneqlt"]["vn"] = np.zeros(num_ij*L, dtype=np.float64)
+            if meas_bond_corr:
+                f["meas_uneqlt"]["pair_bb"] = np.zeros(num_bb*L, dtype=np.float64)
+                f["meas_uneqlt"]["jj"] = np.zeros(num_bb*L, dtype=np.float64)
+                f["meas_uneqlt"]["jsjs"] = np.zeros(num_bb*L, dtype=np.float64)
+                f["meas_uneqlt"]["kk"] = np.zeros(num_bb*L, dtype=np.float64)
+                f["meas_uneqlt"]["ksks"] = np.zeros(num_bb*L, dtype=np.float64)
+            if meas_energy_corr:
+                f["meas_uneqlt"]["kv"] = np.zeros(num_bs*L, dtype=np.float64)
+                f["meas_uneqlt"]["kn"] = np.zeros(num_bs*L, dtype=np.float64)
+                f["meas_uneqlt"]["vv"] = np.zeros(num_ij*L, dtype=np.float64)
+                f["meas_uneqlt"]["vn"] = np.zeros(num_ij*L, dtype=np.float64)
+            if meas_nematic_corr:
+                f["meas_uneqlt"]["nem_nnnn"] = np.zeros(num_bb*L, dtype=np.float64)
+                f["meas_uneqlt"]["nem_ssss"] = np.zeros(num_bb*L, dtype=np.float64)
     return filename
 
 
