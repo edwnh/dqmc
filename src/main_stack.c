@@ -11,6 +11,8 @@
 #include "dqmc.h"
 #include "util.h"
 
+#define USE_HARD_LINK
+
 #define my_printf(...) do { \
 	printf("%16s %6d: ", hostname, pid); \
 	printf(__VA_ARGS__); \
@@ -44,7 +46,11 @@ static int lock_file(const char *file, const int retry)
 	struct timespec lock_mtime = {0};
 	int cycles_same_mtime = 0;
 	while (1) {
+#ifdef USE_HARD_LINK
+		if (link(file, lfile) == 0) {
+#else
 		if (symlink(file, lfile) == 0) { // successfully locked
+#endif
 			my_free(lfile);
 			return 0;
 		}
