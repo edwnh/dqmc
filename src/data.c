@@ -64,7 +64,6 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 		sim->m_eq.kk = my_calloc(num_bb * sizeof(double));
 		sim->m_eq.kv = my_calloc(num_bs * sizeof(double));
 		sim->m_eq.kn = my_calloc(num_bs * sizeof(double));
-		sim->m_eq.vk = my_calloc(num_bs * sizeof(double));
 		sim->m_eq.vv = my_calloc(num_ij * sizeof(double));
 		sim->m_eq.vn = my_calloc(num_ij * sizeof(double));
 	}
@@ -135,7 +134,6 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 		my_read(_double, "/meas_eqlt/kk", sim->m_eq.kk);
 		my_read(_double, "/meas_eqlt/kv", sim->m_eq.kv);
 		my_read(_double, "/meas_eqlt/kn", sim->m_eq.kn);
-		my_read(_double, "/meas_eqlt/vk", sim->m_eq.vk);
 		my_read(_double, "/meas_eqlt/vv", sim->m_eq.vv);
 		my_read(_double, "/meas_eqlt/vn", sim->m_eq.vn);
 	}
@@ -206,7 +204,6 @@ int sim_data_save(const struct sim_data *sim, const char *file)
 		my_write("/meas_eqlt/kk", H5T_NATIVE_DOUBLE, sim->m_eq.kk);
 		my_write("/meas_eqlt/kv", H5T_NATIVE_DOUBLE, sim->m_eq.kv);
 		my_write("/meas_eqlt/kn", H5T_NATIVE_DOUBLE, sim->m_eq.kn);
-		my_write("/meas_eqlt/vk", H5T_NATIVE_DOUBLE, sim->m_eq.vk);
 		my_write("/meas_eqlt/vv", H5T_NATIVE_DOUBLE, sim->m_eq.vv);
 		my_write("/meas_eqlt/vn", H5T_NATIVE_DOUBLE, sim->m_eq.vn);
 	}
@@ -273,7 +270,6 @@ void sim_data_free(const struct sim_data *sim)
 	if (sim->p.meas_energy_corr) {
 		my_free(sim->m_eq.vn);
 		my_free(sim->m_eq.vv);
-		my_free(sim->m_eq.vk);
 		my_free(sim->m_eq.kn);
 		my_free(sim->m_eq.kv);
 		my_free(sim->m_eq.kk);

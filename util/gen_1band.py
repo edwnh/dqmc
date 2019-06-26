@@ -259,7 +259,6 @@ def create_1(filename=None, overwrite=False, seed=None,
             f["meas_eqlt"]["kk"] = np.zeros(num_bb, dtype=np.float64)
             f["meas_eqlt"]["kv"] = np.zeros(num_bs, dtype=np.float64)
             f["meas_eqlt"]["kn"] = np.zeros(num_bs, dtype=np.float64)
-            f["meas_eqlt"]["vk"] = np.zeros(num_bs, dtype=np.float64)
             f["meas_eqlt"]["vv"] = np.zeros(num_ij, dtype=np.float64)
             f["meas_eqlt"]["vn"] = np.zeros(num_ij, dtype=np.float64)
 

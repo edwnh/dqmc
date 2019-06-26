@@ -83,8 +83,6 @@ void measure_eqlt(const struct params *const restrict p, const int sign,
 		m->kv[bs] += pre*((ku*(1. - gujj) + xu)*(1. - gdjj)
 		                + (kd*(1. - gdjj) + xd)*(1. - gujj));
 		m->kn[bs] += pre*((ku + kd)*(2. - gujj - gdjj) + xu + xd);
-		m->vk[bs] += pre*((1. - gujj)*((1. - gdjj)*kd + (delta_i1j - gdi1j)*gdji0 + (delta_i0j - gdi0j)*gdji1)
-		                + (1. - gdjj)*((1. - gujj)*ku + (delta_i1j - gui1j)*guji0 + (delta_i0j - gui0j)*guji1));
 	}
 
 	// 2 bond measurements

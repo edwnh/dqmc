@@ -41,7 +41,7 @@ struct meas_eqlt {
 	double *xx;
 	double *zz;
 	double *pair_sw;
-	double *kk, *kv, *kn, *vk, *vv, *vn;
+	double *kk, *kv, *kn, *vv, *vn;
 };
 
 struct meas_uneqlt {
