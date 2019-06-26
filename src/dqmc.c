@@ -81,6 +81,8 @@ static int dqmc(struct sim_data *sim)
 	const int F = sim->p.F;
 	const double *const restrict exp_K = sim->p.exp_K;
 	const double *const restrict inv_exp_K = sim->p.inv_exp_K;
+	const double *const restrict exp_halfK = sim->p.exp_halfK;
+	const double *const restrict inv_exp_halfK = sim->p.inv_exp_halfK;
 	const double *const restrict exp_lambda = sim->p.exp_lambda;
 	const double *const restrict del = sim->p.del;
 	uint64_t *const restrict rng = sim->s.rng;
@@ -322,8 +324,26 @@ static int dqmc(struct sim_data *sim)
 			if ((sim->s.sweep >= sim->p.n_sweep_warm) &&
 					(sim->p.period_eqlt > 0) &&
 					(l + 1) % sim->p.period_eqlt == 0) {
+				#pragma omp parallel sections
+				{
+				#pragma omp section
+				{
+				profile_begin(half_wrap);
+				matmul(tmpNN1u, gu, exp_halfK);
+				matmul(tmpNN2u, inv_exp_halfK, tmpNN1u);
+				profile_end(half_wrap);
+				}
+				#pragma omp section
+				{
+				profile_begin(half_wrap);
+				matmul(tmpNN1d, gd, exp_halfK);
+				matmul(tmpNN2d, inv_exp_halfK, tmpNN1d);
+				profile_end(half_wrap);
+				}
+				}
+
 				profile_begin(meas_eq);
-				measure_eqlt(&sim->p, sign, gu, gd, &sim->m_eq);
+				measure_eqlt(&sim->p, sign, tmpNN2u, tmpNN2d, &sim->m_eq);
 				profile_end(meas_eq);
 			}
 		}
@@ -348,6 +368,44 @@ static int dqmc(struct sim_data *sim)
 			matdiff(N, N, Gutt, N, guacc, N);
 			matdiff(N, N, Gdtt, N, gdacc, N);
 			#endif
+
+			#pragma omp parallel sections
+			{
+			#pragma omp section
+			{
+			profile_begin(half_wrap);
+			for (int l = 0; l < L; l++) {
+				matmul(tmpNN1u, Gu0t + N*N*l, exp_halfK);
+				matmul(Gu0t + N*N*l, inv_exp_halfK, tmpNN1u);
+			}
+			for (int l = 0; l < L; l++) {
+				matmul(tmpNN1u, Gutt + N*N*l, exp_halfK);
+				matmul(Gutt + N*N*l, inv_exp_halfK, tmpNN1u);
+			}
+			for (int l = 0; l < L; l++) {
+				matmul(tmpNN1u, Gut0 + N*N*l, exp_halfK);
+				matmul(Gut0 + N*N*l, inv_exp_halfK, tmpNN1u);
+			}
+			profile_end(half_wrap);
+			}
+			#pragma omp section
+			{
+			profile_begin(half_wrap);
+			for (int l = 0; l < L; l++) {
+				matmul(tmpNN1d, Gd0t + N*N*l, exp_halfK);
+				matmul(Gd0t + N*N*l, inv_exp_halfK, tmpNN1d);
+			}
+			for (int l = 0; l < L; l++) {
+				matmul(tmpNN1d, Gdtt + N*N*l, exp_halfK);
+				matmul(Gdtt + N*N*l, inv_exp_halfK, tmpNN1d);
+			}
+			for (int l = 0; l < L; l++) {
+				matmul(tmpNN1d, Gdt0 + N*N*l, exp_halfK);
+				matmul(Gdt0 + N*N*l, inv_exp_halfK, tmpNN1d);
+			}
+			profile_end(half_wrap);
+			}
+			}
 
 			profile_begin(meas_uneq);
 			measure_uneqlt(&sim->p, sign,

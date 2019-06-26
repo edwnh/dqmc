@@ -164,6 +164,8 @@ def create_1(filename=None, overwrite=False, seed=None,
             K[ix + Nx*iy, ix + Nx*iy] -= mu
     exp_K = expm(-dt * K)
     inv_exp_K = expm(dt * K)
+    exp_halfK = expm(-dt/2 * K)
+    inv_exp_halfK = expm(dt/2 * K)
 #   exp_K = np.array(mpm.expm(mpm.matrix(-dt * K)).tolist(), dtype=np.float64)
 
     U_i = np.array((U,), dtype=np.float64)
@@ -228,6 +230,8 @@ def create_1(filename=None, overwrite=False, seed=None,
         f["params"]["degen_bb"] = degen_bb
         f["params"]["exp_K"] = exp_K
         f["params"]["inv_exp_K"] = inv_exp_K
+        f["params"]["exp_halfK"] = exp_halfK
+        f["params"]["inv_exp_halfK"] = inv_exp_halfK
         f["params"]["exp_lambda"] = exp_lambda
         f["params"]["del"] = delll
         f["params"]["F"] = np.array(L//n_matmul, dtype=np.int32)

@@ -12,6 +12,7 @@
 	X(multb) \
 	X(recalc) \
 	X(wrap) \
+	X(half_wrap) \
 	X(meas_eq) \
 	X(calc_o) \
 	X(bsofi) \

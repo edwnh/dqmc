@@ -48,6 +48,8 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	sim->p.degen_bb      = my_calloc(num_bb   * sizeof(int));
 	sim->p.exp_K         = my_calloc(N*N      * sizeof(double));
 	sim->p.inv_exp_K     = my_calloc(N*N      * sizeof(double));
+	sim->p.exp_halfK     = my_calloc(N*N      * sizeof(double));
+	sim->p.inv_exp_halfK = my_calloc(N*N      * sizeof(double));
 	sim->p.exp_lambda    = my_calloc(N*2      * sizeof(double));
 	sim->p.del           = my_calloc(N*2      * sizeof(double));
 	sim->s.hs            = my_calloc(N*L      * sizeof(int));
@@ -111,6 +113,8 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	my_read(_int,    "/params/degen_bb",       sim->p.degen_bb);
 	my_read(_double, "/params/exp_K",          sim->p.exp_K);
 	my_read(_double, "/params/inv_exp_K",      sim->p.inv_exp_K);
+	my_read(_double, "/params/exp_halfK",      sim->p.exp_halfK);
+	my_read(_double, "/params/inv_exp_halfK",  sim->p.inv_exp_halfK);
 	my_read(_double, "/params/exp_lambda",     sim->p.exp_lambda);
 	my_read(_double, "/params/del",            sim->p.del);
 	my_read(_int,    "/params/F",             &sim->p.F);
@@ -284,6 +288,8 @@ void sim_data_free(const struct sim_data *sim)
 	my_free(sim->s.hs);
 	my_free(sim->p.del);
 	my_free(sim->p.exp_lambda);
+	my_free(sim->p.inv_exp_halfK);
+	my_free(sim->p.exp_halfK);
 	my_free(sim->p.inv_exp_K);
 	my_free(sim->p.exp_K);
 	my_free(sim->p.degen_bb);

@@ -18,6 +18,7 @@ struct params {
 	int num_b, num_bs, num_bb;
 	int *degen_i, *degen_ij, *degen_bs, *degen_bb;
 	double *exp_K, *inv_exp_K;
+	double *exp_halfK, *inv_exp_halfK;
 	double *exp_lambda, *del;
 	int F, n_sweep;
 };
