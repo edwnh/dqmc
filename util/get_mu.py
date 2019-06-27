@@ -9,31 +9,45 @@ def get_mu_n(path):
         util.load(path, "meas_eqlt/n_sample", "meas_eqlt/sign",
                         "meas_eqlt/density")
     mask = (n_sample == n_sample.max())
-    print(f"complete: {mask.sum()}/{len(n_sample)}")
+    if not mask.all():
+        print(f"{path} incomplete: {mask.sum()}/{len(n_sample)}")
     sign, density = sign[mask], density[mask]
     nj = util.jackknife(sign, density.sum(1))
     return util.load_firstfile(path, "metadata/mu")[0], nj[0], nj[1]
 
 
-def main(argv):
-    n = 3
-    target = float(argv[1])
-    data = np.array([get_mu_n(path) for path in argv[2:]])
+def get_mu(targets, paths):
+    data = np.array([get_mu_n(path) for path in paths])
     data = data[np.argsort(data[:, 0])]
-    diffs = data[:, 1].copy()
-    diffs[0] = 0
-    diffs[1:] -= data[:-1, 1]
-    print(np.hstack((data, diffs[:, None])))
+    
+    mus = np.zeros(len(targets))
+    for i in range(len(targets)):
+        y = data[:, 1] - targets[i]
 
-    data[:, 1] -= target
-    c = np.abs(data[:, 1]).argmin()
-    if c == 0:
-        c = 1
-    elif c == data.shape[0] - 1:
-        c = data.shape[0] - 2
-    p = np.polyfit(data[c-1:c+2, 0], data[c-1:c+2, 1], 2)
-    r = np.roots(p)
-    print(r[np.abs(r - data[c, 0]).argmin()])
+        closest = np.abs(y).argmin()
+        j = np.clip(closest, 1, data.shape[0] - 2)
+        if j != closest:
+            print(f"warning: target {targets[i]} out of range of data")
+
+        p = np.polyfit(data[j-1:j+2, 0], y[j-1:j+2], 2)
+        r = np.roots(p)
+        mus[i] = r[np.abs(r - data[closest, 0]).argmin()]
+    
+    return data, mus
+
+
+def main(argv):
+    target = float(argv[1])
+    paths = argv[2:]
+
+    data, mus = get_mu([target], paths)
+    
+    diffs = np.zeros(data.shape[0])
+    diffs[:-1] = data[1:, 1] - data[:-1, 1]
+    print(np.hstack((data, diffs[:, None])))
+    
+    print(mus)
+
 
 if __name__ == "__main__":
     main(sys.argv)
