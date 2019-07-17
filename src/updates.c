@@ -17,6 +17,7 @@ void update_delayed(const int N, const int n_delay, const double *const restrict
 		const int i = site_order[ii];
 		const double delu = del[i + N*hs[i]];
 		const double deld = del[i + N*!hs[i]];
+		if (delu == 0.0 && deld == 0.0) continue;
 		const double ru = 1.0 + (1.0 - du[i]) * delu;
 		const double rd = 1.0 + (1.0 - dd[i]) * deld;
 		const double prob = ru * rd;
