@@ -9,9 +9,9 @@ def info(path):
                              "state/sweep", "params/n_sweep")
     print(f"n_sample={n_sample}, sweep={sweep}/{n_sweep}")
     if n_sample > 0:
-        print(f"<sign>={float(sign/n_sample):.20f}")
-        print(f"<n>={float(density/sign):.20f}")
-        print(f"<m_z^2>={float((density-2*double_occ)/sign):.20f}")
+        print(f"<sign>={(sign/n_sample)}")
+        print(f"<n>={(density/sign)}")
+        print(f"<m_z^2>={((density-2*double_occ)/sign)}")
 
 
 def main(argv):

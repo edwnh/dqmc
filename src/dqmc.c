@@ -1,5 +1,5 @@
 #include "dqmc.h"
-#include <math.h>
+#include <tgmath.h>
 #include <stdio.h>
 #include <mkl.h>
 #include "data.h"
@@ -25,14 +25,14 @@
 
 // who needs function calls :D
 #define matmul(C, A, B) do { \
-	dgemm("N", "N", &N, &N, &N, cdbl(1.0), (A), &N, (B), &N, cdbl(0.0), (C), &N); \
+	zgemm("N", "N", &N, &N, &N, ccplx(1.0), (A), &N, (B), &N, ccplx(0.0), (C), &N); \
 } while (0);
 
 #define calcBu(B, l) do { \
 	for (int j = 0; j < N; j++) { \
 		const double el = exp_lambda[j + N*hs[j + N*(l)]]; \
 		for (int i = 0; i < N; i++) \
-			(B)[i + N*j] = exp_K[i + N*j] * el; \
+			(B)[i + N*j] = exp_Ku[i + N*j] * el; \
 	} \
 } while (0);
 
@@ -40,7 +40,7 @@
 	for (int j = 0; j < N; j++) { \
 		const double el = exp_lambda[j + N*!hs[j + N*(l)]]; \
 		for (int i = 0; i < N; i++) \
-			(B)[i + N*j] = exp_K[i + N*j] * el; \
+			(B)[i + N*j] = exp_Kd[i + N*j] * el; \
 	} \
 } while (0);
 
@@ -48,7 +48,7 @@
 	for (int i = 0; i < N; i++) { \
 		const double el = exp_lambda[i + N*!hs[i + N*(l)]]; \
 		for (int j = 0; j < N; j++) \
-			(iB)[i + N*j] = el * inv_exp_K[i + N*j]; \
+			(iB)[i + N*j] = el * inv_exp_Ku[i + N*j]; \
 	} \
 } while (0);
 
@@ -56,7 +56,7 @@
 	for (int i = 0; i < N; i++) { \
 		const double el = exp_lambda[i + N*hs[i + N*(l)]]; \
 		for (int j = 0; j < N; j++) \
-			(iB)[i + N*j] = el * inv_exp_K[i + N*j]; \
+			(iB)[i + N*j] = el * inv_exp_Kd[i + N*j]; \
 	} \
 } while (0);
 
@@ -79,85 +79,89 @@ static int dqmc(struct sim_data *sim)
 	const int n_matmul = sim->p.n_matmul;
 	const int n_delay = sim->p.n_delay;
 	const int F = sim->p.F;
-	const double *const restrict exp_K = sim->p.exp_K;
-	const double *const restrict inv_exp_K = sim->p.inv_exp_K;
-	const double *const restrict exp_halfK = sim->p.exp_halfK;
-	const double *const restrict inv_exp_halfK = sim->p.inv_exp_halfK;
+	const complex double *const restrict exp_Ku = sim->p.exp_Ku;
+	const complex double *const restrict exp_Kd = sim->p.exp_Kd;
+	const complex double *const restrict inv_exp_Ku = sim->p.inv_exp_Ku;
+	const complex double *const restrict inv_exp_Kd = sim->p.inv_exp_Kd;
+	const complex double *const restrict exp_halfKu = sim->p.exp_halfKu;
+	const complex double *const restrict exp_halfKd = sim->p.exp_halfKd;
+	const complex double *const restrict inv_exp_halfKu = sim->p.inv_exp_halfKu;
+	const complex double *const restrict inv_exp_halfKd = sim->p.inv_exp_halfKd;
 	const double *const restrict exp_lambda = sim->p.exp_lambda;
 	const double *const restrict del = sim->p.del;
 	uint64_t *const restrict rng = sim->s.rng;
 	int *const restrict hs = sim->s.hs;
 
-	double *const Bu = my_calloc(N*N*L * sizeof(double));
-	double *const Bd = my_calloc(N*N*L * sizeof(double));
-	double *const iBu = my_calloc(N*N*L * sizeof(double));
-	double *const iBd = my_calloc(N*N*L * sizeof(double));
-	double *const Cu = my_calloc(N*N*F * sizeof(double));
-	double *const Cd = my_calloc(N*N*F * sizeof(double));
-	double *const restrict gu = my_calloc(N*N * sizeof(double));
-	double *const restrict gd = my_calloc(N*N * sizeof(double));
+	complex double *const Bu = my_calloc(N*N*L * sizeof(complex double));
+	complex double *const Bd = my_calloc(N*N*L * sizeof(complex double));
+	complex double *const iBu = my_calloc(N*N*L * sizeof(complex double));
+	complex double *const iBd = my_calloc(N*N*L * sizeof(complex double));
+	complex double *const Cu = my_calloc(N*N*F * sizeof(complex double));
+	complex double *const Cd = my_calloc(N*N*F * sizeof(complex double));
+	complex double *const restrict gu = my_calloc(N*N * sizeof(complex double));
+	complex double *const restrict gd = my_calloc(N*N * sizeof(complex double));
 	#ifdef CHECK_G_WRP
-	double *const restrict guwrp = my_calloc(N*N * sizeof(double));
-	double *const restrict gdwrp = my_calloc(N*N * sizeof(double));
+	complex double *const restrict guwrp = my_calloc(N*N * sizeof(complex double));
+	complex double *const restrict gdwrp = my_calloc(N*N * sizeof(complex double));
 	#endif
 	#ifdef CHECK_G_ACC
-	double *const restrict guacc = my_calloc(N*N * sizeof(double));
-	double *const restrict gdacc = my_calloc(N*N * sizeof(double));
+	complex double *const restrict guacc = my_calloc(N*N * sizeof(complex double));
+	complex double *const restrict gdacc = my_calloc(N*N * sizeof(complex double));
 	#endif
-	int sign = 0;
+	complex double phase;
 	int *const site_order = my_calloc(N * sizeof(double));
 
 	// work arrays for calc_eq_g and stuff. two sets for easy 2x parallelization
-	double *const restrict tmpNN1u = my_calloc(N*N * sizeof(double));
-	double *const restrict tmpNN2u = my_calloc(N*N * sizeof(double));
-	double *const restrict tmpN1u = my_calloc(N * sizeof(double));
-	double *const restrict tmpN2u = my_calloc(N * sizeof(double));
-	double *const restrict tmpN3u = my_calloc(N * sizeof(double));
+	complex double *const restrict tmpNN1u = my_calloc(N*N * sizeof(complex double));
+	complex double *const restrict tmpNN2u = my_calloc(N*N * sizeof(complex double));
+	complex double *const restrict tmpN1u = my_calloc(N * sizeof(complex double));
+	complex double *const restrict tmpN2u = my_calloc(N * sizeof(complex double));
+	complex double *const restrict tmpN3u = my_calloc(N * sizeof(complex double));
 	int *const restrict pvtu = my_calloc(N * sizeof(int));
 
-	double *const restrict tmpNN1d = my_calloc(N*N * sizeof(double));
-	double *const restrict tmpNN2d = my_calloc(N*N * sizeof(double));
-	double *const restrict tmpN1d = my_calloc(N * sizeof(double));
-	double *const restrict tmpN2d = my_calloc(N * sizeof(double));
-	double *const restrict tmpN3d = my_calloc(N * sizeof(double));
+	complex double *const restrict tmpNN1d = my_calloc(N*N * sizeof(complex double));
+	complex double *const restrict tmpNN2d = my_calloc(N*N * sizeof(complex double));
+	complex double *const restrict tmpN1d = my_calloc(N * sizeof(complex double));
+	complex double *const restrict tmpN2d = my_calloc(N * sizeof(complex double));
+	complex double *const restrict tmpN3d = my_calloc(N * sizeof(complex double));
 	int *const restrict pvtd = my_calloc(N * sizeof(int));
 
 	// arrays for calc_ue_g
-	double *restrict Gu0t = NULL;
-	double *restrict Gutt = NULL;
-	double *restrict Gut0 = NULL;
-	// double *restrict ueGu = NULL;
-	double *restrict Gredu = NULL;
-	double *restrict tauu = NULL;
-	double *restrict Qu = NULL;
+	complex double *restrict Gu0t = NULL;
+	complex double *restrict Gutt = NULL;
+	complex double *restrict Gut0 = NULL;
+	// complex double *restrict ueGu = NULL;
+	complex double *restrict Gredu = NULL;
+	complex double *restrict tauu = NULL;
+	complex double *restrict Qu = NULL;
 
-	double *restrict Gd0t = NULL;
-	double *restrict Gdtt = NULL;
-	double *restrict Gdt0 = NULL;
-	// double *restrict ueGd = NULL;
-	double *restrict Gredd = NULL;
-	double *restrict taud = NULL;
-	double *restrict Qd = NULL;
+	complex double *restrict Gd0t = NULL;
+	complex double *restrict Gdtt = NULL;
+	complex double *restrict Gdt0 = NULL;
+	// complex double *restrict ueGd = NULL;
+	complex double *restrict Gredd = NULL;
+	complex double *restrict taud = NULL;
+	complex double *restrict Qd = NULL;
 
 	if (sim->p.period_uneqlt > 0) {
 		const int E = 1 + (F - 1) / N_MUL;
 
-		Gredu = my_calloc(N*E*N*E * sizeof(double));
-		tauu = my_calloc(N*E * sizeof(double));
-		Qu = my_calloc(4*N*N * sizeof(double));
+		Gredu = my_calloc(N*E*N*E * sizeof(complex double));
+		tauu = my_calloc(N*E * sizeof(complex double));
+		Qu = my_calloc(4*N*N * sizeof(complex double));
 
-		Gredd = my_calloc(N*E*N*E * sizeof(double));
-		taud = my_calloc(N*E * sizeof(double));
-		Qd = my_calloc(4*N*N * sizeof(double));
+		Gredd = my_calloc(N*E*N*E * sizeof(complex double));
+		taud = my_calloc(N*E * sizeof(complex double));
+		Qd = my_calloc(4*N*N * sizeof(complex double));
 
-		Gu0t = my_calloc(N*N*L * sizeof(double));
-		Gutt = my_calloc(N*N*L * sizeof(double));
-		Gut0 = my_calloc(N*N*L * sizeof(double));
-		Gd0t = my_calloc(N*N*L * sizeof(double));
-		Gdtt = my_calloc(N*N*L * sizeof(double));
-		Gdt0 = my_calloc(N*N*L * sizeof(double));
-		// ueGu = my_calloc(N*N*L*L * sizeof(double));
-		// ueGd = my_calloc(N*N*L*L * sizeof(double));
+		Gu0t = my_calloc(N*N*L * sizeof(complex double));
+		Gutt = my_calloc(N*N*L * sizeof(complex double));
+		Gut0 = my_calloc(N*N*L * sizeof(complex double));
+		Gd0t = my_calloc(N*N*L * sizeof(complex double));
+		Gdtt = my_calloc(N*N*L * sizeof(complex double));
+		Gdt0 = my_calloc(N*N*L * sizeof(complex double));
+		// ueGu = my_calloc(N*N*L*L * sizeof(complex double));
+		// ueGd = my_calloc(N*N*L*L * sizeof(complex double));
 		// if (ueGu == NULL || ueGd == NULL) return -1;
 	}
 
@@ -167,11 +171,11 @@ static int dqmc(struct sim_data *sim)
 		const int lwork_ue = get_lwork_ue_g(N, F);
 		if (lwork_ue > lwork) lwork = lwork_ue;
 	}
-	double *const restrict worku = my_calloc(lwork * sizeof(double));
-	double *const restrict workd = my_calloc(lwork * sizeof(double));
+	complex double *const restrict worku = my_calloc(lwork * sizeof(complex double));
+	complex double *const restrict workd = my_calloc(lwork * sizeof(complex double));
 
 	{
-	int signu, signd;
+	complex double phaseu, phased;
 	#pragma omp parallel sections
 	{
 	#pragma omp section
@@ -184,7 +188,7 @@ static int dqmc(struct sim_data *sim)
 	for (int f = 0; f < F; f++)
 		mul_seq(N, L, f*n_matmul, ((f + 1)*n_matmul) % L, 1.0,
 		        Bu, Cu + N*N*f, N, tmpNN1u);
-	signu = calc_eq_g(0, N, F, N_MUL, Cu, gu, tmpNN1u, tmpNN2u,
+	phaseu = calc_eq_g(0, N, F, N_MUL, Cu, gu, tmpNN1u, tmpNN2u,
 	                  tmpN1u, tmpN2u, tmpN3u, pvtu, worku, lwork);
 	}
 	#pragma omp section
@@ -197,11 +201,11 @@ static int dqmc(struct sim_data *sim)
 	for (int f = 0; f < F; f++)
 		mul_seq(N, L, f*n_matmul, ((f + 1)*n_matmul) % L, 1.0,
 		        Bd, Cd + N*N*f, N, tmpNN1d);
-	signd = calc_eq_g(0, N, F, N_MUL, Cd, gd, tmpNN1d, tmpNN2d,
+	phased = calc_eq_g(0, N, F, N_MUL, Cd, gd, tmpNN1d, tmpNN2d,
 	                  tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
 	}
 	}
-	sign = signu*signd;
+	phase = phaseu*phased;
 	}
 
 	for (; sim->s.sweep < sim->p.n_sweep; sim->s.sweep++) {
@@ -212,21 +216,21 @@ static int dqmc(struct sim_data *sim)
 			profile_begin(updates);
 			shuffle(rng, N, site_order);
 			update_delayed(N, n_delay, del, site_order,
-			               rng, hs + N*l, gu, gd, &sign,
+			               rng, hs + N*l, gu, gd, &phase,
 			               tmpNN1u, tmpNN2u, tmpN1u,
 			               tmpNN1d, tmpNN2d, tmpN1d);
 			profile_end(updates);
 
 			const int f = l / n_matmul;
 			const int recalc = ((l + 1) % n_matmul == 0);
-			int signu, signd;
+			complex double phaseu, phased;
 			#pragma omp parallel sections
 			{
 			#pragma omp section
 			{
-			double *const restrict Bul = Bu + N*N*l;
-			double *const restrict iBul = iBu + N*N*l;
-			double *const restrict Cuf = Cu + N*N*f;
+			complex double *const restrict Bul = Bu + N*N*l;
+			complex double *const restrict iBul = iBu + N*N*l;
+			complex double *const restrict Cuf = Cu + N*N*f;
 			profile_begin(calcb);
 			calcBu(Bul, l);
 			if (!recalc || sim->p.period_uneqlt > 0)
@@ -249,7 +253,7 @@ static int dqmc(struct sim_data *sim)
 				          tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				          tmpN3u, pvtu, worku, lwork);
 				#endif
-				signu = calc_eq_g((f + 1) % F, N, F, N_MUL, Cu, gu,
+				phaseu = calc_eq_g((f + 1) % F, N, F, N_MUL, Cu, gu,
 				                  tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				                  tmpN3u, pvtu, worku, lwork);
 				profile_end(recalc);
@@ -262,9 +266,9 @@ static int dqmc(struct sim_data *sim)
 			}
 			#pragma omp section
 			{
-			double *const restrict Bdl = Bd + N*N*l;
-			double *const restrict iBdl = iBd + N*N*l;
-			double *const restrict Cdf = Cd + N*N*f;
+			complex double *const restrict Bdl = Bd + N*N*l;
+			complex double *const restrict iBdl = iBd + N*N*l;
+			complex double *const restrict Cdf = Cd + N*N*f;
 			profile_begin(calcb);
 			calcBd(Bdl, l);
 			if (!recalc || sim->p.period_uneqlt > 0)
@@ -287,7 +291,7 @@ static int dqmc(struct sim_data *sim)
 				          tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				          tmpN3d, pvtd, workd, lwork);
 				#endif
-				signd = calc_eq_g((f + 1) % F, N, F, N_MUL, Cd, gd,
+				phased = calc_eq_g((f + 1) % F, N, F, N_MUL, Cd, gd,
 				                  tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				                  tmpN3d, pvtd, workd, lwork);
 				profile_end(recalc);
@@ -319,7 +323,7 @@ static int dqmc(struct sim_data *sim)
 			}
 			#endif
 
-			if (recalc) sign = signu*signd;
+			if (recalc) phase = phaseu*phased;
 
 			if ((sim->s.sweep >= sim->p.n_sweep_warm) &&
 					(sim->p.period_eqlt > 0) &&
@@ -329,21 +333,21 @@ static int dqmc(struct sim_data *sim)
 				#pragma omp section
 				{
 				profile_begin(half_wrap);
-				matmul(tmpNN1u, gu, exp_halfK);
-				matmul(tmpNN2u, inv_exp_halfK, tmpNN1u);
+				matmul(tmpNN1u, gu, exp_halfKu);
+				matmul(tmpNN2u, inv_exp_halfKu, tmpNN1u);
 				profile_end(half_wrap);
 				}
 				#pragma omp section
 				{
 				profile_begin(half_wrap);
-				matmul(tmpNN1d, gd, exp_halfK);
-				matmul(tmpNN2d, inv_exp_halfK, tmpNN1d);
+				matmul(tmpNN1d, gd, exp_halfKd);
+				matmul(tmpNN2d, inv_exp_halfKd, tmpNN1d);
 				profile_end(half_wrap);
 				}
 				}
 
 				profile_begin(meas_eq);
-				measure_eqlt(&sim->p, sign, tmpNN2u, tmpNN2d, &sim->m_eq);
+				measure_eqlt(&sim->p, phase, tmpNN2u, tmpNN2d, &sim->m_eq);
 				profile_end(meas_eq);
 			}
 		}
@@ -375,16 +379,16 @@ static int dqmc(struct sim_data *sim)
 			{
 			profile_begin(half_wrap);
 			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1u, Gu0t + N*N*l, exp_halfK);
-				matmul(Gu0t + N*N*l, inv_exp_halfK, tmpNN1u);
+				matmul(tmpNN1u, Gu0t + N*N*l, exp_halfKu);
+				matmul(Gu0t + N*N*l, inv_exp_halfKu, tmpNN1u);
 			}
 			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1u, Gutt + N*N*l, exp_halfK);
-				matmul(Gutt + N*N*l, inv_exp_halfK, tmpNN1u);
+				matmul(tmpNN1u, Gutt + N*N*l, exp_halfKu);
+				matmul(Gutt + N*N*l, inv_exp_halfKu, tmpNN1u);
 			}
 			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1u, Gut0 + N*N*l, exp_halfK);
-				matmul(Gut0 + N*N*l, inv_exp_halfK, tmpNN1u);
+				matmul(tmpNN1u, Gut0 + N*N*l, exp_halfKu);
+				matmul(Gut0 + N*N*l, inv_exp_halfKu, tmpNN1u);
 			}
 			profile_end(half_wrap);
 			}
@@ -392,23 +396,23 @@ static int dqmc(struct sim_data *sim)
 			{
 			profile_begin(half_wrap);
 			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1d, Gd0t + N*N*l, exp_halfK);
-				matmul(Gd0t + N*N*l, inv_exp_halfK, tmpNN1d);
+				matmul(tmpNN1d, Gd0t + N*N*l, exp_halfKd);
+				matmul(Gd0t + N*N*l, inv_exp_halfKd, tmpNN1d);
 			}
 			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1d, Gdtt + N*N*l, exp_halfK);
-				matmul(Gdtt + N*N*l, inv_exp_halfK, tmpNN1d);
+				matmul(tmpNN1d, Gdtt + N*N*l, exp_halfKd);
+				matmul(Gdtt + N*N*l, inv_exp_halfKd, tmpNN1d);
 			}
 			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1d, Gdt0 + N*N*l, exp_halfK);
-				matmul(Gdt0 + N*N*l, inv_exp_halfK, tmpNN1d);
+				matmul(tmpNN1d, Gdt0 + N*N*l, exp_halfKd);
+				matmul(Gdt0 + N*N*l, inv_exp_halfKd, tmpNN1d);
 			}
 			profile_end(half_wrap);
 			}
 			}
 
 			profile_begin(meas_uneq);
-			measure_uneqlt(&sim->p, sign,
+			measure_uneqlt(&sim->p, phase,
 			               Gu0t, Gutt, Gut0, Gd0t, Gdtt, Gdt0,
 			               &sim->m_ue);
 			profile_end(meas_uneq);

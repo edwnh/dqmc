@@ -1,5 +1,6 @@
 #pragma once
 
+#include <complex.h>
 #include <stdint.h>
 
 struct params {
@@ -17,8 +18,8 @@ struct params {
 	int num_i, num_ij;
 	int num_b, num_bs, num_bb;
 	int *degen_i, *degen_ij, *degen_bs, *degen_bb;
-	double *exp_K, *inv_exp_K;
-	double *exp_halfK, *inv_exp_halfK;
+	complex double *exp_Ku, *exp_Kd, *inv_exp_Ku, *inv_exp_Kd;
+	complex double *exp_halfKu, *exp_halfKd, *inv_exp_halfKu, *inv_exp_halfKd;
 	double *exp_lambda, *del;
 	int F, n_sweep;
 };
@@ -31,33 +32,33 @@ struct state {
 
 struct meas_eqlt {
 	int n_sample;
-	double sign;
+	complex double sign;
 
-	double *density;
-	double *double_occ;
+	complex double *density;
+	complex double *double_occ;
 
-	double *g00;
-	double *nn;
-	double *xx;
-	double *zz;
-	double *pair_sw;
-	double *kk, *kv, *kn, *vv, *vn;
+	complex double *g00;
+	complex double *nn;
+	complex double *xx;
+	complex double *zz;
+	complex double *pair_sw;
+	complex double *kk, *kv, *kn, *vv, *vn;
 };
 
 struct meas_uneqlt {
 	int n_sample;
-	double sign;
+	complex double sign;
 
-	double *gt0;
-	double *nn;
-	double *xx;
-	double *zz;
-	double *pair_sw;
-	double *pair_bb;
-	double *jj, *jsjs;
-	double *kk, *ksks;
-	double *kv, *kn, *vv, *vn;
-	double *nem_nnnn, *nem_ssss;
+	complex double *gt0;
+	complex double *nn;
+	complex double *xx;
+	complex double *zz;
+	complex double *pair_sw;
+	complex double *pair_bb;
+	complex double *jj, *jsjs;
+	complex double *kk, *ksks;
+	complex double *kv, *kn, *vv, *vn;
+	complex double *nem_nnnn, *nem_ssss;
 };
 
 struct sim_data {

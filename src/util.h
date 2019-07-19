@@ -1,5 +1,6 @@
 #pragma once
 
+#include <complex.h>
 #include <string.h>
 #include <mkl.h>
 
@@ -14,6 +15,7 @@
 // use these since fortran blas/lapack functions take pointers for arguments
 #define cint(x) &(const int){(x)}
 #define cdbl(x) &(const double){(x)}
+#define ccplx(x) &(const complex double){(x)}
 
 static inline void *my_calloc(size_t size)
 {

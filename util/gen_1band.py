@@ -55,6 +55,7 @@ def rand_jump(rng):
 
 def create_1(filename=None, overwrite=False, seed=None,
              Nx=16, Ny=4, mu=0.0, tp=0.0, U=6.0, dt=0.115, L=40,
+             nflux=0,
              n_delay=16, n_matmul=8, n_sweep_warm=200, n_sweep_meas=2000,
              period_eqlt=8, period_uneqlt=0,
              meas_bond_corr=1, meas_energy_corr=0, meas_nematic_corr=0):
@@ -146,26 +147,36 @@ def create_1(filename=None, overwrite=False, seed=None,
                             map_bb[j + N*jj, i + N*ii] = kk
                             degen_bb[kk] += 1
 
-    K = np.zeros((N, N), dtype=np.float64)
+    B = nflux/(Ny*Nx)
+    tij = np.zeros((Ny*Nx, Ny*Nx), dtype=np.complex)
     for iy in range(Ny):
         for ix in range(Nx):
             iy1 = (iy + 1) % Ny
             ix1 = (ix + 1) % Nx
-            K[ix + Nx*iy1, ix + Nx*iy] -= 1.0
-            K[ix + Nx*iy, ix + Nx*iy1] -= 1.0
-            K[ix1 + Nx*iy, ix + Nx*iy] -= 1.0
-            K[ix + Nx*iy, ix1 + Nx*iy] -= 1.0
+                #jx    jy    ix    iy
+            tij[ix + Nx*iy1, ix + Nx*iy] += np.exp(1j*np.pi*B*( 1* ix + (0 if iy1 > iy else  Ny* ix)))
+            tij[ix + Nx*iy, ix + Nx*iy1] += np.exp(1j*np.pi*B*(-1* ix + (0 if iy1 > iy else -Ny* ix)))
+            tij[ix1 + Nx*iy, ix + Nx*iy] += np.exp(1j*np.pi*B*( 1*-iy + (0 if ix1 > ix else  Nx*-iy)))
+            tij[ix + Nx*iy, ix1 + Nx*iy] += np.exp(1j*np.pi*B*(-1*-iy + (0 if ix1 > ix else -Nx*-iy)))
 
-            K[ix1 + Nx*iy1, ix + Nx*iy] -= tp
-            K[ix + Nx*iy, ix1 + Nx*iy1] -= tp
-            K[ix1 + Nx*iy, ix + Nx*iy1] -= tp
-            K[ix + Nx*iy1, ix1 + Nx*iy] -= tp
+            tij[ix1 + Nx*iy1, ix + Nx*iy] += tp * np.exp(1j*np.pi*B*( 1*ix  +  1*-iy  + (0 if iy1 > iy else  Ny*ix1) + (0 if ix1 > ix else  Nx*-iy1) + (-Nx*Ny if ix1 < ix and iy1 < iy else 0)))
+            tij[ix + Nx*iy, ix1 + Nx*iy1] += tp * np.exp(1j*np.pi*B*(-1*ix1 + -1*-iy1 + (0 if iy1 > iy else -Ny*ix ) + (0 if ix1 > ix else -Nx*-iy ) + ( Nx*Ny if ix1 < ix and iy1 < iy else 0)))
+            tij[ix1 + Nx*iy, ix + Nx*iy1] += tp * np.exp(1j*np.pi*B*(-1*ix  +  1*-iy1 + (0 if iy1 > iy else -Ny*ix1) + (0 if ix1 > ix else  Nx*-iy ) + ( Nx*Ny if ix1 < ix and iy1 < iy else 0)))
+            tij[ix + Nx*iy1, ix1 + Nx*iy] += tp * np.exp(1j*np.pi*B*( 1*ix1 + -1*-iy  + (0 if iy1 > iy else  Ny*ix ) + (0 if ix1 > ix else -Nx*-iy1) + (-Nx*Ny if ix1 < ix and iy1 < iy else 0)))
+    Ku = -1*tij
+    Kd = -1*tij
+    for i in range(Ny*Nx):
+        Ku[i, i] -= mu
+        Kd[i, i] -= mu
 
-            K[ix + Nx*iy, ix + Nx*iy] -= mu
-    exp_K = expm(-dt * K)
-    inv_exp_K = expm(dt * K)
-    exp_halfK = expm(-dt/2 * K)
-    inv_exp_halfK = expm(dt/2 * K)
+    exp_Ku = expm(-dt * Ku)
+    exp_Kd = expm(-dt * Kd)
+    inv_exp_Ku = expm(dt * Ku)
+    inv_exp_Kd = expm(dt * Kd)
+    exp_halfKu = expm(-dt/2 * Ku)
+    exp_halfKd = expm(-dt/2 * Kd)
+    inv_exp_halfKu = expm(dt/2 * Ku)
+    inv_exp_halfKd = expm(dt/2 * Kd)
 #   exp_K = np.array(mpm.expm(mpm.matrix(-dt * K)).tolist(), dtype=np.float64)
 
     U_i = np.array((U,), dtype=np.float64)
@@ -183,12 +194,13 @@ def create_1(filename=None, overwrite=False, seed=None,
         # parameters not used by dqmc code, but useful for analysis
         f.create_group("metadata")
         f["metadata"]["version"] = 0.0
-        f["metadata"]["model"] = "Hubbard"
+        f["metadata"]["model"] = "Hubbard (complex)"
         f["metadata"]["Nx"] = Nx
         f["metadata"]["Ny"] = Ny
         f["metadata"]["bps"] = bps
         f["metadata"]["U"] = U
         f["metadata"]["t'"] = tp
+        f["metadata"]["nflux"] = nflux
         f["metadata"]["mu"] = mu
         f["metadata"]["beta"] = L*dt
 
@@ -202,7 +214,8 @@ def create_1(filename=None, overwrite=False, seed=None,
         f["params"]["bonds"] = bonds
         f["params"]["map_bs"] = map_bs
         f["params"]["map_bb"] = map_bb
-        f["params"]["K"] = K
+        f["params"]["Ku"] = Ku
+        f["params"]["Kd"] = Kd
         f["params"]["U"] = U_i
         f["params"]["dt"] = np.array(dt, dtype=np.float64)
 
@@ -228,10 +241,14 @@ def create_1(filename=None, overwrite=False, seed=None,
         f["params"]["degen_ij"] = degen_ij
         f["params"]["degen_bs"] = degen_bs
         f["params"]["degen_bb"] = degen_bb
-        f["params"]["exp_K"] = exp_K
-        f["params"]["inv_exp_K"] = inv_exp_K
-        f["params"]["exp_halfK"] = exp_halfK
-        f["params"]["inv_exp_halfK"] = inv_exp_halfK
+        f["params"]["exp_Ku"] = exp_Ku
+        f["params"]["exp_Kd"] = exp_Kd
+        f["params"]["inv_exp_Ku"] = inv_exp_Ku
+        f["params"]["inv_exp_Kd"] = inv_exp_Kd
+        f["params"]["exp_halfKu"] = exp_halfKu
+        f["params"]["exp_halfKd"] = exp_halfKd
+        f["params"]["inv_exp_halfKu"] = inv_exp_halfKu
+        f["params"]["inv_exp_halfKd"] = inv_exp_halfKd
         f["params"]["exp_lambda"] = exp_lambda
         f["params"]["del"] = delll
         f["params"]["F"] = np.array(L//n_matmul, dtype=np.int32)
@@ -247,44 +264,44 @@ def create_1(filename=None, overwrite=False, seed=None,
         # measurements
         f.create_group("meas_eqlt")
         f["meas_eqlt"]["n_sample"] = np.array(0, dtype=np.int32)
-        f["meas_eqlt"]["sign"] = np.array(0.0, dtype=np.float64)
-        f["meas_eqlt"]["density"] = np.zeros(num_i, dtype=np.float64)
-        f["meas_eqlt"]["double_occ"] = np.zeros(num_i, dtype=np.float64)
-        f["meas_eqlt"]["g00"] = np.zeros(num_ij, dtype=np.float64)
-        f["meas_eqlt"]["nn"] = np.zeros(num_ij, dtype=np.float64)
-        f["meas_eqlt"]["xx"] = np.zeros(num_ij, dtype=np.float64)
-        f["meas_eqlt"]["zz"] = np.zeros(num_ij, dtype=np.float64)
-        f["meas_eqlt"]["pair_sw"] = np.zeros(num_ij, dtype=np.float64)
+        f["meas_eqlt"]["sign"] = np.array(0.0, dtype=np.complex)
+        f["meas_eqlt"]["density"] = np.zeros(num_i, dtype=np.complex)
+        f["meas_eqlt"]["double_occ"] = np.zeros(num_i, dtype=np.complex)
+        f["meas_eqlt"]["g00"] = np.zeros(num_ij, dtype=np.complex)
+        f["meas_eqlt"]["nn"] = np.zeros(num_ij, dtype=np.complex)
+        f["meas_eqlt"]["xx"] = np.zeros(num_ij, dtype=np.complex)
+        f["meas_eqlt"]["zz"] = np.zeros(num_ij, dtype=np.complex)
+        f["meas_eqlt"]["pair_sw"] = np.zeros(num_ij, dtype=np.complex)
         if meas_energy_corr:
-            f["meas_eqlt"]["kk"] = np.zeros(num_bb, dtype=np.float64)
-            f["meas_eqlt"]["kv"] = np.zeros(num_bs, dtype=np.float64)
-            f["meas_eqlt"]["kn"] = np.zeros(num_bs, dtype=np.float64)
-            f["meas_eqlt"]["vv"] = np.zeros(num_ij, dtype=np.float64)
-            f["meas_eqlt"]["vn"] = np.zeros(num_ij, dtype=np.float64)
+            f["meas_eqlt"]["kk"] = np.zeros(num_bb, dtype=np.complex)
+            f["meas_eqlt"]["kv"] = np.zeros(num_bs, dtype=np.complex)
+            f["meas_eqlt"]["kn"] = np.zeros(num_bs, dtype=np.complex)
+            f["meas_eqlt"]["vv"] = np.zeros(num_ij, dtype=np.complex)
+            f["meas_eqlt"]["vn"] = np.zeros(num_ij, dtype=np.complex)
 
         if period_uneqlt > 0:
             f.create_group("meas_uneqlt")
             f["meas_uneqlt"]["n_sample"] = np.array(0, dtype=np.int32)
-            f["meas_uneqlt"]["sign"] = np.array(0.0, dtype=np.float64)
-            f["meas_uneqlt"]["gt0"] = np.zeros(num_ij*L, dtype=np.float64)
-            f["meas_uneqlt"]["nn"] = np.zeros(num_ij*L, dtype=np.float64)
-            f["meas_uneqlt"]["xx"] = np.zeros(num_ij*L, dtype=np.float64)
-            f["meas_uneqlt"]["zz"] = np.zeros(num_ij*L, dtype=np.float64)
-            f["meas_uneqlt"]["pair_sw"] = np.zeros(num_ij*L, dtype=np.float64)
+            f["meas_uneqlt"]["sign"] = np.array(0.0, dtype=np.complex)
+            f["meas_uneqlt"]["gt0"] = np.zeros(num_ij*L, dtype=np.complex)
+            f["meas_uneqlt"]["nn"] = np.zeros(num_ij*L, dtype=np.complex)
+            f["meas_uneqlt"]["xx"] = np.zeros(num_ij*L, dtype=np.complex)
+            f["meas_uneqlt"]["zz"] = np.zeros(num_ij*L, dtype=np.complex)
+            f["meas_uneqlt"]["pair_sw"] = np.zeros(num_ij*L, dtype=np.complex)
             if meas_bond_corr:
-                f["meas_uneqlt"]["pair_bb"] = np.zeros(num_bb*L, dtype=np.float64)
-                f["meas_uneqlt"]["jj"] = np.zeros(num_bb*L, dtype=np.float64)
-                f["meas_uneqlt"]["jsjs"] = np.zeros(num_bb*L, dtype=np.float64)
-                f["meas_uneqlt"]["kk"] = np.zeros(num_bb*L, dtype=np.float64)
-                f["meas_uneqlt"]["ksks"] = np.zeros(num_bb*L, dtype=np.float64)
+                f["meas_uneqlt"]["pair_bb"] = np.zeros(num_bb*L, dtype=np.complex)
+                f["meas_uneqlt"]["jj"] = np.zeros(num_bb*L, dtype=np.complex)
+                f["meas_uneqlt"]["jsjs"] = np.zeros(num_bb*L, dtype=np.complex)
+                f["meas_uneqlt"]["kk"] = np.zeros(num_bb*L, dtype=np.complex)
+                f["meas_uneqlt"]["ksks"] = np.zeros(num_bb*L, dtype=np.complex)
             if meas_energy_corr:
-                f["meas_uneqlt"]["kv"] = np.zeros(num_bs*L, dtype=np.float64)
-                f["meas_uneqlt"]["kn"] = np.zeros(num_bs*L, dtype=np.float64)
-                f["meas_uneqlt"]["vv"] = np.zeros(num_ij*L, dtype=np.float64)
-                f["meas_uneqlt"]["vn"] = np.zeros(num_ij*L, dtype=np.float64)
+                f["meas_uneqlt"]["kv"] = np.zeros(num_bs*L, dtype=np.complex)
+                f["meas_uneqlt"]["kn"] = np.zeros(num_bs*L, dtype=np.complex)
+                f["meas_uneqlt"]["vv"] = np.zeros(num_ij*L, dtype=np.complex)
+                f["meas_uneqlt"]["vn"] = np.zeros(num_ij*L, dtype=np.complex)
             if meas_nematic_corr:
-                f["meas_uneqlt"]["nem_nnnn"] = np.zeros(num_bb*L, dtype=np.float64)
-                f["meas_uneqlt"]["nem_ssss"] = np.zeros(num_bb*L, dtype=np.float64)
+                f["meas_uneqlt"]["nem_nnnn"] = np.zeros(num_bb*L, dtype=np.complex)
+                f["meas_uneqlt"]["nem_ssss"] = np.zeros(num_bb*L, dtype=np.complex)
     return filename
 
 

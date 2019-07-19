@@ -19,7 +19,7 @@ def load(path, *args):
         print(f"no files matching: {path}*.h5")
         return
     last = load_file(files.pop(), *args)
-    data = tuple(np.zeros((nbins,) + a.shape) for a in last)
+    data = tuple(np.zeros((nbins,) + a.shape, dtype=a.dtype) for a in last)
     for a, a_last in zip(data, last):
         a[-1, ...] = a_last
     for i, f in enumerate(files):
@@ -28,7 +28,7 @@ def load(path, *args):
     return data
 
 
-def jackknife(*args, f=lambda s, sx: (sx.T/s.T).T):
+def jackknife(*args, f=lambda s, sx: (sx.T/s.T).T.real):
     n = args[0].shape[0]
     sums = tuple(a.sum(0) for a in args)
     res_all = f(*sums)
