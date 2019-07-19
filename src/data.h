@@ -54,6 +54,8 @@ struct meas_uneqlt {
 	complex double *xx;
 	complex double *zz;
 	complex double *pair_sw;
+	complex double *pair_bs;
+	complex double *pair_sb;
 	complex double *pair_bb;
 	complex double *jj, *jsjs;
 	complex double *kk, *ksks;

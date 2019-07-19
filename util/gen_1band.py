@@ -289,6 +289,8 @@ def create_1(filename=None, overwrite=False, seed=None,
             f["meas_uneqlt"]["zz"] = np.zeros(num_ij*L, dtype=np.complex)
             f["meas_uneqlt"]["pair_sw"] = np.zeros(num_ij*L, dtype=np.complex)
             if meas_bond_corr:
+                f["meas_uneqlt"]["pair_bs"] = np.zeros(num_bb*L, dtype=np.complex)
+                f["meas_uneqlt"]["pair_sb"] = np.zeros(num_bb*L, dtype=np.complex)
                 f["meas_uneqlt"]["pair_bb"] = np.zeros(num_bb*L, dtype=np.complex)
                 f["meas_uneqlt"]["jj"] = np.zeros(num_bb*L, dtype=np.complex)
                 f["meas_uneqlt"]["jsjs"] = np.zeros(num_bb*L, dtype=np.complex)

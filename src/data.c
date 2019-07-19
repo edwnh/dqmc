@@ -87,6 +87,8 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 		sim->m_ue.zz      = my_calloc(num_ij*L * sizeof(complex double));
 		sim->m_ue.pair_sw = my_calloc(num_ij*L * sizeof(complex double));
 		if (sim->p.meas_bond_corr) {
+			sim->m_ue.pair_bs = my_calloc(num_bs*L * sizeof(complex double));
+			sim->m_ue.pair_sb = my_calloc(num_bs*L * sizeof(complex double));
 			sim->m_ue.pair_bb = my_calloc(num_bb*L * sizeof(complex double));
 			sim->m_ue.jj      = my_calloc(num_bb*L * sizeof(complex double));
 			sim->m_ue.jsjs    = my_calloc(num_bb*L * sizeof(complex double));
@@ -163,6 +165,8 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 		my_read( , "/meas_uneqlt/zz",        mycplx, sim->m_ue.zz);
 		my_read( , "/meas_uneqlt/pair_sw",   mycplx, sim->m_ue.pair_sw);
 		if (sim->p.meas_bond_corr) {
+			my_read( , "/meas_uneqlt/pair_bs", mycplx, sim->m_ue.pair_bs);
+			my_read( , "/meas_uneqlt/pair_sb", mycplx, sim->m_ue.pair_sb);
 			my_read( , "/meas_uneqlt/pair_bb", mycplx, sim->m_ue.pair_bb);
 			my_read( , "/meas_uneqlt/jj",      mycplx, sim->m_ue.jj);
 			my_read( , "/meas_uneqlt/jsjs",    mycplx, sim->m_ue.jsjs)
@@ -233,6 +237,8 @@ int sim_data_save(const struct sim_data *sim, const char *file)
 		my_write("/meas_uneqlt/zz",       mycplx,  sim->m_ue.zz);
 		my_write("/meas_uneqlt/pair_sw",  mycplx,  sim->m_ue.pair_sw);
 		if (sim->p.meas_bond_corr) {
+			my_write("/meas_uneqlt/pair_bs", mycplx, sim->m_ue.pair_bs);
+			my_write("/meas_uneqlt/pair_sb", mycplx, sim->m_ue.pair_sb);
 			my_write("/meas_uneqlt/pair_bb", mycplx, sim->m_ue.pair_bb);
 			my_write("/meas_uneqlt/jj",      mycplx, sim->m_ue.jj);
 			my_write("/meas_uneqlt/jsjs",    mycplx, sim->m_ue.jsjs);
@@ -277,6 +283,8 @@ void sim_data_free(const struct sim_data *sim)
 			my_free(sim->m_ue.jsjs);
 			my_free(sim->m_ue.jj);
 			my_free(sim->m_ue.pair_bb);
+			my_free(sim->m_ue.pair_sb);
+			my_free(sim->m_ue.pair_bs);
 		}
 		my_free(sim->m_ue.pair_sw);
 		my_free(sim->m_ue.zz);

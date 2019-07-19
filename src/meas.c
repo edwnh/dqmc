@@ -190,6 +190,34 @@ void measure_uneqlt(const struct params *const restrict p, const complex double 
 	}
 
 	// 1 bond 1 site measurements
+	if (meas_bond_corr)
+	#pragma omp parallel for
+	for (int t = 0; t < L; t++) {
+		const complex double *const restrict Gu0t_t = Gu0t + N*N*t;
+		const complex double *const restrict Gutt_t = Gutt + N*N*t;
+		const complex double *const restrict Gut0_t = Gut0 + N*N*t;
+		const complex double *const restrict Gd0t_t = Gd0t + N*N*t;
+		const complex double *const restrict Gdtt_t = Gdtt + N*N*t;
+		const complex double *const restrict Gdt0_t = Gdt0 + N*N*t;
+	for (int j = 0; j < N; j++)
+	for (int b = 0; b < num_b; b++) {
+		const int i0 = p->bonds[b];
+		const int i1 = p->bonds[b + num_b];
+		const int bs = p->map_bs[b + num_b*j];
+		const complex double pre = phase / p->degen_bs[bs];
+		const complex double gui0j = Gut0_t[i0 + N*j];
+		const complex double guji0 = Gu0t_t[j + N*i0];
+		const complex double gdi0j = Gdt0_t[i0 + N*j];
+		const complex double gdji0 = Gd0t_t[j + N*i0];
+		const complex double gui1j = Gut0_t[i1 + N*j];
+		const complex double guji1 = Gu0t_t[j + N*i1];
+		const complex double gdi1j = Gdt0_t[i1 + N*j];
+		const complex double gdji1 = Gd0t_t[j + N*i1];
+		m->pair_bs[bs + num_bs*t] += pre*(gui0j*gdi1j + gui1j*gdi0j);
+		m->pair_sb[bs + num_bs*t] += pre*(guji0*gdji1 + guji1*gdji0);
+	}
+	}
+
 	if (meas_energy_corr)
 	#pragma omp parallel for
 	for (int t = 0; t < L; t++) {
