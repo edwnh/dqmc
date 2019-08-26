@@ -305,7 +305,7 @@ def create_1(filename=None, overwrite=False, seed=None,
     return filename
 
 
-def create_batch(Nfiles=1, prefix=None, seed=None, Nx=16, Ny=4, L=40, **kwargs):
+def create_batch(Nfiles=1, prefix=None, seed=None, **kwargs):
     if seed is None:
         seed = int(time.time())
     if prefix is None:
@@ -314,15 +314,18 @@ def create_batch(Nfiles=1, prefix=None, seed=None, Nx=16, Ny=4, L=40, **kwargs):
 
     file_0 = "{}_{}.h5".format(prefix, 0)
 
-    create_1(filename=file_0, seed=seed, Nx=Nx, Ny=Ny, L=L, **kwargs)
+    create_1(filename=file_0, seed=seed, **kwargs)
+    with h5py.File(file_0, "r") as f:
+        N = f["params"]["N"][...]
+        L = f["params"]["L"][...]
 
     for i in range(1, Nfiles):
         rand_jump(rng)
         init_rng = rng.copy()
-        init_hs = np.zeros((L, Nx*Ny), dtype=np.int32)
+        init_hs = np.zeros((L, N), dtype=np.int32)
 
         for l in range(L):
-            for r in range(Nx*Ny):
+            for r in range(N):
                 init_hs[l, r] = rand_uint(init_rng) >> np.uint64(63)
 
         file_i = "{}_{}.h5".format(prefix, i)
