@@ -1,19 +1,20 @@
 #pragma once
 
 #include "data.h"
+#include "util.h"
 
-void measure_eqlt(const struct params *const restrict p, const complex double phase,
-		const complex double *const restrict gu,
-		const complex double *const restrict gd,
+void measure_eqlt(const struct params *const restrict p, const num phase,
+		const num *const restrict gu,
+		const num *const restrict gd,
 		struct meas_eqlt *const restrict m);
 
-void measure_uneqlt(const struct params *const restrict p, const complex double phase,
-		const complex double *const Gu0t,
-		const complex double *const Gutt,
-		const complex double *const Gut0,
-		const complex double *const Gd0t,
-		const complex double *const Gdtt,
-		const complex double *const Gdt0,
+void measure_uneqlt(const struct params *const restrict p, const num phase,
+		const num *const Gu0t,
+		const num *const Gutt,
+		const num *const Gut0,
+		const num *const Gd0t,
+		const num *const Gdtt,
+		const num *const Gdt0,
 		struct meas_uneqlt *const restrict m);
 
 /*

@@ -1,15 +1,15 @@
 #pragma once
 
-#include <complex.h>
 #include <stdint.h>
+#include "util.h"
 
 void update_delayed(const int N, const int n_delay, const double *const restrict del,
 		const int *const restrict site_order,
 		uint64_t *const restrict rng, int *const restrict hs,
-		complex double *const restrict Gu, complex double *const restrict Gd, complex double *const restrict phase,
+		num *const restrict Gu, num *const restrict Gd, num *const restrict phase,
 		// work arrays (sizes: N*N, N*N, N)
-		complex double *const restrict au, complex double *const restrict bu, complex double *const restrict du,
-		complex double *const restrict ad, complex double *const restrict bd, complex double *const restrict dd);
+		num *const restrict au, num *const restrict bu, num *const restrict du,
+		num *const restrict ad, num *const restrict bd, num *const restrict dd);
 
 /*
 // regular sherman morrison

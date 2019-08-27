@@ -1,14 +1,15 @@
 #include "updates.h"
 #include <tgmath.h>
+#include "linalg.h"
 #include "rand.h"
 #include "util.h"
 
 void update_delayed(const int N, const int n_delay, const double *const restrict del,
 		const int *const restrict site_order,
 		uint64_t *const restrict rng, int *const restrict hs,
-		complex double *const restrict gu, complex double *const restrict gd, complex double *const restrict phase,
-		complex double *const restrict au, complex double *const restrict bu, complex double *const restrict du,
-		complex double *const restrict ad, complex double *const restrict bd, complex double *const restrict dd)
+		num *const restrict gu, num *const restrict gd, num *const restrict phase,
+		num *const restrict au, num *const restrict bu, num *const restrict du,
+		num *const restrict ad, num *const restrict bd, num *const restrict dd)
 {
 	int k = 0;
 	for (int j = 0; j < N; j++) du[j] = gu[j + N*j];
@@ -18,9 +19,9 @@ void update_delayed(const int N, const int n_delay, const double *const restrict
 		const double delu = del[i + N*hs[i]];
 		const double deld = del[i + N*!hs[i]];
 		if (delu == 0.0 && deld == 0.0) continue;
-		const complex double ru = 1.0 + (1.0 - du[i]) * delu;
-		const complex double rd = 1.0 + (1.0 - dd[i]) * deld;
-		const complex double prob = ru * rd;
+		const num ru = 1.0 + (1.0 - du[i]) * delu;
+		const num rd = 1.0 + (1.0 - dd[i]) * deld;
+		const num prob = ru * rd;
 		const double absprob = fabs(prob);
 		if (rand_doub(rng) < absprob) {
 			#pragma omp parallel sections
@@ -29,10 +30,10 @@ void update_delayed(const int N, const int n_delay, const double *const restrict
 			{
 			for (int j = 0; j < N; j++) au[j + N*k] = gu[j + N*i];
 			for (int j = 0; j < N; j++) bu[j + N*k] = gu[i + N*j];
-			zgemv("N", &N, &k, ccplx(1.0), au, &N, bu + i,
-			      &N, ccplx(1.0), au + N*k, cint(1));
-			zgemv("N", &N, &k, ccplx(1.0), bu, &N, au + i,
-			      &N, ccplx(1.0), bu + N*k, cint(1));
+			xgemv("N", N, k, 1.0, au, N, bu + i,
+			      N, 1.0, au + N*k, 1);
+			xgemv("N", N, k, 1.0, bu, N, au + i,
+			      N, 1.0, bu + N*k, 1);
 			au[i + N*k] -= 1.0;
 			for (int j = 0; j < N; j++) au[j + N*k] *= delu/ru;
 			for (int j = 0; j < N; j++) du[j] += au[j + N*k] * bu[j + N*k];
@@ -41,10 +42,10 @@ void update_delayed(const int N, const int n_delay, const double *const restrict
 			{
 			for (int j = 0; j < N; j++) ad[j + N*k] = gd[j + N*i];
 			for (int j = 0; j < N; j++) bd[j + N*k] = gd[i + N*j];
-			zgemv("N", &N, &k, ccplx(1.0), ad, &N, bd + i,
-			      &N, ccplx(1.0), ad + N*k, cint(1));
-			zgemv("N", &N, &k, ccplx(1.0), bd, &N, ad + i,
-			      &N, ccplx(1.0), bd + N*k, cint(1));
+			xgemv("N", N, k, 1.0, ad, N, bd + i,
+			      N, 1.0, ad + N*k, 1);
+			xgemv("N", N, k, 1.0, bd, N, ad + i,
+			      N, 1.0, bd + N*k, 1);
 			ad[i + N*k] -= 1.0;
 			for (int j = 0; j < N; j++) ad[j + N*k] *= deld/rd;
 			for (int j = 0; j < N; j++) dd[j] += ad[j + N*k] * bd[j + N*k];
@@ -60,14 +61,14 @@ void update_delayed(const int N, const int n_delay, const double *const restrict
 			{
 			#pragma omp section
 			{
-			zgemm("N", "T", &N, &N, &n_delay, ccplx(1.0),
-			      au, &N, bu, &N, ccplx(1.0), gu, &N);
+			xgemm("N", "T", N, N, n_delay, 1.0,
+			      au, N, bu, N, 1.0, gu, N);
 			for (int j = 0; j < N; j++) du[j] = gu[j + N*j];
 			}
 			#pragma omp section
 			{
-			zgemm("N", "T", &N, &N, &n_delay, ccplx(1.0),
-			      ad, &N, bd, &N, ccplx(1.0), gd, &N);
+			xgemm("N", "T", N, N, n_delay, 1.0,
+			      ad, N, bd, N, 1.0, gd, N);
 			for (int j = 0; j < N; j++) dd[j] = gd[j + N*j];
 			}
 			}
@@ -76,9 +77,9 @@ void update_delayed(const int N, const int n_delay, const double *const restrict
 	#pragma omp parallel sections
 	{
 	#pragma omp section
-	zgemm("N", "T", &N, &N, &k, ccplx(1.0), au, &N, bu, &N, ccplx(1.0), gu, &N);
+	xgemm("N", "T", N, N, k, 1.0, au, N, bu, N, 1.0, gu, N);
 	#pragma omp section
-	zgemm("N", "T", &N, &N, &k, ccplx(1.0), ad, &N, bd, &N, ccplx(1.0), gd, &N);
+	xgemm("N", "T", N, N, k, 1.0, ad, N, bd, N, 1.0, gd, N);
 	}
 }
 

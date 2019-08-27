@@ -7,7 +7,7 @@
 #define return_if(cond, val, ...) \
 	do {if (cond) {fprintf(stderr, __VA_ARGS__); return (val);}} while (0)
 
-static hid_t mycplx;
+static hid_t num_h5t;
 
 int sim_data_read_alloc(struct sim_data *sim, const char *file)
 {
@@ -16,11 +16,15 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 
 	herr_t status;
 
-	mycplx = H5Tcreate(H5T_COMPOUND, sizeof(complex double));
-	status = H5Tinsert(mycplx, "r", 0, H5T_NATIVE_DOUBLE);
+#ifdef USE_CPLX
+	num_h5t = H5Tcreate(H5T_COMPOUND, sizeof(num));
+	status = H5Tinsert(num_h5t, "r", 0, H5T_NATIVE_DOUBLE);
 	return_if(status < 0, -1, "H5Tinsert() failed: %d\n", status);
-	status = H5Tinsert(mycplx, "i", 8, H5T_NATIVE_DOUBLE);
+	status = H5Tinsert(num_h5t, "i", 8, H5T_NATIVE_DOUBLE);
 	return_if(status < 0, -1, "H5Tinsert() failed: %d\n", status);
+#else
+	num_h5t = H5T_NATIVE_DOUBLE;
+#endif
 
 
 #define my_read(_type, name, ...) do { \
@@ -55,53 +59,53 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	sim->p.degen_ij      = my_calloc(num_ij   * sizeof(int));
 	sim->p.degen_bs      = my_calloc(num_bs   * sizeof(int));
 	sim->p.degen_bb      = my_calloc(num_bb   * sizeof(int));
-	sim->p.exp_Ku        = my_calloc(N*N      * sizeof(complex double));
-	sim->p.exp_Kd        = my_calloc(N*N      * sizeof(complex double));
-	sim->p.inv_exp_Ku    = my_calloc(N*N      * sizeof(complex double));
-	sim->p.inv_exp_Kd    = my_calloc(N*N      * sizeof(complex double));
-	sim->p.exp_halfKu    = my_calloc(N*N      * sizeof(complex double));
-	sim->p.exp_halfKd    = my_calloc(N*N      * sizeof(complex double));
-	sim->p.inv_exp_halfKu= my_calloc(N*N      * sizeof(complex double));
-	sim->p.inv_exp_halfKd= my_calloc(N*N      * sizeof(complex double));
+	sim->p.exp_Ku        = my_calloc(N*N      * sizeof(num));
+	sim->p.exp_Kd        = my_calloc(N*N      * sizeof(num));
+	sim->p.inv_exp_Ku    = my_calloc(N*N      * sizeof(num));
+	sim->p.inv_exp_Kd    = my_calloc(N*N      * sizeof(num));
+	sim->p.exp_halfKu    = my_calloc(N*N      * sizeof(num));
+	sim->p.exp_halfKd    = my_calloc(N*N      * sizeof(num));
+	sim->p.inv_exp_halfKu= my_calloc(N*N      * sizeof(num));
+	sim->p.inv_exp_halfKd= my_calloc(N*N      * sizeof(num));
 	sim->p.exp_lambda    = my_calloc(N*2      * sizeof(double));
 	sim->p.del           = my_calloc(N*2      * sizeof(double));
 	sim->s.hs            = my_calloc(N*L      * sizeof(int));
-	sim->m_eq.density    = my_calloc(num_i    * sizeof(complex double));
-	sim->m_eq.double_occ = my_calloc(num_i    * sizeof(complex double));
-	sim->m_eq.g00        = my_calloc(num_ij   * sizeof(complex double));
-	sim->m_eq.nn         = my_calloc(num_ij   * sizeof(complex double));
-	sim->m_eq.xx         = my_calloc(num_ij   * sizeof(complex double));
-	sim->m_eq.zz         = my_calloc(num_ij   * sizeof(complex double));
-	sim->m_eq.pair_sw    = my_calloc(num_ij   * sizeof(complex double));
+	sim->m_eq.density    = my_calloc(num_i    * sizeof(num));
+	sim->m_eq.double_occ = my_calloc(num_i    * sizeof(num));
+	sim->m_eq.g00        = my_calloc(num_ij   * sizeof(num));
+	sim->m_eq.nn         = my_calloc(num_ij   * sizeof(num));
+	sim->m_eq.xx         = my_calloc(num_ij   * sizeof(num));
+	sim->m_eq.zz         = my_calloc(num_ij   * sizeof(num));
+	sim->m_eq.pair_sw    = my_calloc(num_ij   * sizeof(num));
 	if (sim->p.meas_energy_corr) {
-		sim->m_eq.kk = my_calloc(num_bb * sizeof(complex double));
-		sim->m_eq.kv = my_calloc(num_bs * sizeof(complex double));
-		sim->m_eq.kn = my_calloc(num_bs * sizeof(complex double));
-		sim->m_eq.vv = my_calloc(num_ij * sizeof(complex double));
-		sim->m_eq.vn = my_calloc(num_ij * sizeof(complex double));
+		sim->m_eq.kk = my_calloc(num_bb * sizeof(num));
+		sim->m_eq.kv = my_calloc(num_bs * sizeof(num));
+		sim->m_eq.kn = my_calloc(num_bs * sizeof(num));
+		sim->m_eq.vv = my_calloc(num_ij * sizeof(num));
+		sim->m_eq.vn = my_calloc(num_ij * sizeof(num));
 	}
 	if (sim->p.period_uneqlt > 0) {
-		sim->m_ue.gt0     = my_calloc(num_ij*L * sizeof(complex double));
-		sim->m_ue.nn      = my_calloc(num_ij*L * sizeof(complex double));
-		sim->m_ue.xx      = my_calloc(num_ij*L * sizeof(complex double));
-		sim->m_ue.zz      = my_calloc(num_ij*L * sizeof(complex double));
-		sim->m_ue.pair_sw = my_calloc(num_ij*L * sizeof(complex double));
+		sim->m_ue.gt0     = my_calloc(num_ij*L * sizeof(num));
+		sim->m_ue.nn      = my_calloc(num_ij*L * sizeof(num));
+		sim->m_ue.xx      = my_calloc(num_ij*L * sizeof(num));
+		sim->m_ue.zz      = my_calloc(num_ij*L * sizeof(num));
+		sim->m_ue.pair_sw = my_calloc(num_ij*L * sizeof(num));
 		if (sim->p.meas_bond_corr) {
-			sim->m_ue.pair_bb = my_calloc(num_bb*L * sizeof(complex double));
-			sim->m_ue.jj      = my_calloc(num_bb*L * sizeof(complex double));
-			sim->m_ue.jsjs    = my_calloc(num_bb*L * sizeof(complex double));
-			sim->m_ue.kk      = my_calloc(num_bb*L * sizeof(complex double));
-			sim->m_ue.ksks    = my_calloc(num_bb*L * sizeof(complex double));
+			sim->m_ue.pair_bb = my_calloc(num_bb*L * sizeof(num));
+			sim->m_ue.jj      = my_calloc(num_bb*L * sizeof(num));
+			sim->m_ue.jsjs    = my_calloc(num_bb*L * sizeof(num));
+			sim->m_ue.kk      = my_calloc(num_bb*L * sizeof(num));
+			sim->m_ue.ksks    = my_calloc(num_bb*L * sizeof(num));
 		}
 		if (sim->p.meas_energy_corr) {
-			sim->m_ue.kv      = my_calloc(num_bs*L * sizeof(complex double));
-			sim->m_ue.kn      = my_calloc(num_bs*L * sizeof(complex double));
-			sim->m_ue.vv      = my_calloc(num_ij*L * sizeof(complex double));
-			sim->m_ue.vn      = my_calloc(num_ij*L * sizeof(complex double));
+			sim->m_ue.kv      = my_calloc(num_bs*L * sizeof(num));
+			sim->m_ue.kn      = my_calloc(num_bs*L * sizeof(num));
+			sim->m_ue.vv      = my_calloc(num_ij*L * sizeof(num));
+			sim->m_ue.vn      = my_calloc(num_ij*L * sizeof(num));
 		}
 		if (sim->p.meas_nematic_corr) {
-			sim->m_ue.nem_nnnn = my_calloc(num_bb*L * sizeof(complex double));
-			sim->m_ue.nem_ssss = my_calloc(num_bb*L * sizeof(complex double));
+			sim->m_ue.nem_nnnn = my_calloc(num_bb*L * sizeof(num));
+			sim->m_ue.nem_ssss = my_calloc(num_bb*L * sizeof(num));
 		}
 	}
 	// make sure anything appended here is free'd in sim_data_free()
@@ -123,14 +127,14 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	my_read(_int,    "/params/degen_ij",       sim->p.degen_ij);
 	my_read(_int,    "/params/degen_bs",       sim->p.degen_bs);
 	my_read(_int,    "/params/degen_bb",       sim->p.degen_bb);
-	my_read( , "/params/exp_Ku",     mycplx,   sim->p.exp_Ku);
-	my_read( , "/params/exp_Kd",     mycplx,   sim->p.exp_Kd);
-	my_read( , "/params/inv_exp_Ku", mycplx,   sim->p.inv_exp_Ku);
-	my_read( , "/params/inv_exp_Kd", mycplx,   sim->p.inv_exp_Kd);
-	my_read( , "/params/exp_halfKu",     mycplx,   sim->p.exp_halfKu);
-	my_read( , "/params/exp_halfKd",     mycplx,   sim->p.exp_halfKd);
-	my_read( , "/params/inv_exp_halfKu", mycplx,   sim->p.inv_exp_halfKu);
-	my_read( , "/params/inv_exp_halfKd", mycplx,   sim->p.inv_exp_halfKd);
+	my_read( , "/params/exp_Ku",     num_h5t,   sim->p.exp_Ku);
+	my_read( , "/params/exp_Kd",     num_h5t,   sim->p.exp_Kd);
+	my_read( , "/params/inv_exp_Ku", num_h5t,   sim->p.inv_exp_Ku);
+	my_read( , "/params/inv_exp_Kd", num_h5t,   sim->p.inv_exp_Kd);
+	my_read( , "/params/exp_halfKu",     num_h5t,   sim->p.exp_halfKu);
+	my_read( , "/params/exp_halfKd",     num_h5t,   sim->p.exp_halfKd);
+	my_read( , "/params/inv_exp_halfKu", num_h5t,   sim->p.inv_exp_halfKu);
+	my_read( , "/params/inv_exp_halfKd", num_h5t,   sim->p.inv_exp_halfKd);
 	my_read(_double, "/params/exp_lambda",     sim->p.exp_lambda);
 	my_read(_double, "/params/del",            sim->p.del);
 	my_read(_int,    "/params/F",             &sim->p.F);
@@ -139,45 +143,45 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	my_read(_int,    "/state/sweep",          &sim->s.sweep);
 	my_read(_int,    "/state/hs",              sim->s.hs);
 	my_read(_int,    "/meas_eqlt/n_sample",   &sim->m_eq.n_sample);
-	my_read( , "/meas_eqlt/sign",        mycplx, &sim->m_eq.sign);
-	my_read( , "/meas_eqlt/density",     mycplx, sim->m_eq.density);
-	my_read( , "/meas_eqlt/double_occ",  mycplx, sim->m_eq.double_occ);
-	my_read( , "/meas_eqlt/g00",         mycplx, sim->m_eq.g00);
-	my_read( , "/meas_eqlt/nn",          mycplx, sim->m_eq.nn);
-	my_read( , "/meas_eqlt/xx",          mycplx, sim->m_eq.xx);
-	my_read( , "/meas_eqlt/zz",          mycplx, sim->m_eq.zz);
-	my_read( , "/meas_eqlt/pair_sw",     mycplx, sim->m_eq.pair_sw);
+	my_read( , "/meas_eqlt/sign",        num_h5t, &sim->m_eq.sign);
+	my_read( , "/meas_eqlt/density",     num_h5t, sim->m_eq.density);
+	my_read( , "/meas_eqlt/double_occ",  num_h5t, sim->m_eq.double_occ);
+	my_read( , "/meas_eqlt/g00",         num_h5t, sim->m_eq.g00);
+	my_read( , "/meas_eqlt/nn",          num_h5t, sim->m_eq.nn);
+	my_read( , "/meas_eqlt/xx",          num_h5t, sim->m_eq.xx);
+	my_read( , "/meas_eqlt/zz",          num_h5t, sim->m_eq.zz);
+	my_read( , "/meas_eqlt/pair_sw",     num_h5t, sim->m_eq.pair_sw);
 	if (sim->p.meas_energy_corr) {
-		my_read( , "/meas_eqlt/kk", mycplx, sim->m_eq.kk);
-		my_read( , "/meas_eqlt/kv", mycplx, sim->m_eq.kv);
-		my_read( , "/meas_eqlt/kn", mycplx, sim->m_eq.kn);
-		my_read( , "/meas_eqlt/vv", mycplx, sim->m_eq.vv);
-		my_read( , "/meas_eqlt/vn", mycplx, sim->m_eq.vn);
+		my_read( , "/meas_eqlt/kk", num_h5t, sim->m_eq.kk);
+		my_read( , "/meas_eqlt/kv", num_h5t, sim->m_eq.kv);
+		my_read( , "/meas_eqlt/kn", num_h5t, sim->m_eq.kn);
+		my_read( , "/meas_eqlt/vv", num_h5t, sim->m_eq.vv);
+		my_read( , "/meas_eqlt/vn", num_h5t, sim->m_eq.vn);
 	}
 	if (sim->p.period_uneqlt > 0) {
 		my_read(_int,    "/meas_uneqlt/n_sample", &sim->m_ue.n_sample);
-		my_read( , "/meas_uneqlt/sign",      mycplx, &sim->m_ue.sign);
-		my_read( , "/meas_uneqlt/gt0",       mycplx, sim->m_ue.gt0);
-		my_read( , "/meas_uneqlt/nn",        mycplx, sim->m_ue.nn);
-		my_read( , "/meas_uneqlt/xx",        mycplx, sim->m_ue.xx);
-		my_read( , "/meas_uneqlt/zz",        mycplx, sim->m_ue.zz);
-		my_read( , "/meas_uneqlt/pair_sw",   mycplx, sim->m_ue.pair_sw);
+		my_read( , "/meas_uneqlt/sign",      num_h5t, &sim->m_ue.sign);
+		my_read( , "/meas_uneqlt/gt0",       num_h5t, sim->m_ue.gt0);
+		my_read( , "/meas_uneqlt/nn",        num_h5t, sim->m_ue.nn);
+		my_read( , "/meas_uneqlt/xx",        num_h5t, sim->m_ue.xx);
+		my_read( , "/meas_uneqlt/zz",        num_h5t, sim->m_ue.zz);
+		my_read( , "/meas_uneqlt/pair_sw",   num_h5t, sim->m_ue.pair_sw);
 		if (sim->p.meas_bond_corr) {
-			my_read( , "/meas_uneqlt/pair_bb", mycplx, sim->m_ue.pair_bb);
-			my_read( , "/meas_uneqlt/jj",      mycplx, sim->m_ue.jj);
-			my_read( , "/meas_uneqlt/jsjs",    mycplx, sim->m_ue.jsjs)
-			my_read( , "/meas_uneqlt/kk",      mycplx, sim->m_ue.kk);
-			my_read( , "/meas_uneqlt/ksks",    mycplx, sim->m_ue.ksks);
+			my_read( , "/meas_uneqlt/pair_bb", num_h5t, sim->m_ue.pair_bb);
+			my_read( , "/meas_uneqlt/jj",      num_h5t, sim->m_ue.jj);
+			my_read( , "/meas_uneqlt/jsjs",    num_h5t, sim->m_ue.jsjs)
+			my_read( , "/meas_uneqlt/kk",      num_h5t, sim->m_ue.kk);
+			my_read( , "/meas_uneqlt/ksks",    num_h5t, sim->m_ue.ksks);
 		}
 		if (sim->p.meas_energy_corr) {
-			my_read( , "/meas_uneqlt/kv", mycplx, sim->m_ue.kv);
-			my_read( , "/meas_uneqlt/kn", mycplx, sim->m_ue.kn);
-			my_read( , "/meas_uneqlt/vv", mycplx, sim->m_ue.vv);
-			my_read( , "/meas_uneqlt/vn", mycplx, sim->m_ue.vn);
+			my_read( , "/meas_uneqlt/kv", num_h5t, sim->m_ue.kv);
+			my_read( , "/meas_uneqlt/kn", num_h5t, sim->m_ue.kn);
+			my_read( , "/meas_uneqlt/vv", num_h5t, sim->m_ue.vv);
+			my_read( , "/meas_uneqlt/vn", num_h5t, sim->m_ue.vn);
 		}
 		if (sim->p.meas_nematic_corr) {
-			my_read( , "/meas_uneqlt/nem_nnnn", mycplx, sim->m_ue.nem_nnnn);
-			my_read( , "/meas_uneqlt/nem_ssss", mycplx, sim->m_ue.nem_ssss);
+			my_read( , "/meas_uneqlt/nem_nnnn", num_h5t, sim->m_ue.nem_nnnn);
+			my_read( , "/meas_uneqlt/nem_ssss", num_h5t, sim->m_ue.nem_ssss);
 		}
 	}
 
@@ -209,45 +213,45 @@ int sim_data_save(const struct sim_data *sim, const char *file)
 	my_write("/state/sweep",          H5T_NATIVE_INT,    &sim->s.sweep);
 	my_write("/state/hs",             H5T_NATIVE_INT,     sim->s.hs);
 	my_write("/meas_eqlt/n_sample",   H5T_NATIVE_INT,    &sim->m_eq.n_sample);
-	my_write("/meas_eqlt/sign",       mycplx, &sim->m_eq.sign);
-	my_write("/meas_eqlt/density",    mycplx,  sim->m_eq.density);
-	my_write("/meas_eqlt/double_occ", mycplx,  sim->m_eq.double_occ);
-	my_write("/meas_eqlt/g00",        mycplx,  sim->m_eq.g00);
-	my_write("/meas_eqlt/nn",         mycplx,  sim->m_eq.nn);
-	my_write("/meas_eqlt/xx",         mycplx,  sim->m_eq.xx);
-	my_write("/meas_eqlt/zz",         mycplx,  sim->m_eq.zz);
-	my_write("/meas_eqlt/pair_sw",    mycplx,  sim->m_eq.pair_sw);
+	my_write("/meas_eqlt/sign",       num_h5t, &sim->m_eq.sign);
+	my_write("/meas_eqlt/density",    num_h5t,  sim->m_eq.density);
+	my_write("/meas_eqlt/double_occ", num_h5t,  sim->m_eq.double_occ);
+	my_write("/meas_eqlt/g00",        num_h5t,  sim->m_eq.g00);
+	my_write("/meas_eqlt/nn",         num_h5t,  sim->m_eq.nn);
+	my_write("/meas_eqlt/xx",         num_h5t,  sim->m_eq.xx);
+	my_write("/meas_eqlt/zz",         num_h5t,  sim->m_eq.zz);
+	my_write("/meas_eqlt/pair_sw",    num_h5t,  sim->m_eq.pair_sw);
 	if (sim->p.meas_energy_corr) {
-		my_write("/meas_eqlt/kk", mycplx, sim->m_eq.kk);
-		my_write("/meas_eqlt/kv", mycplx, sim->m_eq.kv);
-		my_write("/meas_eqlt/kn", mycplx, sim->m_eq.kn);
-		my_write("/meas_eqlt/vv", mycplx, sim->m_eq.vv);
-		my_write("/meas_eqlt/vn", mycplx, sim->m_eq.vn);
+		my_write("/meas_eqlt/kk", num_h5t, sim->m_eq.kk);
+		my_write("/meas_eqlt/kv", num_h5t, sim->m_eq.kv);
+		my_write("/meas_eqlt/kn", num_h5t, sim->m_eq.kn);
+		my_write("/meas_eqlt/vv", num_h5t, sim->m_eq.vv);
+		my_write("/meas_eqlt/vn", num_h5t, sim->m_eq.vn);
 	}
 	if (sim->p.period_uneqlt > 0) {
 		my_write("/meas_uneqlt/n_sample", H5T_NATIVE_INT,    &sim->m_ue.n_sample);
-		my_write("/meas_uneqlt/sign",     mycplx, &sim->m_ue.sign);
-		my_write("/meas_uneqlt/gt0",      mycplx,  sim->m_ue.gt0);
-		my_write("/meas_uneqlt/nn",       mycplx,  sim->m_ue.nn);
-		my_write("/meas_uneqlt/xx",       mycplx,  sim->m_ue.xx);
-		my_write("/meas_uneqlt/zz",       mycplx,  sim->m_ue.zz);
-		my_write("/meas_uneqlt/pair_sw",  mycplx,  sim->m_ue.pair_sw);
+		my_write("/meas_uneqlt/sign",     num_h5t, &sim->m_ue.sign);
+		my_write("/meas_uneqlt/gt0",      num_h5t,  sim->m_ue.gt0);
+		my_write("/meas_uneqlt/nn",       num_h5t,  sim->m_ue.nn);
+		my_write("/meas_uneqlt/xx",       num_h5t,  sim->m_ue.xx);
+		my_write("/meas_uneqlt/zz",       num_h5t,  sim->m_ue.zz);
+		my_write("/meas_uneqlt/pair_sw",  num_h5t,  sim->m_ue.pair_sw);
 		if (sim->p.meas_bond_corr) {
-			my_write("/meas_uneqlt/pair_bb", mycplx, sim->m_ue.pair_bb);
-			my_write("/meas_uneqlt/jj",      mycplx, sim->m_ue.jj);
-			my_write("/meas_uneqlt/jsjs",    mycplx, sim->m_ue.jsjs);
-			my_write("/meas_uneqlt/kk",      mycplx, sim->m_ue.kk);
-			my_write("/meas_uneqlt/ksks",    mycplx, sim->m_ue.ksks);
+			my_write("/meas_uneqlt/pair_bb", num_h5t, sim->m_ue.pair_bb);
+			my_write("/meas_uneqlt/jj",      num_h5t, sim->m_ue.jj);
+			my_write("/meas_uneqlt/jsjs",    num_h5t, sim->m_ue.jsjs);
+			my_write("/meas_uneqlt/kk",      num_h5t, sim->m_ue.kk);
+			my_write("/meas_uneqlt/ksks",    num_h5t, sim->m_ue.ksks);
 		}
 		if (sim->p.meas_energy_corr) {
-			my_write("/meas_uneqlt/kv", mycplx, sim->m_ue.kv);
-			my_write("/meas_uneqlt/kn", mycplx, sim->m_ue.kn);
-			my_write("/meas_uneqlt/vv", mycplx, sim->m_ue.vv);
-			my_write("/meas_uneqlt/vn", mycplx, sim->m_ue.vn);
+			my_write("/meas_uneqlt/kv", num_h5t, sim->m_ue.kv);
+			my_write("/meas_uneqlt/kn", num_h5t, sim->m_ue.kn);
+			my_write("/meas_uneqlt/vv", num_h5t, sim->m_ue.vv);
+			my_write("/meas_uneqlt/vn", num_h5t, sim->m_ue.vn);
 		}
 		if (sim->p.meas_nematic_corr) {
-			my_write("/meas_uneqlt/nem_nnnn", mycplx, sim->m_ue.nem_nnnn);
-			my_write("/meas_uneqlt/nem_ssss", mycplx, sim->m_ue.nem_ssss);
+			my_write("/meas_uneqlt/nem_nnnn", num_h5t, sim->m_ue.nem_nnnn);
+			my_write("/meas_uneqlt/nem_ssss", num_h5t, sim->m_ue.nem_ssss);
 		}
 	}
 
