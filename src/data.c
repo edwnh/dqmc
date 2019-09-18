@@ -53,6 +53,8 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	sim->p.bonds         = my_calloc(num_b*2  * sizeof(int));
 	sim->p.map_bs        = my_calloc(num_b*N  * sizeof(int));
 	sim->p.map_bb        = my_calloc(num_b*num_b * sizeof(int));
+	sim->p.peierlsu      = my_calloc(N*N      * sizeof(num));
+	sim->p.peierlsd      = my_calloc(N*N      * sizeof(num));
 //	sim->p.K             = my_calloc(N*N      * sizeof(double));
 //	sim->p.U             = my_calloc(num_i    * sizeof(double));
 	sim->p.degen_i       = my_calloc(num_i    * sizeof(int));
@@ -115,6 +117,8 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	my_read(_int,    "/params/bonds",          sim->p.bonds);
 	my_read(_int,    "/params/map_bs",         sim->p.map_bs);
 	my_read(_int,    "/params/map_bb",         sim->p.map_bb);
+	my_read( , "/params/peierlsu", num_h5t,    sim->p.peierlsu);
+	my_read( , "/params/peierlsd", num_h5t,    sim->p.peierlsd);
 //	my_read(_double, "/params/K",              sim->p.K);
 //	my_read(_double, "/params/U",              sim->p.U);
 //	my_read(_double, "/params/dt",            &sim->p.dt);
@@ -319,6 +323,8 @@ void sim_data_free(const struct sim_data *sim)
 	my_free(sim->p.degen_i);
 //	my_free(sim->p.U);
 //	my_free(sim->p.K);
+	my_free(sim->p.peierlsd);
+	my_free(sim->p.peierlsu);
 	my_free(sim->p.map_bb);
 	my_free(sim->p.map_bs);
 	my_free(sim->p.bonds);

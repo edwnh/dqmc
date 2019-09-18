@@ -2,8 +2,27 @@
 #include "data.h"
 #include "util.h"
 
-// number of bonds kept for nematic correlators. 2 by default
+// number of types of bonds kept for 4-particle nematic correlators.
+// 2 by default since these are slow measurerments
 #define NEM_BONDS 2
+
+// if complex numbers are being used, multiple some measurements by Peierls
+// phases to preserve gauge invariance
+#ifdef USE_CPLX
+#define USE_PEIERLS
+#else
+// if not, these are equal to 1 anyway. multiplying by the variables costs a
+// little performance, so #define them away at compile time
+// TODO: exception: if using twisted boundaries, these are not always 1
+#define pui0i1 1
+#define pui1i0 1
+#define pdi0i1 1
+#define pdi1i0 1
+#define puj0j1 1
+#define puj1j0 1
+#define pdj0j1 1
+#define pdj1j0 1
+#endif
 
 void measure_eqlt(const struct params *const restrict p, const num phase,
 		const num *const restrict gu,
@@ -35,7 +54,11 @@ void measure_eqlt(const struct params *const restrict p, const num phase,
 		const num guij = gu[i + j*N], gdij = gd[i + j*N];
 		const num guji = gu[j + i*N], gdji = gd[j + i*N];
 		const num gujj = gu[j + j*N], gdjj = gd[j + j*N];
+#ifdef USE_PEIERLS
+		m->g00[r] += 0.5*pre*(guij*p->peierlsu[j + i*N] + gdij*p->peierlsd[j + i*N]);
+#else
 		m->g00[r] += 0.5*pre*(guij + gdij);
+#endif
 		const num x = delta*(guii + gdii) - (guji*guij + gdji*gdij);
 		m->nn[r] += pre*((2. - guii - gdii)*(2. - gujj - gdjj) + x);
 		m->xx[r] += 0.25*pre*(delta*(guii + gdii) - (guji*gdij + gdji*guij));
@@ -57,6 +80,12 @@ void measure_eqlt(const struct params *const restrict p, const num phase,
 	for (int b = 0; b < num_b; b++) {
 		const int i0 = p->bonds[b];
 		const int i1 = p->bonds[b + num_b];
+#ifdef USE_PEIERLS
+		const num pui0i1 = p->peierlsu[i0 + N*i1];
+		const num pui1i0 = p->peierlsu[i1 + N*i0];
+		const num pdi0i1 = p->peierlsd[i0 + N*i1];
+		const num pdi1i0 = p->peierlsd[i1 + N*i0];
+#endif
 		const int bs = p->map_bs[b + num_b*j];
 		const num pre = phase / p->degen_bs[bs];
 		const int delta_i0i1 = 0;
@@ -77,10 +106,10 @@ void measure_eqlt(const struct params *const restrict p, const num phase,
 		const num gujj = gu[j + N*j];
 		const num gdjj = gd[j + N*j];
 
-		const num ku = 2.*delta_i0i1 - gui0i1 - gui1i0;
-		const num kd = 2.*delta_i0i1 - gdi0i1 - gdi1i0;
-		const num xu = (delta_i0j - guji0)*gui1j + (delta_i1j - guji1)*gui0j;
-		const num xd = (delta_i0j - gdji0)*gdi1j + (delta_i1j - gdji1)*gdi0j;
+		const num ku = pui1i0*(delta_i0i1 - gui0i1) + pui0i1*(delta_i0i1 - gui1i0);
+		const num kd = pdi1i0*(delta_i0i1 - gdi0i1) + pdi0i1*(delta_i0i1 - gdi1i0);
+		const num xu = pui0i1*(delta_i0j - guji0)*gui1j + pui1i0*(delta_i1j - guji1)*gui0j;
+		const num xd = pdi0i1*(delta_i0j - gdji0)*gdi1j + pdi1i0*(delta_i1j - gdji1)*gdi0j;
 		m->kv[bs] += pre*((ku*(1. - gujj) + xu)*(1. - gdjj)
 		                + (kd*(1. - gdjj) + xd)*(1. - gujj));
 		m->kn[bs] += pre*((ku + kd)*(2. - gujj - gdjj) + xu + xd);
@@ -90,9 +119,21 @@ void measure_eqlt(const struct params *const restrict p, const num phase,
 	for (int c = 0; c < num_b; c++) {
 		const int j0 = p->bonds[c];
 		const int j1 = p->bonds[c + num_b];
+#ifdef USE_PEIERLS
+		const num puj0j1 = p->peierlsu[j0 + N*j1];
+		const num puj1j0 = p->peierlsu[j1 + N*j0];
+		const num pdj0j1 = p->peierlsd[j0 + N*j1];
+		const num pdj1j0 = p->peierlsd[j1 + N*j0];
+#endif
 	for (int b = 0; b < num_b; b++) {
 		const int i0 = p->bonds[b];
 		const int i1 = p->bonds[b + num_b];
+#ifdef USE_PEIERLS
+		const num pui0i1 = p->peierlsu[i0 + N*i1];
+		const num pui1i0 = p->peierlsu[i1 + N*i0];
+		const num pdi0i1 = p->peierlsd[i0 + N*i1];
+		const num pdi1i0 = p->peierlsd[i1 + N*i0];
+#endif
 		const int bb = p->map_bb[b + c*num_b];
 		const num pre = phase / p->degen_bb[bb];
 		const int delta_i0j0 = (i0 == j0);
@@ -123,11 +164,12 @@ void measure_eqlt(const struct params *const restrict p, const num phase,
 		const num gdj1i1 = gd[j1 + i1*N];
 		const num gdj1j0 = gd[j1 + j0*N];
 		const num gdj0j1 = gd[j0 + j1*N];
-		const num x = ((delta_i0j1 - guj1i0)*gui1j0 + (delta_i1j0 - guj0i1)*gui0j1
-		                + (delta_i0j1 - gdj1i0)*gdi1j0 + (delta_i1j0 - gdj0i1)*gdi0j1);
-		const num y = ((delta_i0j0 - guj0i0)*gui1j1 + (delta_i1j1 - guj1i1)*gui0j0
-		                + (delta_i0j0 - gdj0i0)*gdi1j1 + (delta_i1j1 - gdj1i1)*gdi0j0);
-		m->kk[bb] += pre*((gui0i1 + gui1i0 + gdi0i1 + gdi1i0)*(guj0j1 + guj1j0 + gdj0j1 + gdj1j0) + x + y);
+		const num x = pui0i1*puj0j1*(delta_i0j1 - guj1i0)*gui1j0 + pui1i0*puj1j0*(delta_i1j0 - guj0i1)*gui0j1
+		            + pdi0i1*pdj0j1*(delta_i0j1 - gdj1i0)*gdi1j0 + pdi1i0*pdj1j0*(delta_i1j0 - gdj0i1)*gdi0j1;
+		const num y = pui0i1*puj1j0*(delta_i0j0 - guj0i0)*gui1j1 + pui1i0*puj0j1*(delta_i1j1 - guj1i1)*gui0j0
+		            + pdi0i1*pdj1j0*(delta_i0j0 - gdj0i0)*gdi1j1 + pdi1i0*pdj0j1*(delta_i1j1 - gdj1i1)*gdi0j0;
+		m->kk[bb] += pre*((pui1i0*gui0i1 + pui0i1*gui1i0 + pdi1i0*gdi0i1 + pdi0i1*gdi1i0)
+		                 *(puj1j0*guj0j1 + puj0j1*guj1j0 + pdj1j0*gdj0j1 + pdj0j1*gdj1j0) + x + y);
 	}
 	}
 }
@@ -175,7 +217,11 @@ void measure_uneqlt(const struct params *const restrict p, const num phase,
 		const num gdij = Gdt0_t[i + N*j];
 		const num gdji = Gd0t_t[j + N*i];
 		const num gdjj = Gd00[j + N*j];
+#ifdef USE_PEIERLS
+		m->gt0[r + num_ij*t] += 0.5*pre*(guij*p->peierlsu[j + i*N] + gdij*p->peierlsd[j + i*N]);
+#else
 		m->gt0[r + num_ij*t] += 0.5*pre*(guij + gdij);
+#endif
 		const num x = delta_tij*(guii + gdii) - (guji*guij + gdji*gdij);
 		m->nn[r + num_ij*t] += pre*((2. - guii - gdii)*(2. - gujj - gdjj) + x);
 		m->xx[r + num_ij*t] += 0.25*pre*(delta_tij*(guii + gdii) - (guji*gdij + gdji*guij));
@@ -205,6 +251,12 @@ void measure_uneqlt(const struct params *const restrict p, const num phase,
 	for (int b = 0; b < num_b; b++) {
 		const int i0 = p->bonds[b];
 		const int i1 = p->bonds[b + num_b];
+#ifdef USE_PEIERLS
+		const num pui0i1 = p->peierlsu[i0 + N*i1];
+		const num pui1i0 = p->peierlsu[i1 + N*i0];
+		const num pdi0i1 = p->peierlsd[i0 + N*i1];
+		const num pdi1i0 = p->peierlsd[i1 + N*i0];
+#endif
 		const int bs = p->map_bs[b + num_b*j];
 		const num pre = phase / p->degen_bs[bs];
 		const int delta_i0i1 = 0;
@@ -225,12 +277,12 @@ void measure_uneqlt(const struct params *const restrict p, const num phase,
 		const num gujj = Gu00[j + N*j];
 		const num gdjj = Gd00[j + N*j];
 
-		const num ku = 2.*delta_i0i1 - gui0i1 - gui1i0;
-		const num kd = 2.*delta_i0i1 - gdi0i1 - gdi1i0;
-		const num xu = (delta_i0j - guji0)*gui1j + (delta_i1j - guji1)*gui0j;
-		const num xd = (delta_i0j - gdji0)*gdi1j + (delta_i1j - gdji1)*gdi0j;
+		const num ku = pui1i0*(delta_i0i1 - gui0i1) + pui0i1*(delta_i0i1 - gui1i0);
+		const num kd = pdi1i0*(delta_i0i1 - gdi0i1) + pdi0i1*(delta_i0i1 - gdi1i0);
+		const num xu = pui0i1*(delta_i0j - guji0)*gui1j + pui1i0*(delta_i1j - guji1)*gui0j;
+		const num xd = pdi0i1*(delta_i0j - gdji0)*gdi1j + pdi1i0*(delta_i1j - gdji1)*gdi0j;
 		m->kv[bs + num_bs*t] += pre*((ku*(1. - gujj) + xu)*(1. - gdjj)
-					   + (kd*(1. - gdjj) + xd)*(1. - gujj));
+		                           + (kd*(1. - gdjj) + xd)*(1. - gujj));
 		m->kn[bs + num_bs*t] += pre*((ku + kd)*(2. - gujj - gdjj) + xu + xd);
 	}
 	}
@@ -243,9 +295,21 @@ void measure_uneqlt(const struct params *const restrict p, const num phase,
 	for (int c = 0; c < num_b; c++) {
 		const int j0 = p->bonds[c];
 		const int j1 = p->bonds[c + num_b];
+#ifdef USE_PEIERLS
+		const num puj0j1 = p->peierlsu[j0 + N*j1];
+		const num puj1j0 = p->peierlsu[j1 + N*j0];
+		const num pdj0j1 = p->peierlsd[j0 + N*j1];
+		const num pdj1j0 = p->peierlsd[j1 + N*j0];
+#endif
 	for (int b = 0; b < num_b; b++) {
 		const int i0 = p->bonds[b];
 		const int i1 = p->bonds[b + num_b];
+#ifdef USE_PEIERLS
+		const num pui0i1 = p->peierlsu[i0 + N*i1];
+		const num pui1i0 = p->peierlsu[i1 + N*i0];
+		const num pdi0i1 = p->peierlsd[i0 + N*i1];
+		const num pdi1i0 = p->peierlsd[i1 + N*i0];
+#endif
 		const int bb = p->map_bb[b + c*num_b];
 		const num pre = phase / p->degen_bb[bb];
 		const int delta_i0j0 = (i0 == j0);
@@ -277,14 +341,18 @@ void measure_uneqlt(const struct params *const restrict p, const num phase,
 		const num gdj1j0 = Gd00[j1 + j0*N];
 		const num gdj0j1 = Gd00[j0 + j1*N];
 		m->pair_bb[bb] += 0.5*pre*(gui0j0*gdi1j1 + gui1j0*gdi0j1 + gui0j1*gdi1j0 + gui1j1*gdi0j0);
-		const num x = ((delta_i0j1 - guj1i0)*gui1j0 + (delta_i1j0 - guj0i1)*gui0j1
-				+ (delta_i0j1 - gdj1i0)*gdi1j0 + (delta_i1j0 - gdj0i1)*gdi0j1);
-		const num y = ((delta_i0j0 - guj0i0)*gui1j1 + (delta_i1j1 - guj1i1)*gui0j0
-				+ (delta_i0j0 - gdj0i0)*gdi1j1 + (delta_i1j1 - gdj1i1)*gdi0j0);
-		m->jj[bb]   += pre*((gui0i1 - gui1i0 + gdi0i1 - gdi1i0)*(guj0j1 - guj1j0 + gdj0j1 - gdj1j0) + x - y);
-		m->jsjs[bb] += pre*((gui0i1 - gui1i0 - gdi0i1 + gdi1i0)*(guj0j1 - guj1j0 - gdj0j1 + gdj1j0) + x - y);
-		m->kk[bb]   += pre*((gui0i1 + gui1i0 + gdi0i1 + gdi1i0)*(guj0j1 + guj1j0 + gdj0j1 + gdj1j0) + x + y);
-		m->ksks[bb] += pre*((gui0i1 + gui1i0 - gdi0i1 - gdi1i0)*(guj0j1 + guj1j0 - gdj0j1 - gdj1j0) + x + y);
+		const num x = pui0i1*puj0j1*(delta_i0j1 - guj1i0)*gui1j0 + pui1i0*puj1j0*(delta_i1j0 - guj0i1)*gui0j1
+		            + pdi0i1*pdj0j1*(delta_i0j1 - gdj1i0)*gdi1j0 + pdi1i0*pdj1j0*(delta_i1j0 - gdj0i1)*gdi0j1;
+		const num y = pui0i1*puj1j0*(delta_i0j0 - guj0i0)*gui1j1 + pui1i0*puj0j1*(delta_i1j1 - guj1i1)*gui0j0
+		            + pdi0i1*pdj1j0*(delta_i0j0 - gdj0i0)*gdi1j1 + pdi1i0*pdj0j1*(delta_i1j1 - gdj1i1)*gdi0j0;
+		m->jj[bb]   += pre*((pui1i0*gui0i1 - pui0i1*gui1i0 + pdi1i0*gdi0i1 - pdi0i1*gdi1i0)
+		                   *(puj1j0*guj0j1 - puj0j1*guj1j0 + pdj1j0*gdj0j1 - pdj0j1*gdj1j0) + x - y);
+		m->jsjs[bb] += pre*((pui1i0*gui0i1 - pui0i1*gui1i0 - pdi1i0*gdi0i1 + pdi0i1*gdi1i0)
+		                   *(puj1j0*guj0j1 - puj0j1*guj1j0 - pdj1j0*gdj0j1 + pdj0j1*gdj1j0) + x - y);
+		m->kk[bb]   += pre*((pui1i0*gui0i1 + pui0i1*gui1i0 + pdi1i0*gdi0i1 + pdi0i1*gdi1i0)
+		                   *(puj1j0*guj0j1 + puj0j1*guj1j0 + pdj1j0*gdj0j1 + pdj0j1*gdj1j0) + x + y);
+		m->ksks[bb] += pre*((pui1i0*gui0i1 + pui0i1*gui1i0 - pdi1i0*gdi0i1 - pdi0i1*gdi1i0)
+		                   *(puj1j0*guj0j1 + puj0j1*guj1j0 - pdj1j0*gdj0j1 - pdj0j1*gdj1j0) + x + y);
 	}
 	}
 
@@ -292,9 +360,21 @@ void measure_uneqlt(const struct params *const restrict p, const num phase,
 	for (int c = 0; c < NEM_BONDS*N; c++) {
 		const int j0 = p->bonds[c];
 		const int j1 = p->bonds[c + num_b];
+#ifdef USE_PEIERLS
+		const num puj0j1 = p->peierlsu[j0 + N*j1];
+		const num puj1j0 = p->peierlsu[j1 + N*j0];
+		const num pdj0j1 = p->peierlsd[j0 + N*j1];
+		const num pdj1j0 = p->peierlsd[j1 + N*j0];
+#endif
 	for (int b = 0; b < NEM_BONDS*N; b++) {
 		const int i0 = p->bonds[b];
 		const int i1 = p->bonds[b + num_b];
+#ifdef USE_PEIERLS
+		const num pui0i1 = p->peierlsu[i0 + N*i1];
+		const num pui1i0 = p->peierlsu[i1 + N*i0];
+		const num pdi0i1 = p->peierlsd[i0 + N*i1];
+		const num pdi1i0 = p->peierlsd[i1 + N*i0];
+#endif
 		const int bb = p->map_bb[b + c*num_b];
 		const num pre = phase / p->degen_bb[bb];
 		const int delta_i0j0 = (i0 == j0);
@@ -375,9 +455,21 @@ void measure_uneqlt(const struct params *const restrict p, const num phase,
 	for (int c = 0; c < num_b; c++) {
 		const int j0 = p->bonds[c];
 		const int j1 = p->bonds[c + num_b];
+#ifdef USE_PEIERLS
+		const num puj0j1 = p->peierlsu[j0 + N*j1];
+		const num puj1j0 = p->peierlsu[j1 + N*j0];
+		const num pdj0j1 = p->peierlsd[j0 + N*j1];
+		const num pdj1j0 = p->peierlsd[j1 + N*j0];
+#endif
 	for (int b = 0; b < num_b; b++) {
 		const int i0 = p->bonds[b];
 		const int i1 = p->bonds[b + num_b];
+#ifdef USE_PEIERLS
+		const num pui0i1 = p->peierlsu[i0 + N*i1];
+		const num pui1i0 = p->peierlsu[i1 + N*i0];
+		const num pdi0i1 = p->peierlsd[i0 + N*i1];
+		const num pdi1i0 = p->peierlsd[i1 + N*i0];
+#endif
 		const int bb = p->map_bb[b + c*num_b];
 		const num pre = phase / p->degen_bb[bb];
 		const num gui0i0 = Gutt_t[i0 + i0*N];
@@ -413,12 +505,18 @@ void measure_uneqlt(const struct params *const restrict p, const num phase,
 		const num gdj0j1 = Gd00[j0 + j1*N];
 		const num gdj1j1 = Gd00[j1 + j1*N];
 		m->pair_bb[bb + num_bb*t] += 0.5*pre*(gui0j0*gdi1j1 + gui1j0*gdi0j1 + gui0j1*gdi1j0 + gui1j1*gdi0j0);
-		const num x = -guj1i0*gui1j0 - guj0i1*gui0j1 - gdj1i0*gdi1j0 - gdj0i1*gdi0j1;
-		const num y = -guj0i0*gui1j1 - guj1i1*gui0j0 - gdj0i0*gdi1j1 - gdj1i1*gdi0j0;
-		m->jj[bb + num_bb*t]   += pre*((gui0i1 - gui1i0 + gdi0i1 - gdi1i0)*(guj0j1 - guj1j0 + gdj0j1 - gdj1j0) + x - y);
-		m->jsjs[bb + num_bb*t] += pre*((gui0i1 - gui1i0 - gdi0i1 + gdi1i0)*(guj0j1 - guj1j0 - gdj0j1 + gdj1j0) + x - y);
-		m->kk[bb + num_bb*t]   += pre*((gui0i1 + gui1i0 + gdi0i1 + gdi1i0)*(guj0j1 + guj1j0 + gdj0j1 + gdj1j0) + x + y);
-		m->ksks[bb + num_bb*t] += pre*((gui0i1 + gui1i0 - gdi0i1 - gdi1i0)*(guj0j1 + guj1j0 - gdj0j1 - gdj1j0) + x + y);
+		const num x = -pui0i1*puj0j1*guj1i0*gui1j0 - pui1i0*puj1j0*guj0i1*gui0j1
+		             - pdi0i1*pdj0j1*gdj1i0*gdi1j0 - pdi1i0*pdj1j0*gdj0i1*gdi0j1;
+		const num y = -pui0i1*puj1j0*guj0i0*gui1j1 - pui1i0*puj0j1*guj1i1*gui0j0
+		             - pdi0i1*pdj1j0*gdj0i0*gdi1j1 - pdi1i0*pdj0j1*gdj1i1*gdi0j0;
+		m->jj[bb + num_bb*t]   += pre*((pui1i0*gui0i1 - pui0i1*gui1i0 + pdi1i0*gdi0i1 - pdi0i1*gdi1i0)
+		                              *(puj1j0*guj0j1 - puj0j1*guj1j0 + pdj1j0*gdj0j1 - pdj0j1*gdj1j0) + x - y);
+		m->jsjs[bb + num_bb*t] += pre*((pui1i0*gui0i1 - pui0i1*gui1i0 - pdi1i0*gdi0i1 + pdi0i1*gdi1i0)
+		                              *(puj1j0*guj0j1 - puj0j1*guj1j0 - pdj1j0*gdj0j1 + pdj0j1*gdj1j0) + x - y);
+		m->kk[bb + num_bb*t]   += pre*((pui1i0*gui0i1 + pui0i1*gui1i0 + pdi1i0*gdi0i1 + pdi0i1*gdi1i0)
+		                              *(puj1j0*guj0j1 + puj0j1*guj1j0 + pdj1j0*gdj0j1 + pdj0j1*gdj1j0) + x + y);
+		m->ksks[bb + num_bb*t] += pre*((pui1i0*gui0i1 + pui0i1*gui1i0 - pdi1i0*gdi0i1 - pdi0i1*gdi1i0)
+		                              *(puj1j0*guj0j1 + puj0j1*guj1j0 - pdj1j0*gdj0j1 - pdj0j1*gdj1j0) + x + y);
 	}
 	}
 	}

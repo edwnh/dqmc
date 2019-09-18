@@ -7,6 +7,7 @@ struct params {
 	int N, L;
 	int *map_i, *map_ij;
 	int *bonds, *map_bs, *map_bb;
+	num *peierlsu, *peierlsd;
 //	double *K, *U;
 //	double dt;
 

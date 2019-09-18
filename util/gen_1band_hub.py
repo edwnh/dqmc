@@ -152,29 +152,53 @@ def create_1(filename=None, overwrite=False, seed=None,
                             map_bb[j + N*jj, i + N*ii] = kk
                             degen_bb[kk] += 1
 
-    B = nflux/(Ny*Nx)
+    # hopping (assuming periodic boundaries and no field)
     tij = np.zeros((Ny*Nx, Ny*Nx), dtype=np.complex)
     for iy in range(Ny):
         for ix in range(Nx):
             iy1 = (iy + 1) % Ny
             ix1 = (ix + 1) % Nx
                 #jx    jy    ix    iy
-            tij[ix + Nx*iy1, ix + Nx*iy] += np.exp(1j*np.pi*B*( 1* ix + (0 if iy1 > iy else  Ny* ix)))
-            tij[ix + Nx*iy, ix + Nx*iy1] += np.exp(1j*np.pi*B*(-1* ix + (0 if iy1 > iy else -Ny* ix)))
-            tij[ix1 + Nx*iy, ix + Nx*iy] += np.exp(1j*np.pi*B*( 1*-iy + (0 if ix1 > ix else  Nx*-iy)))
-            tij[ix + Nx*iy, ix1 + Nx*iy] += np.exp(1j*np.pi*B*(-1*-iy + (0 if ix1 > ix else -Nx*-iy)))
+            tij[ix + Nx*iy1, ix + Nx*iy] += 1
+            tij[ix + Nx*iy, ix + Nx*iy1] += 1
+            tij[ix1 + Nx*iy, ix + Nx*iy] += 1
+            tij[ix + Nx*iy, ix1 + Nx*iy] += 1
 
-            tij[ix1 + Nx*iy1, ix + Nx*iy] += tp * np.exp(1j*np.pi*B*( 1*ix  +  1*-iy  + (0 if iy1 > iy else  Ny*ix1) + (0 if ix1 > ix else  Nx*-iy1) + (-Nx*Ny if ix1 < ix and iy1 < iy else 0)))
-            tij[ix + Nx*iy, ix1 + Nx*iy1] += tp * np.exp(1j*np.pi*B*(-1*ix1 + -1*-iy1 + (0 if iy1 > iy else -Ny*ix ) + (0 if ix1 > ix else -Nx*-iy ) + ( Nx*Ny if ix1 < ix and iy1 < iy else 0)))
-            tij[ix1 + Nx*iy, ix + Nx*iy1] += tp * np.exp(1j*np.pi*B*(-1*ix  +  1*-iy1 + (0 if iy1 > iy else -Ny*ix1) + (0 if ix1 > ix else  Nx*-iy ) + ( Nx*Ny if ix1 < ix and iy1 < iy else 0)))
-            tij[ix + Nx*iy1, ix1 + Nx*iy] += tp * np.exp(1j*np.pi*B*( 1*ix1 + -1*-iy  + (0 if iy1 > iy else  Ny*ix ) + (0 if ix1 > ix else -Nx*-iy1) + (-Nx*Ny if ix1 < ix and iy1 < iy else 0)))
+            tij[ix1 + Nx*iy1, ix + Nx*iy] += tp
+            tij[ix + Nx*iy, ix1 + Nx*iy1] += tp
+            tij[ix1 + Nx*iy, ix + Nx*iy1] += tp
+            tij[ix + Nx*iy1, ix1 + Nx*iy] += tp
+
+    alpha = 0.5  # gauge choice. 0.5 for symmetric gauge.
+    beta = 1 - alpha
+    phi = np.zeros((Ny*Nx, Ny*Nx))
+    # path is straight line
+    # if Ny is even, prefer dy - -Ny/2 over Ny/2. likewise for even Nx
+    for dy in range((1-Ny)//2, (1+Ny)//2):
+        for dx in range((1-Nx)//2, (1+Nx)//2):
+            for iy in range(Ny):
+                for ix in range(Nx):
+                    jy = iy + dy
+                    jjy = jy % Ny
+                    offset_y = jy - jjy
+                    jx = ix + dx
+                    jjx = jx % Nx
+                    offset_x = jx - jjx
+                    mx = (ix + jx)/2
+                    my = (iy + jy)/2
+                    phi[jjx + Nx*jjy, ix + Nx*iy] = \
+                        -alpha*my*dx + beta*mx*dy - beta*offset_x*jy + alpha*offset_y*jx - alpha*offset_x*offset_y
+    peierls = np.exp(2j*np.pi*(nflux/(Ny*Nx))*phi)
 
     if dtype_num == np.complex:
-        Ku = -1*tij
-        Kd = -1*tij
+        Ku = -tij * peierls
+        Kd = -tij * peierls
+        assert np.max(np.abs(Ku - Ku.T.conj())) < 1e-10
     else:
-        Ku = -1*tij.real
-        Kd = -1*tij.real
+        Ku = -tij.real
+        Kd = -tij.real
+        assert np.max(np.abs(peierls.imag)) < 1e-10
+        peierls = peierls.real
 
     for i in range(Ny*Nx):
         Ku[i, i] -= mu
@@ -205,7 +229,8 @@ def create_1(filename=None, overwrite=False, seed=None,
         # parameters not used by dqmc code, but useful for analysis
         f.create_group("metadata")
         f["metadata"]["version"] = 0.0
-        f["metadata"]["model"] = "Hubbard (complex)"
+        f["metadata"]["model"] = \
+            "Hubbard (complex)" if dtype_num == np.complex else "Hubbard"
         f["metadata"]["Nx"] = Nx
         f["metadata"]["Ny"] = Ny
         f["metadata"]["bps"] = bps
@@ -225,6 +250,8 @@ def create_1(filename=None, overwrite=False, seed=None,
         f["params"]["bonds"] = bonds
         f["params"]["map_bs"] = map_bs
         f["params"]["map_bb"] = map_bb
+        f["params"]["peierlsu"] = peierls
+        f["params"]["peierlsd"] = peierls
         f["params"]["Ku"] = Ku
         f["params"]["Kd"] = Kd
         f["params"]["U"] = U_i
