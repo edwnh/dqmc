@@ -58,7 +58,8 @@ def create_1(filename=None, overwrite=False, seed=None,
              nflux=0,
              n_delay=16, n_matmul=8, n_sweep_warm=200, n_sweep_meas=2000,
              period_eqlt=8, period_uneqlt=0,
-             meas_bond_corr=1, meas_energy_corr=0, meas_nematic_corr=0):
+             meas_bond_corr=1, meas_energy_corr=0, meas_nematic_corr=0,
+             trans_sym=1):
     assert L % n_matmul == 0 and L % period_eqlt == 0
     N = Nx * Ny
 
@@ -77,24 +78,32 @@ def create_1(filename=None, overwrite=False, seed=None,
             init_hs[l, i] = rand_uint(init_rng) >> np.uint64(63)
 
     # 1 site mapping
-    map_i = np.zeros(N, dtype=np.int32)
-    degen_i = np.array((N,), dtype=np.int32)
+    if trans_sym:
+        map_i = np.zeros(N, dtype=np.int32)
+        degen_i = np.array((N,), dtype=np.int32)
+    else:
+        map_i = np.arange(N, dtype=np.int32)
+        degen_i = np.ones(N, dtype=np.int32)
     num_i = map_i.max() + 1
     assert num_i == degen_i.size
 
     # 2 site mapping
     map_ij = np.zeros((N, N), dtype=np.int32)
-    degen_ij = np.zeros(N, dtype=np.int32)
+    num_ij = N if trans_sym else N*N
+    degen_ij = np.zeros(num_ij, dtype=np.int32)
     for jy in range(Ny):
         for jx in range(Nx):
             for iy in range(Ny):
                 for ix in range(Nx):
-                    ky = (iy - jy) % Ny
-                    kx = (ix - jx) % Nx
-                    map_ij[jx + Nx*jy, ix + Nx*iy] = kx + Nx*ky
-                    degen_ij[kx + Nx*ky] += 1
-    num_ij = map_ij.max() + 1
-    assert num_ij == degen_ij.size
+                    if trans_sym:
+                        ky = (iy - jy) % Ny
+                        kx = (ix - jx) % Nx
+                        k = kx + Nx*ky
+                    else:
+                        k = (ix + Nx*iy) + N*(jx + Nx*jy)
+                    map_ij[jx + Nx*jy, ix + Nx*iy] = k
+                    degen_ij[k] += 1
+    assert num_ij == map_ij.max() + 1
 
     # bond definitions
     bps = 4 if tp != 0.0 else 2  # bonds per site
@@ -116,41 +125,31 @@ def create_1(filename=None, overwrite=False, seed=None,
                 bonds[1, i + 3*N] = ix + Nx*iy1   # i1 = i + y
 
     # 1 bond 1 site mapping
-    num_bs = bps*N
     map_bs = np.zeros((N, num_b), dtype=np.int32)
+    num_bs = bps*N if trans_sym else num_b*N
     degen_bs = np.zeros(num_bs, dtype=np.int32)
-    for jy in range(Ny):
-        for jx in range(Nx):
-            for iy in range(Ny):
-                for ix in range(Nx):
-                    ky = (iy - jy) % Ny
-                    kx = (ix - jx) % Nx
-                    i = ix + Nx*iy
-                    j = jx + Nx*jy
-                    k = kx + Nx*ky
-                    for ii in range(bps):
-                        kk = k + N*ii
-                        map_bs[j, i + N*ii] = kk
-                        degen_bs[kk] += 1
+    for j in range(N):
+        for i in range(N):
+            k = map_ij[j, i]
+            for ib in range(bps):
+                kk = k + num_ij*ib
+                map_bs[j, i + N*ib] = kk
+                degen_bs[kk] += 1
+    assert num_bs == map_bs.max() + 1
 
     # 2 bond mapping
-    num_bb = bps*bps*N
     map_bb = np.zeros((num_b, num_b), dtype=np.int32)
+    num_bb = bps*bps*N if trans_sym else num_b*num_b
     degen_bb = np.zeros(num_bb, dtype = np.int32)
-    for jy in range(Ny):
-        for jx in range(Nx):
-            for iy in range(Ny):
-                for ix in range(Nx):
-                    ky = (iy - jy) % Ny
-                    kx = (ix - jx) % Nx
-                    i = ix + Nx*iy
-                    j = jx + Nx*jy
-                    k = kx + Nx*ky
-                    for jj in range(bps):
-                        for ii in range(bps):
-                            kk =  k + N*(ii + bps*jj)
-                            map_bb[j + N*jj, i + N*ii] = kk
-                            degen_bb[kk] += 1
+    for j in range(N):
+        for i in range(N):
+            k = map_ij[j, i]
+            for jb in range(bps):
+                for ib in range(bps):
+                    kk = k + num_ij*(ib + bps*jb)
+                    map_bb[j + N*jb, i + N*ib] = kk
+                    degen_bb[kk] += 1
+    assert num_bb == map_bb.max() + 1
 
     # hopping (assuming periodic boundaries and no field)
     tij = np.zeros((Ny*Nx, Ny*Nx), dtype=np.complex)
@@ -214,7 +213,7 @@ def create_1(filename=None, overwrite=False, seed=None,
     inv_exp_halfKd = expm(dt/2 * Kd)
 #   exp_K = np.array(mpm.expm(mpm.matrix(-dt * K)).tolist(), dtype=np.float64)
 
-    U_i = np.array((U,), dtype=np.float64)
+    U_i = U*np.ones_like(degen_i, dtype=np.float64)
     assert U_i.shape[0] == num_i
 
     exp_lmbd = np.exp(0.5*U_i*dt) + np.sqrt(np.expm1(U_i*dt))
