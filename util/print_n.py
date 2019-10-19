@@ -1,5 +1,6 @@
 import sys
 import util
+from glob import glob
 
 
 def info(path):
@@ -17,9 +18,15 @@ def info(path):
 
 
 def main(argv):
+    #wildcard path expansion on Windows
     for path in argv[1:]:
-        print(path)
-        info(path)
+        paths = sorted(glob(path))
+        if len(paths) == 0:
+            print("No paths matching:"+ path)
+        else:
+            for p in paths:
+                print(p)
+                info(p)
 
 if __name__ == "__main__":
     main(sys.argv)
