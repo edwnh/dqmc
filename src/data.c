@@ -14,6 +14,8 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	const hid_t file_id = H5Fopen(file, H5F_ACC_RDONLY, H5P_DEFAULT);
 	return_if(file_id < 0, -1, "H5Fopen() failed: %ld\n", file_id);
 
+	sim->file = file;
+
 	herr_t status;
 
 #ifdef USE_CPLX
@@ -196,9 +198,9 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	return 0;
 }
 
-int sim_data_save(const struct sim_data *sim, const char *file)
+int sim_data_save(const struct sim_data *sim)
 {
-	const hid_t file_id = H5Fopen(file, H5F_ACC_RDWR, H5P_DEFAULT);
+	const hid_t file_id = H5Fopen(sim->file, H5F_ACC_RDWR, H5P_DEFAULT);
 	return_if(file_id < 0, -1, "H5Fopen() failed: %ld\n", file_id);
 
 	herr_t status;

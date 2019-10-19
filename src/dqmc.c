@@ -209,8 +209,14 @@ static int dqmc(struct sim_data *sim)
 	}
 
 	for (; sim->s.sweep < sim->p.n_sweep; sim->s.sweep++) {
-		if (sig_check_state(sim->s.sweep, sim->p.n_sweep_warm, sim->p.n_sweep) != 0)
+		const int sig = sig_check_state(sim->s.sweep, sim->p.n_sweep_warm, sim->p.n_sweep);
+		if (sig == 1) // stop flag
 			break;
+		else if (sig == 2) { // progress flag
+			const int status = sim_data_save(sim);
+			if (status < 0)
+				fprintf(stderr, "save_file() failed: %d\n", status);
+		}
 
 		for (int l = 0; l < L; l++) {
 			profile_begin(updates);
@@ -544,7 +550,7 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 	// save to simulation file (if not in benchmarking mode)
 	if (!bench) {
 		fprintf(log, "saving data\n");
-		status = sim_data_save(sim, sim_file);
+		status = sim_data_save(sim);
 		if (status < 0) {
 			fprintf(stderr, "save_file() failed: %d\n", status);
 			status = -1;

@@ -63,6 +63,7 @@ struct meas_uneqlt {
 };
 
 struct sim_data {
+	const char *file;
 	struct params p;
 	struct state s;
 	struct meas_eqlt m_eq;
@@ -71,6 +72,6 @@ struct sim_data {
 
 int sim_data_read_alloc(struct sim_data *sim, const char *file);
 
-int sim_data_save(const struct sim_data *sim, const char *file);
+int sim_data_save(const struct sim_data *sim);
 
 void sim_data_free(const struct sim_data *sim);

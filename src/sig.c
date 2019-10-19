@@ -4,7 +4,7 @@
 #include "time_.h"
 
 static volatile sig_atomic_t progress_flag = 0;
-static void progress(int signum) { progress_flag = 1; }
+static void progress(int signum) { progress_flag = signum; }
 
 static volatile sig_atomic_t stop_flag = 0;
 static void stop(int signum) { stop_flag = signum; }
@@ -45,7 +45,6 @@ int sig_check_state(const int sweep, const int n_sweep_warm, const int n_sweep)
 	}
 
 	if (stop_flag != 0 || progress_flag != 0) {
-		progress_flag = 0;
 		const int warmed_up = (sweep >= n_sweep_warm);
 		const double t_elapsed = (t_now - wall_start) * SEC_PER_TICK;
 		const double t_done = (t_now - t_first) * SEC_PER_TICK;
@@ -75,6 +74,10 @@ int sig_check_state(const int sweep, const int n_sweep_warm, const int n_sweep)
 		fprintf(log, "reached time limit, checkpointing\n");
 	else if (stop_flag > 0)
 		fprintf(log, "signal %d received, checkpointing\n", stop_flag);
+	else if (progress_flag != 0)
+		fprintf(log, "signal %d received, checkpointing\n", progress_flag);
 
-	return (stop_flag != 0);
+	const int retval = (stop_flag != 0) ? 1 : (progress_flag != 0) ? 2 : 0;
+	progress_flag = 0;
+	return retval;
 }
