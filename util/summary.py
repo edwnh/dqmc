@@ -1,6 +1,6 @@
 import sys
 import util
-
+from glob import glob
 
 def info(path):
     n_sample, sign, density, double_occ, sweep, n_sweep = \
@@ -15,9 +15,15 @@ def info(path):
 
 
 def main(argv):
-    for path in argv[1:]:
-        print(path)
-        info(path)
+    #rework this function to make sure it works on Windows
+    for path_spec in argv[1:]:
+        files = sorted(glob(path_spec))
+        if len(files) == 0:
+            print("No files matching:"+path_spec)
+        else:
+            for f in files:
+                print(f)
+                info(f)
 
 if __name__ == "__main__":
     main(sys.argv)
