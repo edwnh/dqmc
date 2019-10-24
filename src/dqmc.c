@@ -168,7 +168,8 @@ static int dqmc(struct sim_data *sim)
 	// lapack work arrays
 	int lwork = get_lwork_eq_g(N);
 	if (sim->p.period_uneqlt > 0) {
-		const int lwork_ue = get_lwork_ue_g(N, F);
+		const int E = 1 + (F - 1) / N_MUL;
+		const int lwork_ue = get_lwork_ue_g(N, E);
 		if (lwork_ue > lwork) lwork = lwork_ue;
 	}
 	num *const restrict worku = my_calloc(lwork * sizeof(num));

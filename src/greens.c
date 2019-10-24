@@ -208,6 +208,12 @@ int get_lwork_ue_g(const int N, const int L)
 	int info = 0;
 	int max_lwork = N*N; // can start smaller if mul_seq doesn't use work
 
+	if (L == 1) {  // then bsofi doesn't use QR
+		xgetri(N, NULL, N, NULL, &lwork, -1, &info);
+		if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
+		return max_lwork;
+	}
+
 	const int NL = N*L;
 	const int N2 = 2*N;
 
