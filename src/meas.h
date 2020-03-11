@@ -17,9 +17,7 @@ void measure_uneqlt(const struct params *const restrict p, const num phase,
 		const num *const Gdt0,
 		struct meas_uneqlt *const restrict m);
 
-/*
-void measure_uneqlt_full(const struct params *const restrict p, const int sign,
-		const double *const restrict Gu,
-		const double *const restrict Gd,
+void measure_uneqlt_full(const struct params *const restrict p, const num phase,
+		const num *const Gu,
+		const num *const Gd,
 		struct meas_uneqlt *const restrict m);
-*/

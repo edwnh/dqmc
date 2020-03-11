@@ -30,13 +30,11 @@ void calc_ue_g(const int N, const int L, const int F, const int n_mul,
 		num *const restrict Q,
 		num *const restrict work, const int lwork);
 
-/*
 void calc_ue_g_full(const int N, const int L, const int F, const int n_mul,
-		const double *const restrict B, const double *const restrict iB,
-		const double *const restrict C,
-		double *const restrict G, // NL * NL
-		double *const restrict Gred, // NF * NF
-		double *const restrict tau, // NF
-		double *const restrict Q, // 2*N * 2*N
-		double *const restrict work, const int lwork);
-*/
+		const num *const restrict B, const num *const restrict iB,
+		const num *const restrict C,
+		num *const restrict G, // NL * NL
+		num *const restrict Gred, // NF * NF
+		num *const restrict tau, // NF
+		num *const restrict Q, // 2*N * 2*N
+		num *const restrict work, const int lwork);

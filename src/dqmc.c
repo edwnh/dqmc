@@ -98,6 +98,15 @@ static int dqmc(struct sim_data *sim)
 	num *const iBd = my_calloc(N*N*L * sizeof(num));
 	num *const Cu = my_calloc(N*N*F * sizeof(num));
 	num *const Cd = my_calloc(N*N*F * sizeof(num));
+
+	// B and C matrices wrapped by e^K/2, for uneq G calculation
+	num *const hBu = my_calloc(N*N*L * sizeof(num));
+	num *const hBd = my_calloc(N*N*L * sizeof(num));
+	num *const hiBu = my_calloc(N*N*L * sizeof(num));
+	num *const hiBd = my_calloc(N*N*L * sizeof(num));
+	num *const hCu = my_calloc(N*N*F * sizeof(num));
+	num *const hCd = my_calloc(N*N*F * sizeof(num));
+
 	num *const restrict gu = my_calloc(N*N * sizeof(num));
 	num *const restrict gd = my_calloc(N*N * sizeof(num));
 	#ifdef CHECK_G_WRP
@@ -127,18 +136,18 @@ static int dqmc(struct sim_data *sim)
 	int *const restrict pvtd = my_calloc(N * sizeof(int));
 
 	// arrays for calc_ue_g
-	num *restrict Gu0t = NULL;
-	num *restrict Gutt = NULL;
-	num *restrict Gut0 = NULL;
-	// num *restrict ueGu = NULL;
+// 	num *restrict Gu0t = NULL;
+// 	num *restrict Gutt = NULL;
+// 	num *restrict Gut0 = NULL;
+	num *restrict ueGu = NULL;
 	num *restrict Gredu = NULL;
 	num *restrict tauu = NULL;
 	num *restrict Qu = NULL;
 
-	num *restrict Gd0t = NULL;
-	num *restrict Gdtt = NULL;
-	num *restrict Gdt0 = NULL;
-	// num *restrict ueGd = NULL;
+// 	num *restrict Gd0t = NULL;
+// 	num *restrict Gdtt = NULL;
+// 	num *restrict Gdt0 = NULL;
+	num *restrict ueGd = NULL;
 	num *restrict Gredd = NULL;
 	num *restrict taud = NULL;
 	num *restrict Qd = NULL;
@@ -154,15 +163,15 @@ static int dqmc(struct sim_data *sim)
 		taud = my_calloc(N*E * sizeof(num));
 		Qd = my_calloc(4*N*N * sizeof(num));
 
-		Gu0t = my_calloc(N*N*L * sizeof(num));
-		Gutt = my_calloc(N*N*L * sizeof(num));
-		Gut0 = my_calloc(N*N*L * sizeof(num));
-		Gd0t = my_calloc(N*N*L * sizeof(num));
-		Gdtt = my_calloc(N*N*L * sizeof(num));
-		Gdt0 = my_calloc(N*N*L * sizeof(num));
-		// ueGu = my_calloc(N*N*L*L * sizeof(num));
-		// ueGd = my_calloc(N*N*L*L * sizeof(num));
-		// if (ueGu == NULL || ueGd == NULL) return -1;
+// 		Gu0t = my_calloc(N*N*L * sizeof(num));
+// 		Gutt = my_calloc(N*N*L * sizeof(num));
+// 		Gut0 = my_calloc(N*N*L * sizeof(num));
+// 		Gd0t = my_calloc(N*N*L * sizeof(num));
+// 		Gdtt = my_calloc(N*N*L * sizeof(num));
+// 		Gdt0 = my_calloc(N*N*L * sizeof(num));
+		ueGu = my_calloc(N*N*L*L * sizeof(num));
+		ueGd = my_calloc(N*N*L*L * sizeof(num));
+		if (ueGu == NULL || ueGd == NULL) return -1;
 	}
 
 	// lapack work arrays
@@ -364,64 +373,69 @@ static int dqmc(struct sim_data *sim)
 			#pragma omp parallel sections
 			{
 			#pragma omp section
-			calc_ue_g(N, L, F, N_MUL, Bu, iBu, Cu, Gu0t, Gutt, Gut0,
-			          Gredu, tauu, Qu, worku, lwork);
-			#pragma omp section
-			calc_ue_g(N, L, F, N_MUL, Bd, iBd, Cd, Gd0t, Gdtt, Gdt0,
-			          Gredd, taud, Qd, workd, lwork);
+			{
+			profile_begin(half_wrap);
+			for (int l = 0; l < L; l++) {
+				matmul(tmpNN1u, Bu + N*N*l, exp_halfKu);
+				matmul(hBu + N*N*l, inv_exp_halfKu, tmpNN1u);
 			}
-
-			#ifdef CHECK_G_UE
-			matdiff(N, N, gu, N, Gutt, N);
-			matdiff(N, N, gd, N, Gdtt, N);
-			#endif
-			#if defined(CHECK_G_UE) && defined(CHECK_G_ACC)
-			matdiff(N, N, Gutt, N, guacc, N);
-			matdiff(N, N, Gdtt, N, gdacc, N);
-			#endif
+			for (int l = 0; l < L; l++) {
+				matmul(tmpNN1u, iBu + N*N*l, exp_halfKu);
+				matmul(hiBu + N*N*l, inv_exp_halfKu, tmpNN1u);
+			}
+			for (int l = 0; l < F; l++) {
+				matmul(tmpNN1u, Cu + N*N*l, exp_halfKu);
+				matmul(hCu + N*N*l, inv_exp_halfKu, tmpNN1u);
+			}
+			profile_end(half_wrap);
+			}
+			#pragma omp section
+			{
+			profile_begin(half_wrap);
+			for (int l = 0; l < L; l++) {
+				matmul(tmpNN1d, Bd + N*N*l, exp_halfKd);
+				matmul(hBd + N*N*l, inv_exp_halfKd, tmpNN1d);
+			}
+			for (int l = 0; l < L; l++) {
+				matmul(tmpNN1d, iBd + N*N*l, exp_halfKd);
+				matmul(hiBd + N*N*l, inv_exp_halfKd, tmpNN1d);
+			}
+			for (int l = 0; l < F; l++) {
+				matmul(tmpNN1d, Cd + N*N*l, exp_halfKd);
+				matmul(hCd + N*N*l, inv_exp_halfKd, tmpNN1d);
+			}
+			profile_end(half_wrap);
+			}
+			}
 
 			#pragma omp parallel sections
 			{
 			#pragma omp section
-			{
-			profile_begin(half_wrap);
-			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1u, Gu0t + N*N*l, exp_halfKu);
-				matmul(Gu0t + N*N*l, inv_exp_halfKu, tmpNN1u);
-			}
-			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1u, Gutt + N*N*l, exp_halfKu);
-				matmul(Gutt + N*N*l, inv_exp_halfKu, tmpNN1u);
-			}
-			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1u, Gut0 + N*N*l, exp_halfKu);
-				matmul(Gut0 + N*N*l, inv_exp_halfKu, tmpNN1u);
-			}
-			profile_end(half_wrap);
-			}
+// 			calc_ue_g(N, L, F, N_MUL, Bu, iBu, Cu, Gu0t, Gutt, Gut0,
+// 			          Gredu, tauu, Qu, worku, lwork);
+			calc_ue_g_full(N, L, F, N_MUL, hBu, hiBu, hCu, ueGu,
+			          Gredu, tauu, Qu, worku, lwork);
 			#pragma omp section
-			{
-			profile_begin(half_wrap);
-			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1d, Gd0t + N*N*l, exp_halfKd);
-				matmul(Gd0t + N*N*l, inv_exp_halfKd, tmpNN1d);
-			}
-			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1d, Gdtt + N*N*l, exp_halfKd);
-				matmul(Gdtt + N*N*l, inv_exp_halfKd, tmpNN1d);
-			}
-			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1d, Gdt0 + N*N*l, exp_halfKd);
-				matmul(Gdt0 + N*N*l, inv_exp_halfKd, tmpNN1d);
-			}
-			profile_end(half_wrap);
-			}
+// 			calc_ue_g(N, L, F, N_MUL, Bd, iBd, Cd, Gd0t, Gdtt, Gdt0,
+// 			          Gredd, taud, Qd, workd, lwork);
+			calc_ue_g_full(N, L, F, N_MUL, hBd, hiBd, hCd, ueGd,
+			          Gredd, taud, Qd, workd, lwork);
 			}
 
+// 			#ifdef CHECK_G_UE
+// 			matdiff(N, N, gu, N, Gutt, N);
+// 			matdiff(N, N, gd, N, Gdtt, N);
+// 			#endif
+// 			#if defined(CHECK_G_UE) && defined(CHECK_G_ACC)
+// 			matdiff(N, N, Gutt, N, guacc, N);
+// 			matdiff(N, N, Gdtt, N, gdacc, N);
+// 			#endif
+
 			profile_begin(meas_uneq);
-			measure_uneqlt(&sim->p, phase,
-			               Gu0t, Gutt, Gut0, Gd0t, Gdtt, Gdt0,
-			               &sim->m_ue);
+// 			measure_uneqlt(&sim->p, phase,
+// 			               Gu0t, Gutt, Gut0, Gd0t, Gdtt, Gdt0,
+// 			               &sim->m_ue);
+			measure_uneqlt_full(&sim->p, phase, ueGu, ueGd, &sim->m_ue);
 			profile_end(meas_uneq);
 			// #pragma omp parallel sections
 			// {
@@ -455,17 +469,17 @@ static int dqmc(struct sim_data *sim)
 		my_free(Qd);
 		my_free(taud);
 		my_free(Gredd);
-		// my_free(ueGd);
-		my_free(Gdt0);
-		my_free(Gdtt);
-		my_free(Gd0t);
+		my_free(ueGd);
+// 		my_free(Gdt0);
+// 		my_free(Gdtt);
+// 		my_free(Gd0t);
 		my_free(Qu);
 		my_free(tauu);
 		my_free(Gredu);
-		// my_free(ueGu);
-		my_free(Gut0);
-		my_free(Gutt);
-		my_free(Gu0t);
+		my_free(ueGu);
+// 		my_free(Gut0);
+// 		my_free(Gutt);
+// 		my_free(Gu0t);
 	}
 	my_free(pvtd);
 	my_free(tmpN3d);
@@ -490,6 +504,14 @@ static int dqmc(struct sim_data *sim)
 	#endif
 	my_free(gd);
 	my_free(gu);
+
+	my_free(hCd);
+	my_free(hCu);
+	my_free(hiBd);
+	my_free(hiBu);
+	my_free(hBd);
+	my_free(hBu);
+
 	my_free(Cd);
 	my_free(Cu);
 	my_free(iBd);

@@ -484,12 +484,11 @@ void calc_ue_g(const int N, const int L, const int F, const int n_mul,
 	profile_end(expand_g);
 }
 
-/*
 static void expand_g_full(const int N, const int L, const int E, const int n_matmul,
-		const double *const restrict B,
-		const double *const restrict iB,
-		const double *const restrict Gred,
-		double *const restrict G)
+		const num *const restrict B,
+		const num *const restrict iB,
+		const num *const restrict Gred,
+		num *const restrict G)
 {
 	const int ldG = N;
 
@@ -525,23 +524,23 @@ static void expand_g_full(const int N, const int L, const int E, const int n_mat
 		const int rstop = (f == E - 1) ? rstop_last : l + n_right;
 		for (int m = l; m != lstop;) {
 			const int next = (m - 1 + L) % L;
-			const double alpha = (m == 0) ? -1.0 : 1.0;
-			dgemm("N", "N", &N, &N, &N, &alpha,
-			      G_BLK(k, m), &ldG, B + N*N*next, &N, cdbl(0.0),
-			      G_BLK(k, next), &ldG);
+			const num alpha = (m == 0) ? -1.0 : 1.0;
+			xgemm("N", "N", N, N, N, alpha,
+			      G_BLK(k, m), ldG, B + N*N*next, N, 0.0,
+			      G_BLK(k, next), ldG);
 			m = next;
 		}
 		for (int m = l; m != rstop;) {
 			const int next = (m + 1) % L;
-			const double alpha = (next == 0) ? -1.0 : 1.0;
-			const double beta = (k == m) ? -alpha : 0.0;
+			const num alpha = (next == 0) ? -1.0 : 1.0;
+			const num beta = (k == m) ? -alpha : 0.0;
 			if (k == m)
 				for (int j = 0; j < N; j++)
 				for (int i = 0; i < N; i++)
 					G_BLK(k, next)[i + ldG*j] = iB[i + N*j + N*N*m];
-			dgemm("N", "N", &N, &N, &N, &alpha,
-			      G_BLK(k, m), &ldG, iB + N*N*m, &N, &beta,
-			      G_BLK(k, next), &ldG);
+			xgemm("N", "N", N, N, N, alpha,
+			      G_BLK(k, m), ldG, iB + N*N*m, N, beta,
+			      G_BLK(k, next), ldG);
 			m = next;
 		}
 	}
@@ -554,23 +553,23 @@ static void expand_g_full(const int N, const int L, const int E, const int n_mat
 		const int dstop = (e == E - 1) ? dstop_last : k + n_down;
 		for (int m = k; m != ustop;) {
 			const int next = (m - 1 + L) % L;
-			const double alpha = (m == 0) ? -1.0 : 1.0;
-			const double beta = (m == l) ? -alpha : 0.0;
+			const num alpha = (m == 0) ? -1.0 : 1.0;
+			const num beta = (m == l) ? -alpha : 0.0;
 			if (m == l)
 				for (int j = 0; j < N; j++)
 				for (int i = 0; i < N; i++)
 					G_BLK(next, l)[i + ldG*j] = iB[i + N*j + N*N*next];
-			dgemm("N", "N", &N, &N, &N, &alpha,
-			      iB + N*N*next, &N, G_BLK(m, l), &ldG, &beta,
-			      G_BLK(next, l), &ldG);
+			xgemm("N", "N", N, N, N, alpha,
+			      iB + N*N*next, N, G_BLK(m, l), ldG, beta,
+			      G_BLK(next, l), ldG);
 			m = next;
 		}
 		for (int m = k; m != dstop;) {
 			const int next = (m + 1) % L;
-			const double alpha = (next == 0) ? -1.0 : 1.0;
-			dgemm("N", "N", &N, &N, &N, &alpha,
-			      B + N*N*m, &N, G_BLK(m, l), &ldG, cdbl(0.0),
-			      G_BLK(next, l), &ldG);
+			const num alpha = (next == 0) ? -1.0 : 1.0;
+			xgemm("N", "N", N, N, N, alpha,
+			      B + N*N*m, N, G_BLK(m, l), ldG, 0.0,
+			      G_BLK(next, l), ldG);
 			if (next == l)
 				for (int i = 0; i < N; i++)
 					G_BLK(next, l)[i + ldG*i] += 1.0;
@@ -581,13 +580,13 @@ static void expand_g_full(const int N, const int L, const int E, const int n_mat
 }
 
 void calc_ue_g_full(const int N, const int L, const int F, const int n_mul,
-		const double *const restrict B, const double *const restrict iB,
-		const double *const restrict C,
-		double *const restrict G,
-		double *const restrict Gred,
-		double *const restrict tau,
-		double *const restrict Q,
-		double *const restrict work, const int lwork)
+		const num *const restrict B, const num *const restrict iB,
+		const num *const restrict C,
+		num *const restrict G,
+		num *const restrict Gred,
+		num *const restrict tau,
+		num *const restrict Q,
+		num *const restrict work, const int lwork)
 {
 	const int E = 1 + (F - 1) / n_mul;
 
@@ -603,4 +602,3 @@ void calc_ue_g_full(const int N, const int L, const int F, const int n_mul,
 	expand_g_full(N, L, E, (L/F) * n_mul, B, iB, Gred, G);
 	profile_end(expand_g);
 }
-*/
