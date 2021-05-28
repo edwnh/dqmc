@@ -64,7 +64,7 @@ def create_1(filename=None, overwrite=False, seed=None,
     N = Nx * Ny
 
     if nflux != 0:
-        dtype_num = np.complex
+        dtype_num = np.complex128
     else:
         dtype_num = np.float64
 
@@ -152,7 +152,7 @@ def create_1(filename=None, overwrite=False, seed=None,
     assert num_bb == map_bb.max() + 1
 
     # hopping (assuming periodic boundaries and no field)
-    tij = np.zeros((Ny*Nx, Ny*Nx), dtype=np.complex)
+    tij = np.zeros((Ny*Nx, Ny*Nx), dtype=np.complex128)
     for iy in range(Ny):
         for ix in range(Nx):
             iy1 = (iy + 1) % Ny
@@ -189,7 +189,7 @@ def create_1(filename=None, overwrite=False, seed=None,
                         -alpha*my*dx + beta*mx*dy - beta*offset_x*jy + alpha*offset_y*jx - alpha*offset_x*offset_y
     peierls = np.exp(2j*np.pi*(nflux/(Ny*Nx))*phi)
 
-    if dtype_num == np.complex:
+    if dtype_num == np.complex128:
         Ku = -tij * peierls
         Kd = -tij * peierls
         assert np.max(np.abs(Ku - Ku.T.conj())) < 1e-10
@@ -219,7 +219,7 @@ def create_1(filename=None, overwrite=False, seed=None,
     exp_lmbd = np.exp(0.5*U_i*dt) + np.sqrt(np.expm1(U_i*dt))
 #    exp_lmbd = np.exp(np.arccosh(np.exp(0.5*U_i*dt)))
 #    exp_lmbd = float(mpm.exp(mpm.acosh(mpm.exp(0.5*float(U*dt)))))
-    exp_lambda = np.array((1.0/exp_lmbd[map_i], exp_lmbd[map_i]))
+    exp_lambda = np.array((exp_lmbd[map_i]**-1, exp_lmbd[map_i]))
     delll = np.array((exp_lmbd[map_i]**2 - 1, exp_lmbd[map_i]**-2 - 1))
 
     if filename is None:
@@ -229,7 +229,7 @@ def create_1(filename=None, overwrite=False, seed=None,
         f.create_group("metadata")
         f["metadata"]["version"] = 0.0
         f["metadata"]["model"] = \
-            "Hubbard (complex)" if dtype_num == np.complex else "Hubbard"
+            "Hubbard (complex)" if dtype_num == np.complex128 else "Hubbard"
         f["metadata"]["Nx"] = Nx
         f["metadata"]["Ny"] = Ny
         f["metadata"]["bps"] = bps
