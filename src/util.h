@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string.h>
+#include <xmmintrin.h>
 
 #ifdef USE_CPLX
 	#include <complex.h>

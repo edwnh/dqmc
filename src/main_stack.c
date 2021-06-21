@@ -230,7 +230,7 @@ static void push_stack(const char *file, const char *line)
 		if (bfd == -1)
 			status |= 1;
 		else {
-			if (write(bfd, line_nl, len_line + 1) != len_line + 1)
+			if (write(bfd, line_nl, len_line + 1) != (ssize_t)len_line + 1)
 				status |= 2;
 			if (close(bfd) == -1)
 				status |= 4;
@@ -244,7 +244,7 @@ static void push_stack(const char *file, const char *line)
 	if (fd == -1)
 		status |= 1;
 	else {
-		if (write(fd, line_nl, len_line + 1) != len_line + 1)
+		if (write(fd, line_nl, len_line + 1) != (ssize_t)len_line + 1)
 			status |= 2;
 		if (close(fd) == -1)
 			status |= 4;
