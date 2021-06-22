@@ -1,3 +1,4 @@
+import os
 import shutil
 import sys
 import time
@@ -53,7 +54,7 @@ def rand_jump(rng):
         rng[(np.uint64(j) + rng[16]) & np.uint64(15)] = t[j]
 
 
-def create_1(filename=None, overwrite=False, seed=None,
+def create_1(file_sim=None, file_params=None, overwrite=False, seed=None,
              Nx=16, Ny=4, mu=0.0, tp=0.0, U=6.0, dt=0.115, L=40,
              nflux=0,
              n_delay=16, n_matmul=8, n_sweep_warm=200, n_sweep_meas=2000,
@@ -67,6 +68,13 @@ def create_1(filename=None, overwrite=False, seed=None,
         dtype_num = np.complex128
     else:
         dtype_num = np.float64
+
+    if file_sim is None:
+        file_sim = "{}.h5".format(seed)
+    if file_params is None:
+        file_params = file_sim
+    
+    one_file = (os.path.abspath(file_sim) == os.path.abspath(file_params))
 
     if seed is None:
         seed = int(time.time())
@@ -191,26 +199,19 @@ def create_1(filename=None, overwrite=False, seed=None,
 
     if dtype_num == np.complex128:
         Ku = -tij * peierls
-        Kd = -tij * peierls
         assert np.max(np.abs(Ku - Ku.T.conj())) < 1e-10
     else:
         Ku = -tij.real
-        Kd = -tij.real
         assert np.max(np.abs(peierls.imag)) < 1e-10
         peierls = peierls.real
 
     for i in range(Ny*Nx):
         Ku[i, i] -= mu
-        Kd[i, i] -= mu
 
     exp_Ku = expm(-dt * Ku)
-    exp_Kd = expm(-dt * Kd)
     inv_exp_Ku = expm(dt * Ku)
-    inv_exp_Kd = expm(dt * Kd)
     exp_halfKu = expm(-dt/2 * Ku)
-    exp_halfKd = expm(-dt/2 * Kd)
     inv_exp_halfKu = expm(dt/2 * Ku)
-    inv_exp_halfKd = expm(dt/2 * Kd)
 #   exp_K = np.array(mpm.expm(mpm.matrix(-dt * K)).tolist(), dtype=np.float64)
 
     U_i = U*np.ones_like(degen_i, dtype=np.float64)
@@ -222,12 +223,10 @@ def create_1(filename=None, overwrite=False, seed=None,
     exp_lambda = np.array((exp_lmbd[map_i]**-1, exp_lmbd[map_i]))
     delll = np.array((exp_lmbd[map_i]**2 - 1, exp_lmbd[map_i]**-2 - 1))
 
-    if filename is None:
-        filename = "{}.h5".format(seed)
-    with h5py.File(filename, "w" if overwrite else "x") as f:
+    with h5py.File(file_params, "w" if overwrite else "x") as f:
         # parameters not used by dqmc code, but useful for analysis
         f.create_group("metadata")
-        f["metadata"]["version"] = 0.0
+        f["metadata"]["version"] = 0.1
         f["metadata"]["model"] = \
             "Hubbard (complex)" if dtype_num == np.complex128 else "Hubbard"
         f["metadata"]["Nx"] = Nx
@@ -250,9 +249,9 @@ def create_1(filename=None, overwrite=False, seed=None,
         f["params"]["map_bs"] = map_bs
         f["params"]["map_bb"] = map_bb
         f["params"]["peierlsu"] = peierls
-        f["params"]["peierlsd"] = peierls
+        f["params"]["peierlsd"] = f["params"]["peierlsu"]
         f["params"]["Ku"] = Ku
-        f["params"]["Kd"] = Kd
+        f["params"]["Kd"] = f["params"]["Ku"]
         f["params"]["U"] = U_i
         f["params"]["dt"] = np.array(dt, dtype=np.float64)
 
@@ -266,7 +265,6 @@ def create_1(filename=None, overwrite=False, seed=None,
         f["params"]["meas_bond_corr"] = meas_bond_corr
         f["params"]["meas_energy_corr"] = meas_energy_corr
         f["params"]["meas_nematic_corr"] = meas_nematic_corr
-        f["params"]["init_rng"] = init_rng  # save if need to replicate data
 
         # precalculated stuff
         f["params"]["num_i"] = num_i
@@ -279,22 +277,30 @@ def create_1(filename=None, overwrite=False, seed=None,
         f["params"]["degen_bs"] = degen_bs
         f["params"]["degen_bb"] = degen_bb
         f["params"]["exp_Ku"] = exp_Ku
-        f["params"]["exp_Kd"] = exp_Kd
+        f["params"]["exp_Kd"] = f["params"]["exp_Ku"]
         f["params"]["inv_exp_Ku"] = inv_exp_Ku
-        f["params"]["inv_exp_Kd"] = inv_exp_Kd
+        f["params"]["inv_exp_Kd"] = f["params"]["inv_exp_Ku"]
         f["params"]["exp_halfKu"] = exp_halfKu
-        f["params"]["exp_halfKd"] = exp_halfKd
+        f["params"]["exp_halfKd"] = f["params"]["exp_halfKu"]
         f["params"]["inv_exp_halfKu"] = inv_exp_halfKu
-        f["params"]["inv_exp_halfKd"] = inv_exp_halfKd
+        f["params"]["inv_exp_halfKd"] = f["params"]["inv_exp_halfKu"]
         f["params"]["exp_lambda"] = exp_lambda
         f["params"]["del"] = delll
         f["params"]["F"] = np.array(L//n_matmul, dtype=np.int32)
         f["params"]["n_sweep"] = np.array(n_sweep_warm + n_sweep_meas,
                                           dtype=np.int32)
 
+    with h5py.File(file_sim, "a" if one_file else "w" if overwrite else "x") as f:
         # simulation state
+        params_relpath = os.path.relpath(file_params, os.path.dirname(file_sim))
+        f["params_file"] = params_relpath
+        if not one_file:
+            f["metadata"] = h5py.ExternalLink(params_relpath, "metadata")
+            f["params"] = h5py.ExternalLink(params_relpath, "params")
+
         f.create_group("state")
         f["state"]["sweep"] = np.array(0, dtype=np.int32)
+        f["state"]["init_rng"] = init_rng  # save if need to replicate data
         f["state"]["rng"] = init_rng
         f["state"]["hs"] = init_hs
 
@@ -339,7 +345,6 @@ def create_1(filename=None, overwrite=False, seed=None,
             if meas_nematic_corr:
                 f["meas_uneqlt"]["nem_nnnn"] = np.zeros(num_bb*L, dtype=dtype_num)
                 f["meas_uneqlt"]["nem_ssss"] = np.zeros(num_bb*L, dtype=dtype_num)
-    return filename
 
 
 def create_batch(Nfiles=1, prefix=None, seed=None, **kwargs):
@@ -350,9 +355,11 @@ def create_batch(Nfiles=1, prefix=None, seed=None, **kwargs):
     rng = rand_seed(seed)
 
     file_0 = "{}_{}.h5".format(prefix, 0)
+    file_p = "{}.h5.params".format(prefix)
 
-    create_1(filename=file_0, seed=seed, **kwargs)
-    with h5py.File(file_0, "r") as f:
+    create_1(file_sim=file_0, file_params=file_p, seed=seed, **kwargs)
+
+    with h5py.File(file_p, "r") as f:
         N = f["params"]["N"][...]
         L = f["params"]["L"][...]
 
@@ -368,10 +375,12 @@ def create_batch(Nfiles=1, prefix=None, seed=None, **kwargs):
         file_i = "{}_{}.h5".format(prefix, i)
         shutil.copy2(file_0, file_i)
         with h5py.File(file_i, "r+") as f:
-            f["params"]["init_rng"][...] = init_rng
+            f["state"]["init_rng"][...] = init_rng
             f["state"]["rng"][...] = init_rng
             f["state"]["hs"][...] = init_hs
-    return file_0 if Nfiles == 1 else "{} ... {}".format(file_0, file_i)
+    print("created simulation files:",
+          file_0 if Nfiles == 1 else "{} ... {}".format(file_0, file_i))
+    print("parameter file:", file_p)
 
 
 def main(argv):
@@ -391,7 +400,7 @@ def main(argv):
             except:
                 pass
         kwargs[key] = val
-    print("created simulation files:", create_batch(**kwargs))
+    create_batch(**kwargs)
 
 if __name__ == "__main__":
     main(sys.argv)
