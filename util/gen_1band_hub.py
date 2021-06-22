@@ -1,7 +1,6 @@
 import os
 import shutil
 import sys
-import time
 
 import h5py
 import numpy as np
@@ -10,8 +9,13 @@ from scipy.linalg import expm
 np.seterr(over="ignore")
 
 
+def rand_seed_urandom():
+    rng = np.zeros(17, dtype=np.uint64)
+    rng[:16] = np.frombuffer(os.urandom(16*8), dtype=np.uint64)
+    return rng
+
 # http://xoroshiro.di.unimi.it/splitmix64.c
-def rand_seed(x):
+def rand_seed_splitmix64(x):
     x = np.uint64(x)
     rng = np.zeros(17, dtype=np.uint64)
     for i in range(16):
@@ -54,7 +58,7 @@ def rand_jump(rng):
         rng[(np.uint64(j) + rng[16]) & np.uint64(15)] = t[j]
 
 
-def create_1(file_sim=None, file_params=None, overwrite=False, seed=None,
+def create_1(file_sim=None, file_params=None, overwrite=False, init_rng=None,
              Nx=16, Ny=4, mu=0.0, tp=0.0, U=6.0, dt=0.115, L=40,
              nflux=0,
              n_delay=16, n_matmul=8, n_sweep_warm=200, n_sweep_meas=2000,
@@ -69,21 +73,21 @@ def create_1(file_sim=None, file_params=None, overwrite=False, seed=None,
     else:
         dtype_num = np.float64
 
+    if init_rng is None:
+        init_rng = rand_seed_urandom()
+    rng = init_rng.copy()
+    init_hs = np.zeros((L, N), dtype=np.int32)
+
     if file_sim is None:
-        file_sim = "{}.h5".format(seed)
+        file_sim = "sim.h5"
     if file_params is None:
         file_params = file_sim
     
     one_file = (os.path.abspath(file_sim) == os.path.abspath(file_params))
 
-    if seed is None:
-        seed = int(time.time())
-    init_rng = rand_seed(seed)
-    init_hs = np.zeros((L, N), dtype=np.int32)
-
     for l in range(L):
         for i in range(N):
-            init_hs[l, i] = rand_uint(init_rng) >> np.uint64(63)
+            init_hs[l, i] = rand_uint(rng) >> np.uint64(63)
 
     # 1 site mapping
     if trans_sym:
@@ -301,7 +305,7 @@ def create_1(file_sim=None, file_params=None, overwrite=False, seed=None,
         f.create_group("state")
         f["state"]["sweep"] = np.array(0, dtype=np.int32)
         f["state"]["init_rng"] = init_rng  # save if need to replicate data
-        f["state"]["rng"] = init_rng
+        f["state"]["rng"] = rng
         f["state"]["hs"] = init_hs
 
         # measurements
@@ -349,34 +353,36 @@ def create_1(file_sim=None, file_params=None, overwrite=False, seed=None,
 
 def create_batch(Nfiles=1, prefix=None, seed=None, **kwargs):
     if seed is None:
-        seed = int(time.time())
+        init_rng = rand_seed_urandom()
+    else:
+        init_rng = rand_seed_splitmix64(seed)
+
     if prefix is None:
-        prefix = str(seed)
-    rng = rand_seed(seed)
+        prefix = "sim"
 
     file_0 = "{}_{}.h5".format(prefix, 0)
     file_p = "{}.h5.params".format(prefix)
 
-    create_1(file_sim=file_0, file_params=file_p, seed=seed, **kwargs)
+    create_1(file_sim=file_0, file_params=file_p, init_rng=init_rng, **kwargs)
 
     with h5py.File(file_p, "r") as f:
         N = f["params"]["N"][...]
         L = f["params"]["L"][...]
 
     for i in range(1, Nfiles):
-        rand_jump(rng)
-        init_rng = rng.copy()
+        rand_jump(init_rng)
+        rng = init_rng.copy()
         init_hs = np.zeros((L, N), dtype=np.int32)
 
         for l in range(L):
             for r in range(N):
-                init_hs[l, r] = rand_uint(init_rng) >> np.uint64(63)
+                init_hs[l, r] = rand_uint(rng) >> np.uint64(63)
 
         file_i = "{}_{}.h5".format(prefix, i)
         shutil.copy2(file_0, file_i)
         with h5py.File(file_i, "r+") as f:
             f["state"]["init_rng"][...] = init_rng
-            f["state"]["rng"][...] = init_rng
+            f["state"]["rng"][...] = rng
             f["state"]["hs"][...] = init_hs
     print("created simulation files:",
           file_0 if Nfiles == 1 else "{} ... {}".format(file_0, file_i))
