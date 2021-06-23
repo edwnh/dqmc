@@ -6,10 +6,9 @@
 void update_delayed(const int N, const int n_delay, const double *const restrict del,
 		const int *const restrict site_order,
 		uint64_t *const restrict rng, int *const restrict hs,
-		num *const restrict Gu, num *const restrict Gd, num *const restrict phase,
+		num *const restrict Gu,// num *const restrict Gd, num *const restrict phase,
 		// work arrays (sizes: N*N, N*N, N)
-		num *const restrict au, num *const restrict bu, num *const restrict du,
-		num *const restrict ad, num *const restrict bd, num *const restrict dd);
+		num *const restrict au, num *const restrict bu, num *const restrict du);
 
 /*
 // regular sherman morrison

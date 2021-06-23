@@ -6,13 +6,13 @@ CFLAGS += -DMKL_DIRECT_CALL_SEQ -Wno-ignored-pragmas
 CFLAGS += -DGIT_ID=\"$(shell git describe --always)\"
 CFLAGS += -DPROFILE_ENABLE
 # CFLAGS += -DUSE_CPLX  # uncomment to use complex numbers
-CFLAGS += -fiopenmp  # to disable openmp, use -qopenmp-stubs
+CFLAGS += -qopenmp-stubs  # to disable openmp, use -qopenmp-stubs
 
 LDFLAGS += -lhdf5 -lhdf5_hl -lmkl_intel_lp64 -lmkl_sequential -lmkl_core
 
 OBJS = data.o dqmc.o greens.o meas.o prof.o sig.o updates.o
 
-TARGET = dqmc
+TARGET = negUdqmc
 
 all: one stack
 

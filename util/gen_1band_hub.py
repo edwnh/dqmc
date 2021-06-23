@@ -232,7 +232,7 @@ def create_1(file_sim=None, file_params=None, overwrite=False, init_rng=None,
         f.create_group("metadata")
         f["metadata"]["version"] = 0.1
         f["metadata"]["model"] = \
-            "Hubbard (complex)" if dtype_num == np.complex128 else "Hubbard"
+            "negative U Hubbard (complex)" if dtype_num == np.complex128 else "negative U Hubbard"
         f["metadata"]["Nx"] = Nx
         f["metadata"]["Ny"] = Ny
         f["metadata"]["bps"] = bps

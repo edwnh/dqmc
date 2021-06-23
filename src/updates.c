@@ -7,27 +7,26 @@
 void update_delayed(const int N, const int n_delay, const double *const restrict del,
 		const int *const restrict site_order,
 		uint64_t *const restrict rng, int *const restrict hs,
-		num *const restrict gu, num *const restrict gd, num *const restrict phase,
-		num *const restrict au, num *const restrict bu, num *const restrict du,
-		num *const restrict ad, num *const restrict bd, num *const restrict dd)
+		num *const restrict gu,// num *const restrict gd, num *const restrict phase,
+		num *const restrict au, num *const restrict bu, num *const restrict du)
 {
 	int k = 0;
 	for (int j = 0; j < N; j++) du[j] = gu[j + N*j];
-	for (int j = 0; j < N; j++) dd[j] = gd[j + N*j];
+	// for (int j = 0; j < N; j++) dd[j] = gd[j + N*j];
 	for (int ii = 0; ii < N; ii++) {
 		const int i = site_order[ii];
 		const double delu = del[i + N*hs[i]];
 		const double deld = del[i + N*!hs[i]];
 		if (delu == 0.0 && deld == 0.0) continue;
 		const num ru = 1.0 + (1.0 - du[i]) * delu;
-		const num rd = 1.0 + (1.0 - dd[i]) * deld;
-		const num prob = ru * rd;
-		const double absprob = fabs(prob);
-		if (rand_doub(rng) < absprob) {
-			#pragma omp parallel sections
-			{
-			#pragma omp section
-			{
+		// const num rd = 1.0 + (1.0 - dd[i]) * deld;
+		// const num prob = ru * rd;
+		// const double absprob = fabs(prob);
+		if (rand_doub(rng) < ru*ru*(1.0 + deld)) {
+			// #pragma omp parallel sections
+			// {
+			// #pragma omp section
+			// {
 			for (int j = 0; j < N; j++) au[j + N*k] = gu[j + N*i];
 			for (int j = 0; j < N; j++) bu[j + N*k] = gu[i + N*j];
 			xgemv("N", N, k, 1.0, au, N, bu + i,
@@ -37,50 +36,49 @@ void update_delayed(const int N, const int n_delay, const double *const restrict
 			au[i + N*k] -= 1.0;
 			for (int j = 0; j < N; j++) au[j + N*k] *= delu/ru;
 			for (int j = 0; j < N; j++) du[j] += au[j + N*k] * bu[j + N*k];
-			}
-			#pragma omp section
-			{
-			for (int j = 0; j < N; j++) ad[j + N*k] = gd[j + N*i];
-			for (int j = 0; j < N; j++) bd[j + N*k] = gd[i + N*j];
-			xgemv("N", N, k, 1.0, ad, N, bd + i,
-			      N, 1.0, ad + N*k, 1);
-			xgemv("N", N, k, 1.0, bd, N, ad + i,
-			      N, 1.0, bd + N*k, 1);
-			ad[i + N*k] -= 1.0;
-			for (int j = 0; j < N; j++) ad[j + N*k] *= deld/rd;
-			for (int j = 0; j < N; j++) dd[j] += ad[j + N*k] * bd[j + N*k];
-			}
-			}
+			// }
+			// #pragma omp section
+			// {
+			// for (int j = 0; j < N; j++) ad[j + N*k] = gd[j + N*i];
+			// for (int j = 0; j < N; j++) bd[j + N*k] = gd[i + N*j];
+			// xgemv("N", N, k, 1.0, ad, N, bd + i,
+			//       N, 1.0, ad + N*k, 1);
+			// xgemv("N", N, k, 1.0, bd, N, ad + i,
+			//       N, 1.0, bd + N*k, 1);
+			// ad[i + N*k] -= 1.0;
+			// for (int j = 0; j < N; j++) ad[j + N*k] *= deld/rd;
+			// for (int j = 0; j < N; j++) dd[j] += ad[j + N*k] * bd[j + N*k];
+			// }
+			// }
 			k++;
 			hs[i] = !hs[i];
-			*phase *= prob/absprob;
 		}
 		if (k == n_delay) {
 			k = 0;
-			#pragma omp parallel sections
-			{
-			#pragma omp section
-			{
+			// #pragma omp parallel sections
+			// {
+			// #pragma omp section
+			// {
 			xgemm("N", "T", N, N, n_delay, 1.0,
 			      au, N, bu, N, 1.0, gu, N);
 			for (int j = 0; j < N; j++) du[j] = gu[j + N*j];
-			}
-			#pragma omp section
-			{
-			xgemm("N", "T", N, N, n_delay, 1.0,
-			      ad, N, bd, N, 1.0, gd, N);
-			for (int j = 0; j < N; j++) dd[j] = gd[j + N*j];
-			}
-			}
+			// }
+			// #pragma omp section
+			// {
+			// xgemm("N", "T", N, N, n_delay, 1.0,
+			//       ad, N, bd, N, 1.0, gd, N);
+			// for (int j = 0; j < N; j++) dd[j] = gd[j + N*j];
+			// }
+			// }
 		}
 	}
-	#pragma omp parallel sections
-	{
-	#pragma omp section
+	// #pragma omp parallel sections
+	// {
+	// #pragma omp section
 	xgemm("N", "T", N, N, k, 1.0, au, N, bu, N, 1.0, gu, N);
-	#pragma omp section
-	xgemm("N", "T", N, N, k, 1.0, ad, N, bd, N, 1.0, gd, N);
-	}
+	// #pragma omp section
+	// xgemm("N", "T", N, N, k, 1.0, ad, N, bd, N, 1.0, gd, N);
+	// }
 }
 
 /*

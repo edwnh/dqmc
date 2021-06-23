@@ -24,11 +24,13 @@
 #define pdj1j0 1
 #endif
 
-void measure_eqlt(const struct params *const restrict p, const num phase,
+void measure_eqlt(const struct params *const restrict p,// const num phase,
 		const num *const restrict gu,
-		const num *const restrict gd,
+		// const num *const restrict gd,
 		struct meas_eqlt *const restrict m)
 {
+#define gd gu // too lazy to edit code
+	const num phase = 1;
 	m->n_sample++;
 	m->sign += phase;
 	const int N = p->N, num_i = p->num_i, num_ij = p->num_ij;
@@ -172,17 +174,22 @@ void measure_eqlt(const struct params *const restrict p, const num phase,
 		                 *(puj1j0*guj0j1 + puj0j1*guj1j0 + pdj1j0*gdj0j1 + pdj0j1*gdj1j0) + x + y);
 	}
 	}
+#undef gd
 }
 
-void measure_uneqlt(const struct params *const restrict p, const num phase,
+void measure_uneqlt(const struct params *const restrict p,// const num phase,
 		const num *const Gu0t,
 		const num *const Gutt,
 		const num *const Gut0,
-		const num *const Gd0t,
-		const num *const Gdtt,
-		const num *const Gdt0,
+		// const num *const Gd0t,
+		// const num *const Gdtt,
+		// const num *const Gdt0,
 		struct meas_uneqlt *const restrict m)
 {
+#define Gd0t Gu0t // too lazy to edit code
+#define Gdtt Gutt
+#define Gdt0 Gut0
+	const num phase = 1;
 	m->n_sample++;
 	m->sign += phase;
 	const int N = p->N, L = p->L, num_i = p->num_i, num_ij = p->num_ij;
