@@ -63,5 +63,5 @@ def jackknife_noniid(*args, f=lambda n, ns, nsx: (nsx.T/ns.T).T.real):
     res_jk = f(*(s - a for s, a in zip(sums, args)))
     m = sums[0] - args[0]
     res_jk_mean = (m * res_jk.T).T.sum(0)/m.sum()
-    res_jk_var = (m*m/args[0] * ((res_jk - res_jk_mean)**2).T).T.sum(0)/m.sum()
+    res_jk_var = (m*(m/args[0]) * ((res_jk - res_jk_mean)**2).T).T.sum(0)/m.sum()
     return np.stack((res_all, res_jk_var**0.5))
