@@ -226,7 +226,7 @@ static void push_stack(const char *file, const char *line)
 		backup = my_calloc(len_file + 32);
 		snprintf(backup, len_file + 32, "%s_%.20s_%d", file, hostname, pid);
 
-		const int bfd = open(backup, O_CREAT | O_WRONLY | O_APPEND);
+		const int bfd = open(backup, O_CREAT | O_WRONLY | O_APPEND, 0644);
 		if (bfd == -1)
 			status |= 1;
 		else {
