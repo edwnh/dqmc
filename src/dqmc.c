@@ -109,7 +109,7 @@ static int dqmc(struct sim_data *sim)
 	num *const restrict gdacc = my_calloc(N*N * sizeof(num));
 	#endif
 	num phase;
-	int *const site_order = my_calloc(N * sizeof(double));
+	int *const site_order = my_calloc(N * sizeof(int));
 
 	// work arrays for calc_eq_g and stuff. two sets for easy 2x parallelization
 	num *const restrict tmpNN1u = my_calloc(N*N * sizeof(num));
