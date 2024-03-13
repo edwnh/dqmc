@@ -227,9 +227,9 @@ def measure_eqlt(params, sign, Gu, Gd, meas):
             # meas["pair_sw"][r] += pre*(delta*(1. - Guii - Gdii) + 2.*Guij*Gdij)
 
 
-def measure_uneqlt(params, sign, Gu, Gd, meas):
-    meas["n_sample"] += 1
-    meas["sign"] += sign
+# def measure_uneqlt(params, sign, Gu, Gd, meas):
+#     meas["n_sample"] += 1
+#     meas["sign"] += sign
 
 
 def dqmc(params, state, meas_eqlt, meas_uneqlt):
@@ -243,21 +243,21 @@ def dqmc(params, state, meas_eqlt, meas_uneqlt):
     for f in range(params["F"]):
         l = f*params["n_matmul"]
         exp_Vu = params["exp_lambda"][state["hs"][l, :], arangeN]
-        Bu[l, :, :] = params["exp_K"] * exp_Vu
+        Bu[l, :, :] = params["exp_Ku"] * exp_Vu
         Cu[f, :, :] = Bu[l, :, :]
         for l in range(f*params["n_matmul"] + 1, (f + 1)*params["n_matmul"]):
             exp_Vu = params["exp_lambda"][state["hs"][l, :], arangeN]
-            Bu[l, :, :] = params["exp_K"] * exp_Vu
+            Bu[l, :, :] = params["exp_Ku"] * exp_Vu
             Cu[f, :, :] = np.dot(Bu[l, :, :], Cu[f, :, :])
 
     for f in range(params["F"]):
         l = f*params["n_matmul"]
         exp_Vd = params["exp_lambda"][1-state["hs"][l, :], arangeN]
-        Bd[l, :, :] = params["exp_K"] * exp_Vd
+        Bd[l, :, :] = params["exp_Kd"] * exp_Vd
         Cd[f, :, :] = Bd[l, :, :]
         for l in range(f*params["n_matmul"] + 1, (f + 1)*params["n_matmul"]):
             exp_Vd = params["exp_lambda"][1-state["hs"][l, :], arangeN]
-            Bd[l, :, :] = params["exp_K"] * exp_Vd
+            Bd[l, :, :] = params["exp_Kd"] * exp_Vd
             Cd[f, :, :] = np.dot(Bd[l, :, :], Cd[f, :, :])
 
     Gu = np.zeros((params["N"], params["N"]))
@@ -269,7 +269,7 @@ def dqmc(params, state, meas_eqlt, meas_uneqlt):
     for state["sweep"] in range(state["sweep"], params["n_sweep"]):
         warmed_up = state["sweep"] >= params["n_sweep_warm"]
         enabled_eqlt = warmed_up and params["period_eqlt"] > 0
-        enabled_uneqlt = warmed_up and params["period_uneqlt"] > 0
+        # enabled_uneqlt = warmed_up and params["period_uneqlt"] > 0
 
         for l in range(params["L"]):
             # updates
@@ -280,14 +280,14 @@ def dqmc(params, state, meas_eqlt, meas_uneqlt):
             f = l // params["n_matmul"]
 
             exp_Vu = params["exp_lambda"][state["hs"][l, :], arangeN]
-            Bu[l, :, :] = params["exp_K"] * exp_Vu
+            Bu[l, :, :] = params["exp_Ku"] * exp_Vu
             if l % params["n_matmul"] == 0:
                 Cu[f, :, :] = Bu[l, :, :]
             else:
                 Cu[f, :, :] = np.dot(Bu[l, :, :], Cu[f, :, :])
 
             exp_Vd = params["exp_lambda"][1-state["hs"][l, :], arangeN]
-            Bd[l, :, :] = params["exp_K"] * exp_Vd
+            Bd[l, :, :] = params["exp_Kd"] * exp_Vd
             if l % params["n_matmul"] == 0:
                 Cd[f, :, :] = Bd[l, :, :]
             else:
@@ -311,17 +311,19 @@ def dqmc(params, state, meas_eqlt, meas_uneqlt):
                 # print("Guwrp - Guacc:\tmax {:.3e}\tavg {:.3e}".format(np.max(np.abs(Guwrp-Guacc)), np.mean(np.abs(Guwrp-Guacc))))
                 # print("Gdwrp - Gdacc:\tmax {:.3e}\tavg {:.3e}".format(np.max(np.abs(Gdwrp-Gdacc)), np.mean(np.abs(Gdwrp-Gdacc))))
             else:  # wrap
-                invBlu = exp_Vd[None].T * params["inv_exp_K"]
+                invBlu = exp_Vd[None].T * params["inv_exp_Ku"]
                 np.dot(np.dot(Bu[l, :, :], Gu), invBlu, out=Gu)
-                invBld = exp_Vu[None].T * params["inv_exp_K"]
+                invBld = exp_Vu[None].T * params["inv_exp_Kd"]
                 np.dot(np.dot(Bd[l, :, :], Gd), invBld, out=Gd)
 
             # eqlt meas
             if enabled_eqlt and (l + 1) % params["period_eqlt"] == 0:
-                measure_eqlt(params, sign, Gu, Gd, meas_eqlt)
+                Gu_half = np.dot(params["inv_exp_halfKu"], np.dot(Gu, params["exp_halfKu"]))
+                Gd_half = np.dot(params["inv_exp_halfKd"], np.dot(Gd, params["exp_halfKd"]))
+                measure_eqlt(params, sign, Gu_half, Gd_half, meas_eqlt)
         # uneqlt meas
-        if enabled_uneqlt and state["sweep"] % params["period_uneqlt"] == 0:
-            measure_uneqlt(params, sign, Gu, Gd, meas_uneqlt)
+        # if enabled_uneqlt and state["sweep"] % params["period_uneqlt"] == 0:
+        #     measure_uneqlt(params, sign, Gu, Gd, meas_uneqlt)
     state["sweep"] += 1  # for i in range(...) doesn't increment at the end
 
 
@@ -356,9 +358,9 @@ def main(argv):
             v[...] = state[k]
         for k, v in f["meas_eqlt"].items():
             v[...] = meas_eqlt[k]
-        if params["period_uneqlt"] > 0:
-            for k, v in f["meas_uneqlt"].items():
-                v[...] = meas_uneqlt[k]
+        # if params["period_uneqlt"] > 0:
+        #     for k, v in f["meas_uneqlt"].items():
+        #         v[...] = meas_uneqlt[k]
 
     print("wall time:", time.time() - start_time)
 
