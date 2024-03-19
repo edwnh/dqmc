@@ -76,9 +76,10 @@ static int dqmc(struct sim_data *sim)
 {
 	const int N = sim->p.N;
 	const int L = sim->p.L;
+	const int F = sim->p.F;
+	const int E = 1 + (F - 1) / N_MUL;
 	const int n_matmul = sim->p.n_matmul;
 	const int n_delay = sim->p.n_delay;
-	const int F = sim->p.F;
 	const num *const restrict exp_Ku = sim->p.exp_Ku;
 	const num *const restrict exp_Kd = sim->p.exp_Kd;
 	const num *const restrict inv_exp_Ku = sim->p.inv_exp_Ku;
@@ -89,48 +90,68 @@ static int dqmc(struct sim_data *sim)
 	const num *const restrict inv_exp_halfKd = sim->p.inv_exp_halfKd;
 	const double *const restrict exp_lambda = sim->p.exp_lambda;
 	const double *const restrict del = sim->p.del;
+
 	uint64_t *const restrict rng = sim->s.rng;
 	int *const restrict hs = sim->s.hs;
 
-	num *const Bu = my_calloc(N*N*L * sizeof(num));
-	num *const Bd = my_calloc(N*N*L * sizeof(num));
-	num *const iBu = my_calloc(N*N*L * sizeof(num));
-	num *const iBd = my_calloc(N*N*L * sizeof(num));
-	num *const Cu = my_calloc(N*N*F * sizeof(num));
-	num *const Cd = my_calloc(N*N*F * sizeof(num));
-	num *const restrict gu = my_calloc(N*N * sizeof(num));
-	num *const restrict gd = my_calloc(N*N * sizeof(num));
-	#ifdef CHECK_G_WRP
-	num *const restrict guwrp = my_calloc(N*N * sizeof(num));
-	num *const restrict gdwrp = my_calloc(N*N * sizeof(num));
-	#endif
-	#ifdef CHECK_G_ACC
-	num *const restrict guacc = my_calloc(N*N * sizeof(num));
-	num *const restrict gdacc = my_calloc(N*N * sizeof(num));
-	#endif
 	num phase;
-	int *const site_order = my_calloc(N * sizeof(double));
+
+	// lapack work array size
+	int lwork = get_lwork_eq_g(N);
+	if (sim->p.period_uneqlt > 0) {
+		const int lwork_ue = get_lwork_ue_g(N, E);
+		if (lwork_ue > lwork) lwork = lwork_ue;
+	}
+
+	size_t mem_pool_size_per_spin = (
+		2*N*N*L * sizeof(num) +
+        N*N*F * sizeof(num) +
+        3*N*N * sizeof(num) +
+        3*N * sizeof(num) +
+        N * sizeof(int) +
+        lwork * sizeof(num)
+    ) + (sim->p.period_uneqlt > 0) * (
+        N*E*N*E * sizeof(num) +
+        N*E * sizeof(num) +
+        4*N*N * sizeof(num) +
+        3*N*N*L * sizeof(num)
+    );
+    struct mem_pool *mp = pool_new(N * sizeof(int) + 2*mem_pool_size_per_spin);
+
+	int *const site_order = pool_alloc(mp, N * sizeof(int));
+
+	num *const iBu = pool_alloc(mp, N*N*L * sizeof(num));
+	num *const Bu = pool_alloc(mp, N*N*L * sizeof(num));
+	num *const Cu = pool_alloc(mp, N*N*F * sizeof(num));
+	num *const restrict gu = pool_alloc(mp, N*N * sizeof(num));
+
+	num *const iBd = pool_alloc(mp, N*N*L * sizeof(num));
+	num *const Bd = pool_alloc(mp, N*N*L * sizeof(num));
+	num *const Cd = pool_alloc(mp, N*N*F * sizeof(num));
+	num *const restrict gd = pool_alloc(mp, N*N * sizeof(num));
 
 	// work arrays for calc_eq_g and stuff. two sets for easy 2x parallelization
-	num *const restrict tmpNN1u = my_calloc(N*N * sizeof(num));
-	num *const restrict tmpNN2u = my_calloc(N*N * sizeof(num));
-	num *const restrict tmpN1u = my_calloc(N * sizeof(num));
-	num *const restrict tmpN2u = my_calloc(N * sizeof(num));
-	num *const restrict tmpN3u = my_calloc(N * sizeof(num));
-	int *const restrict pvtu = my_calloc(N * sizeof(int));
+	num *const restrict tmpNN1u = pool_alloc(mp, N*N * sizeof(num));
+	num *const restrict tmpNN2u = pool_alloc(mp, N*N * sizeof(num));
+	num *const restrict tmpN1u = pool_alloc(mp, N * sizeof(num));
+	num *const restrict tmpN2u = pool_alloc(mp, N * sizeof(num));
+	num *const restrict tmpN3u = pool_alloc(mp, N * sizeof(num));
+	int *const restrict pvtu = pool_alloc(mp, N * sizeof(int));
 
-	num *const restrict tmpNN1d = my_calloc(N*N * sizeof(num));
-	num *const restrict tmpNN2d = my_calloc(N*N * sizeof(num));
-	num *const restrict tmpN1d = my_calloc(N * sizeof(num));
-	num *const restrict tmpN2d = my_calloc(N * sizeof(num));
-	num *const restrict tmpN3d = my_calloc(N * sizeof(num));
-	int *const restrict pvtd = my_calloc(N * sizeof(int));
+	num *const restrict tmpNN1d = pool_alloc(mp, N*N * sizeof(num));
+	num *const restrict tmpNN2d = pool_alloc(mp, N*N * sizeof(num));
+	num *const restrict tmpN1d = pool_alloc(mp, N * sizeof(num));
+	num *const restrict tmpN2d = pool_alloc(mp, N * sizeof(num));
+	num *const restrict tmpN3d = pool_alloc(mp, N * sizeof(num));
+	int *const restrict pvtd = pool_alloc(mp, N * sizeof(int));
+
+	num *const restrict worku = pool_alloc(mp, lwork * sizeof(num));
+	num *const restrict workd = pool_alloc(mp, lwork * sizeof(num));
 
 	// arrays for calc_ue_g
 	num *restrict Gu0t = NULL;
 	num *restrict Gutt = NULL;
 	num *restrict Gut0 = NULL;
-	// num *restrict ueGu = NULL;
 	num *restrict Gredu = NULL;
 	num *restrict tauu = NULL;
 	num *restrict Qu = NULL;
@@ -138,42 +159,26 @@ static int dqmc(struct sim_data *sim)
 	num *restrict Gd0t = NULL;
 	num *restrict Gdtt = NULL;
 	num *restrict Gdt0 = NULL;
-	// num *restrict ueGd = NULL;
 	num *restrict Gredd = NULL;
 	num *restrict taud = NULL;
 	num *restrict Qd = NULL;
 
 	if (sim->p.period_uneqlt > 0) {
-		const int E = 1 + (F - 1) / N_MUL;
+		Gredu = pool_alloc(mp, N*E*N*E * sizeof(num));
+		tauu = pool_alloc(mp, N*E * sizeof(num));
+		Qu = pool_alloc(mp, 4*N*N * sizeof(num));
 
-		Gredu = my_calloc(N*E*N*E * sizeof(num));
-		tauu = my_calloc(N*E * sizeof(num));
-		Qu = my_calloc(4*N*N * sizeof(num));
+		Gredd = pool_alloc(mp, N*E*N*E * sizeof(num));
+		taud = pool_alloc(mp, N*E * sizeof(num));
+		Qd = pool_alloc(mp, 4*N*N * sizeof(num));
 
-		Gredd = my_calloc(N*E*N*E * sizeof(num));
-		taud = my_calloc(N*E * sizeof(num));
-		Qd = my_calloc(4*N*N * sizeof(num));
-
-		Gu0t = my_calloc(N*N*L * sizeof(num));
-		Gutt = my_calloc(N*N*L * sizeof(num));
-		Gut0 = my_calloc(N*N*L * sizeof(num));
-		Gd0t = my_calloc(N*N*L * sizeof(num));
-		Gdtt = my_calloc(N*N*L * sizeof(num));
-		Gdt0 = my_calloc(N*N*L * sizeof(num));
-		// ueGu = my_calloc(N*N*L*L * sizeof(num));
-		// ueGd = my_calloc(N*N*L*L * sizeof(num));
-		// if (ueGu == NULL || ueGd == NULL) return -1;
+		Gu0t = pool_alloc(mp, N*N*L * sizeof(num));
+		Gutt = pool_alloc(mp, N*N*L * sizeof(num));
+		Gut0 = pool_alloc(mp, N*N*L * sizeof(num));
+		Gd0t = pool_alloc(mp, N*N*L * sizeof(num));
+		Gdtt = pool_alloc(mp, N*N*L * sizeof(num));
+		Gdt0 = pool_alloc(mp, N*N*L * sizeof(num));
 	}
-
-	// lapack work arrays
-	int lwork = get_lwork_eq_g(N);
-	if (sim->p.period_uneqlt > 0) {
-		const int E = 1 + (F - 1) / N_MUL;
-		const int lwork_ue = get_lwork_ue_g(N, E);
-		if (lwork_ue > lwork) lwork = lwork_ue;
-	}
-	num *const restrict worku = my_calloc(lwork * sizeof(num));
-	num *const restrict workd = my_calloc(lwork * sizeof(num));
 
 	{
 	num phaseu, phased;
@@ -249,17 +254,6 @@ static int dqmc(struct sim_data *sim)
 				        1.0, Bu, Cuf, N, tmpNN1u);
 				profile_end(multb);
 				profile_begin(recalc);
-				#ifdef CHECK_G_WRP
-				if (sim->p.period_uneqlt == 0)
-					calciBu(iBu + N*N*l, l);
-				matmul(tmpNN1u, gu, iBu + N*N*l);
-				matmul(guwrp, Bu + N*N*l, tmpNN1u);
-				#endif
-				#ifdef CHECK_G_ACC
-				calc_eq_g((l + 1) % L, N, L, 1, Bu, guacc,
-				          tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
-				          tmpN3u, pvtu, worku, lwork);
-				#endif
 				phaseu = calc_eq_g((f + 1) % F, N, F, N_MUL, Cu, gu,
 				                  tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
 				                  tmpN3u, pvtu, worku, lwork);
@@ -287,17 +281,6 @@ static int dqmc(struct sim_data *sim)
 				        1.0, Bd, Cdf, N, tmpNN1d);
 				profile_end(multb);
 				profile_begin(recalc);
-				#ifdef CHECK_G_WRP
-				if (sim->p.period_uneqlt == 0)
-					calciBd(iBd + N*N*l, l);
-				matmul(tmpNN1d, gd, iBd + N*N*l);
-				matmul(gdwrp, Bd + N*N*l, tmpNN1d);
-				#endif
-				#ifdef CHECK_G_ACC
-				calc_eq_g((l + 1) % L, N, L, 1, Bd, gdacc,
-				          tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
-				          tmpN3d, pvtd, workd, lwork);
-				#endif
 				phased = calc_eq_g((f + 1) % F, N, F, N_MUL, Cd, gd,
 				                  tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
 				                  tmpN3d, pvtd, workd, lwork);
@@ -310,25 +293,6 @@ static int dqmc(struct sim_data *sim)
 			}
 			}
 			}
-
-			#ifdef CHECK_G_WRP
-			if (recalc) {
-				matdiff(N, N, gu, N, guwrp, N);
-				matdiff(N, N, gd, N, gdwrp, N);
-			}
-			#endif
-			#ifdef CHECK_G_ACC
-			if (recalc) {
-				matdiff(N, N, gu, N, guacc, N);
-				matdiff(N, N, gd, N, gdacc, N);
-			}
-			#endif
-			#if defined(CHECK_G_WRP) && defined(CHECK_G_ACC)
-			if (recalc) {
-				matdiff(N, N, guwrp, N, guacc, N);
-				matdiff(N, N, gdwrp, N, gdacc, N);
-			}
-			#endif
 
 			if (recalc) phase = phaseu*phased;
 
@@ -370,15 +334,6 @@ static int dqmc(struct sim_data *sim)
 			calc_ue_g(N, L, F, N_MUL, Bd, iBd, Cd, Gd0t, Gdtt, Gdt0,
 			          Gredd, taud, Qd, workd, lwork);
 			}
-
-			#ifdef CHECK_G_UE
-			matdiff(N, N, gu, N, Gutt, N);
-			matdiff(N, N, gd, N, Gdtt, N);
-			#endif
-			#if defined(CHECK_G_UE) && defined(CHECK_G_ACC)
-			matdiff(N, N, Gutt, N, guacc, N);
-			matdiff(N, N, Gdtt, N, gdacc, N);
-			#endif
 
 			#pragma omp parallel sections
 			{
@@ -423,80 +378,10 @@ static int dqmc(struct sim_data *sim)
 			               Gu0t, Gutt, Gut0, Gd0t, Gdtt, Gdt0,
 			               &sim->m_ue);
 			profile_end(meas_uneq);
-			// #pragma omp parallel sections
-			// {
-			// #pragma omp section
-			// calc_ue_g(N, L, F, N_MUL, Bu, iBu, Cu,
-			          // ueGu, Gredu, tauu, Qu, worku, lwork);
-			// #pragma omp section
-			// calc_ue_g(N, L, F, N_MUL, Bd, iBd, Cd,
-			          // ueGd, Gredd, taud, Qd, workd, lwork);
-			// }
-
-			// #ifdef CHECK_G_UE
-			// matdiff(N, N, gu, N, ueGu, N);
-			// matdiff(N, N, gd, N, ueGd, N);
-			// #endif
-			// #if defined(CHECK_G_UE) && defined(CHECK_G_ACC)
-			// matdiff(N, N, ueGu, N, guacc, N);
-			// matdiff(N, N, ueGd, N, gdacc, N);
-			// #endif
-
-			// profile_begin(meas_uneq);
-			// measure_uneqlt(&sim->p, sign, ueGu, ueGd, &sim->m_ue);
-			// profile_end(meas_uneq);
 		}
 	}
 
-
-	my_free(workd);
-	my_free(worku);
-	if (sim->p.period_uneqlt > 0) {
-		my_free(Qd);
-		my_free(taud);
-		my_free(Gredd);
-		// my_free(ueGd);
-		my_free(Gdt0);
-		my_free(Gdtt);
-		my_free(Gd0t);
-		my_free(Qu);
-		my_free(tauu);
-		my_free(Gredu);
-		// my_free(ueGu);
-		my_free(Gut0);
-		my_free(Gutt);
-		my_free(Gu0t);
-	}
-	my_free(pvtd);
-	my_free(tmpN3d);
-	my_free(tmpN2d);
-	my_free(tmpN1d);
-	my_free(tmpNN2d);
-	my_free(tmpNN1d);
-	my_free(pvtu);
-	my_free(tmpN3u);
-	my_free(tmpN2u);
-	my_free(tmpN1u);
-	my_free(tmpNN2u);
-	my_free(tmpNN1u);
-	my_free(site_order);
-	#ifdef CHECK_G_ACC
-	my_free(gdacc);
-	my_free(guacc);
-	#endif
-	#ifdef CHECK_G_WRP
-	my_free(gdwrp);
-	my_free(guwrp);
-	#endif
-	my_free(gd);
-	my_free(gu);
-	my_free(Cd);
-	my_free(Cu);
-	my_free(iBd);
-	my_free(iBu);
-	my_free(Bd);
-	my_free(Bu);
-
+	pool_free(mp);
 	return 0;
 }
 

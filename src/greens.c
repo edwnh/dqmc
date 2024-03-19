@@ -4,6 +4,7 @@
 #include "linalg.h"
 #include "prof.h"
 #include "util.h"
+#include "mem.h"
 
 void mul_seq(const int N, const int L,
 		const int min, const int maxp1,

@@ -3,6 +3,7 @@
 #include <hdf5.h>
 #include <hdf5_hl.h>
 #include "util.h"
+#include "mem.h"
 
 #define return_if(cond, val, ...) \
 	do {if (cond) {fprintf(stderr, __VA_ARGS__); return (val);}} while (0)
@@ -46,73 +47,76 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	my_read(_int, "/params/meas_energy_corr", &sim->p.meas_energy_corr);
 	my_read(_int, "/params/meas_nematic_corr", &sim->p.meas_nematic_corr);
 
+	my_read(_int, "/params/mem_pool_size", &sim->p.mem_pool_size);
+
 	const int N = sim->p.N, L = sim->p.L;
 	const int num_i = sim->p.num_i, num_ij = sim->p.num_ij;
 	const int num_b = sim->p.num_b, num_bs = sim->p.num_bs, num_bb = sim->p.num_bb;
 
-	sim->p.map_i         = my_calloc(N        * sizeof(int));
-	sim->p.map_ij        = my_calloc(N*N      * sizeof(int));
-	sim->p.bonds         = my_calloc(num_b*2  * sizeof(int));
-	sim->p.map_bs        = my_calloc(num_b*N  * sizeof(int));
-	sim->p.map_bb        = my_calloc(num_b*num_b * sizeof(int));
-	sim->p.peierlsu      = my_calloc(N*N      * sizeof(num));
-	sim->p.peierlsd      = my_calloc(N*N      * sizeof(num));
-//	sim->p.K             = my_calloc(N*N      * sizeof(double));
-//	sim->p.U             = my_calloc(num_i    * sizeof(double));
-	sim->p.degen_i       = my_calloc(num_i    * sizeof(int));
-	sim->p.degen_ij      = my_calloc(num_ij   * sizeof(int));
-	sim->p.degen_bs      = my_calloc(num_bs   * sizeof(int));
-	sim->p.degen_bb      = my_calloc(num_bb   * sizeof(int));
-	sim->p.exp_Ku        = my_calloc(N*N      * sizeof(num));
-	sim->p.exp_Kd        = my_calloc(N*N      * sizeof(num));
-	sim->p.inv_exp_Ku    = my_calloc(N*N      * sizeof(num));
-	sim->p.inv_exp_Kd    = my_calloc(N*N      * sizeof(num));
-	sim->p.exp_halfKu    = my_calloc(N*N      * sizeof(num));
-	sim->p.exp_halfKd    = my_calloc(N*N      * sizeof(num));
-	sim->p.inv_exp_halfKu= my_calloc(N*N      * sizeof(num));
-	sim->p.inv_exp_halfKd= my_calloc(N*N      * sizeof(num));
-	sim->p.exp_lambda    = my_calloc(N*2      * sizeof(double));
-	sim->p.del           = my_calloc(N*2      * sizeof(double));
-	sim->s.hs            = my_calloc(N*L      * sizeof(int));
-	sim->m_eq.density    = my_calloc(num_i    * sizeof(num));
-	sim->m_eq.double_occ = my_calloc(num_i    * sizeof(num));
-	sim->m_eq.g00        = my_calloc(num_ij   * sizeof(num));
-	sim->m_eq.nn         = my_calloc(num_ij   * sizeof(num));
-	sim->m_eq.xx         = my_calloc(num_ij   * sizeof(num));
-	sim->m_eq.zz         = my_calloc(num_ij   * sizeof(num));
-	sim->m_eq.pair_sw    = my_calloc(num_ij   * sizeof(num));
+	sim->mp = pool_new(sim->p.mem_pool_size);
+
+	sim->p.map_i         = pool_alloc(sim->mp, N        * sizeof(int));
+	sim->p.map_ij        = pool_alloc(sim->mp, N*N      * sizeof(int));
+	sim->p.bonds         = pool_alloc(sim->mp, num_b*2  * sizeof(int));
+	sim->p.map_bs        = pool_alloc(sim->mp, num_b*N  * sizeof(int));
+	sim->p.map_bb        = pool_alloc(sim->mp, num_b*num_b * sizeof(int));
+	sim->p.peierlsu      = pool_alloc(sim->mp, N*N      * sizeof(num));
+	sim->p.peierlsd      = pool_alloc(sim->mp, N*N      * sizeof(num));
+//	sim->p.K             = pool_alloc(sim->mp, N*N      * sizeof(double));
+//	sim->p.U             = pool_alloc(sim->mp, num_i    * sizeof(double));
+	sim->p.degen_i       = pool_alloc(sim->mp, num_i    * sizeof(int));
+	sim->p.degen_ij      = pool_alloc(sim->mp, num_ij   * sizeof(int));
+	sim->p.degen_bs      = pool_alloc(sim->mp, num_bs   * sizeof(int));
+	sim->p.degen_bb      = pool_alloc(sim->mp, num_bb   * sizeof(int));
+	sim->p.exp_lambda    = pool_alloc(sim->mp, N*2      * sizeof(double));
+	sim->p.exp_Ku        = pool_alloc(sim->mp, N*N      * sizeof(num));
+	sim->p.exp_Kd        = pool_alloc(sim->mp, N*N      * sizeof(num));
+	sim->p.inv_exp_Ku    = pool_alloc(sim->mp, N*N      * sizeof(num));
+	sim->p.inv_exp_Kd    = pool_alloc(sim->mp, N*N      * sizeof(num));
+	sim->p.exp_halfKu    = pool_alloc(sim->mp, N*N      * sizeof(num));
+	sim->p.exp_halfKd    = pool_alloc(sim->mp, N*N      * sizeof(num));
+	sim->p.inv_exp_halfKu= pool_alloc(sim->mp, N*N      * sizeof(num));
+	sim->p.inv_exp_halfKd= pool_alloc(sim->mp, N*N      * sizeof(num));
+	sim->p.del           = pool_alloc(sim->mp, N*2      * sizeof(double));
+	sim->s.hs            = pool_alloc(sim->mp, N*L      * sizeof(int));
+	sim->m_eq.density    = pool_alloc(sim->mp, num_i    * sizeof(num));
+	sim->m_eq.double_occ = pool_alloc(sim->mp, num_i    * sizeof(num));
+	sim->m_eq.g00        = pool_alloc(sim->mp, num_ij   * sizeof(num));
+	sim->m_eq.nn         = pool_alloc(sim->mp, num_ij   * sizeof(num));
+	sim->m_eq.xx         = pool_alloc(sim->mp, num_ij   * sizeof(num));
+	sim->m_eq.zz         = pool_alloc(sim->mp, num_ij   * sizeof(num));
+	sim->m_eq.pair_sw    = pool_alloc(sim->mp, num_ij   * sizeof(num));
 	if (sim->p.meas_energy_corr) {
-		sim->m_eq.kk = my_calloc(num_bb * sizeof(num));
-		sim->m_eq.kv = my_calloc(num_bs * sizeof(num));
-		sim->m_eq.kn = my_calloc(num_bs * sizeof(num));
-		sim->m_eq.vv = my_calloc(num_ij * sizeof(num));
-		sim->m_eq.vn = my_calloc(num_ij * sizeof(num));
+		sim->m_eq.kk = pool_alloc(sim->mp, num_bb * sizeof(num));
+		sim->m_eq.kv = pool_alloc(sim->mp, num_bs * sizeof(num));
+		sim->m_eq.kn = pool_alloc(sim->mp, num_bs * sizeof(num));
+		sim->m_eq.vv = pool_alloc(sim->mp, num_ij * sizeof(num));
+		sim->m_eq.vn = pool_alloc(sim->mp, num_ij * sizeof(num));
 	}
 	if (sim->p.period_uneqlt > 0) {
-		sim->m_ue.gt0     = my_calloc(num_ij*L * sizeof(num));
-		sim->m_ue.nn      = my_calloc(num_ij*L * sizeof(num));
-		sim->m_ue.xx      = my_calloc(num_ij*L * sizeof(num));
-		sim->m_ue.zz      = my_calloc(num_ij*L * sizeof(num));
-		sim->m_ue.pair_sw = my_calloc(num_ij*L * sizeof(num));
+		sim->m_ue.gt0     = pool_alloc(sim->mp, num_ij*L * sizeof(num));
+		sim->m_ue.nn      = pool_alloc(sim->mp, num_ij*L * sizeof(num));
+		sim->m_ue.xx      = pool_alloc(sim->mp, num_ij*L * sizeof(num));
+		sim->m_ue.zz      = pool_alloc(sim->mp, num_ij*L * sizeof(num));
+		sim->m_ue.pair_sw = pool_alloc(sim->mp, num_ij*L * sizeof(num));
 		if (sim->p.meas_bond_corr) {
-			sim->m_ue.pair_bb = my_calloc(num_bb*L * sizeof(num));
-			sim->m_ue.jj      = my_calloc(num_bb*L * sizeof(num));
-			sim->m_ue.jsjs    = my_calloc(num_bb*L * sizeof(num));
-			sim->m_ue.kk      = my_calloc(num_bb*L * sizeof(num));
-			sim->m_ue.ksks    = my_calloc(num_bb*L * sizeof(num));
+			sim->m_ue.pair_bb = pool_alloc(sim->mp, num_bb*L * sizeof(num));
+			sim->m_ue.jj      = pool_alloc(sim->mp, num_bb*L * sizeof(num));
+			sim->m_ue.jsjs    = pool_alloc(sim->mp, num_bb*L * sizeof(num));
+			sim->m_ue.kk      = pool_alloc(sim->mp, num_bb*L * sizeof(num));
+			sim->m_ue.ksks    = pool_alloc(sim->mp, num_bb*L * sizeof(num));
 		}
 		if (sim->p.meas_energy_corr) {
-			sim->m_ue.kv      = my_calloc(num_bs*L * sizeof(num));
-			sim->m_ue.kn      = my_calloc(num_bs*L * sizeof(num));
-			sim->m_ue.vv      = my_calloc(num_ij*L * sizeof(num));
-			sim->m_ue.vn      = my_calloc(num_ij*L * sizeof(num));
+			sim->m_ue.kv      = pool_alloc(sim->mp, num_bs*L * sizeof(num));
+			sim->m_ue.kn      = pool_alloc(sim->mp, num_bs*L * sizeof(num));
+			sim->m_ue.vv      = pool_alloc(sim->mp, num_ij*L * sizeof(num));
+			sim->m_ue.vn      = pool_alloc(sim->mp, num_ij*L * sizeof(num));
 		}
 		if (sim->p.meas_nematic_corr) {
-			sim->m_ue.nem_nnnn = my_calloc(num_bb*L * sizeof(num));
-			sim->m_ue.nem_ssss = my_calloc(num_bb*L * sizeof(num));
+			sim->m_ue.nem_nnnn = pool_alloc(sim->mp, num_bb*L * sizeof(num));
+			sim->m_ue.nem_ssss = pool_alloc(sim->mp, num_bb*L * sizeof(num));
 		}
 	}
-	// make sure anything appended here is free'd in sim_data_free()
 
 	my_read(_int,    "/params/map_i",          sim->p.map_i);
 	my_read(_int,    "/params/map_ij",         sim->p.map_ij);
@@ -268,68 +272,8 @@ int sim_data_save(const struct sim_data *sim)
 	return 0;
 }
 
-void sim_data_free(const struct sim_data *sim)
+void sim_data_free(struct sim_data *sim)
 {
-	if (sim->p.period_uneqlt > 0) {
-		if (sim->p.meas_nematic_corr) {
-			my_free(sim->m_ue.nem_ssss);
-			my_free(sim->m_ue.nem_nnnn);
-		}
-		if (sim->p.meas_energy_corr) {
-			my_free(sim->m_ue.vn);
-			my_free(sim->m_ue.vv);
-			my_free(sim->m_ue.kn);
-			my_free(sim->m_ue.kv);
-		}
-		if (sim->p.meas_bond_corr) {
-			my_free(sim->m_ue.ksks);
-			my_free(sim->m_ue.kk);
-			my_free(sim->m_ue.jsjs);
-			my_free(sim->m_ue.jj);
-			my_free(sim->m_ue.pair_bb);
-		}
-		my_free(sim->m_ue.pair_sw);
-		my_free(sim->m_ue.zz);
-		my_free(sim->m_ue.xx);
-		my_free(sim->m_ue.nn);
-		my_free(sim->m_ue.gt0);
-	}
-	if (sim->p.meas_energy_corr) {
-		my_free(sim->m_eq.vn);
-		my_free(sim->m_eq.vv);
-		my_free(sim->m_eq.kn);
-		my_free(sim->m_eq.kv);
-		my_free(sim->m_eq.kk);
-	}
-	my_free(sim->m_eq.pair_sw);
-	my_free(sim->m_eq.zz);
-	my_free(sim->m_eq.xx);
-	my_free(sim->m_eq.nn);
-	my_free(sim->m_eq.g00);
-	my_free(sim->m_eq.double_occ);
-	my_free(sim->m_eq.density);
-	my_free(sim->s.hs);
-	my_free(sim->p.del);
-	my_free(sim->p.exp_lambda);
-	my_free(sim->p.inv_exp_halfKd);
-	my_free(sim->p.inv_exp_halfKu);
-	my_free(sim->p.exp_halfKd);
-	my_free(sim->p.exp_halfKu);
-	my_free(sim->p.inv_exp_Kd);
-	my_free(sim->p.inv_exp_Ku);
-	my_free(sim->p.exp_Kd);
-	my_free(sim->p.exp_Ku);
-	my_free(sim->p.degen_bb);
-	my_free(sim->p.degen_bs);
-	my_free(sim->p.degen_ij);
-	my_free(sim->p.degen_i);
-//	my_free(sim->p.U);
-//	my_free(sim->p.K);
-	my_free(sim->p.peierlsd);
-	my_free(sim->p.peierlsu);
-	my_free(sim->p.map_bb);
-	my_free(sim->p.map_bs);
-	my_free(sim->p.bonds);
-	my_free(sim->p.map_ij);
-	my_free(sim->p.map_i);
+	pool_free(sim->mp);
+	sim->mp = NULL;
 }

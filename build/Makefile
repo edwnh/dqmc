@@ -10,7 +10,7 @@ CFLAGS += -qopenmp  # to disable openmp, use -qopenmp-stubs
 
 LDFLAGS += -lhdf5 -lhdf5_hl -lmkl_intel_lp64 -lmkl_sequential -lmkl_core
 
-OBJS = data.o dqmc.o greens.o meas.o prof.o sig.o updates.o
+OBJS = data.o dqmc.o greens.o meas.o mem.o prof.o sig.o updates.o
 
 TARGET = dqmc
 

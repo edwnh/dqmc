@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include "util.h"
+#include "mem.h"
 
 struct params {
 	int N, L;
@@ -23,6 +24,8 @@ struct params {
 	num *exp_halfKu, *exp_halfKd, *inv_exp_halfKu, *inv_exp_halfKd;
 	double *exp_lambda, *del;
 	int F, n_sweep;
+
+	int mem_pool_size;
 };
 
 struct state {
@@ -64,6 +67,7 @@ struct meas_uneqlt {
 
 struct sim_data {
 	const char *file;
+	struct mem_pool *mp; // memory pool for everything below
 	struct params p;
 	struct state s;
 	struct meas_eqlt m_eq;
@@ -74,4 +78,4 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file);
 
 int sim_data_save(const struct sim_data *sim);
 
-void sim_data_free(const struct sim_data *sim);
+void sim_data_free(struct sim_data *sim);
