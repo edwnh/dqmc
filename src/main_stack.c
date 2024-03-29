@@ -9,7 +9,6 @@
 #include <unistd.h>
 #include <omp.h>
 #include "dqmc.h"
-#include "util.h"
 #include "mem.h"
 
 #define USE_HARD_LINK

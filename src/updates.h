@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "util.h"
+#include "linalg.h"
 
 void update_delayed(const int N, const int n_delay, const double *const restrict del,
 		const int *const restrict site_order,

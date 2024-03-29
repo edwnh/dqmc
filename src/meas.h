@@ -1,7 +1,7 @@
 #pragma once
 
 #include "data.h"
-#include "util.h"
+#include "linalg.h"
 
 void measure_eqlt(const struct params *const restrict p, const num phase,
 		const num *const restrict gu,

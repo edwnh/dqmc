@@ -1,12 +1,15 @@
 #pragma once
 
 #include <mkl.h>
-#include "util.h"
+#include <tgmath.h>
 
 #ifdef USE_CPLX
+	#include <complex.h>
+	typedef double complex num;
 	#define cast(p) (MKL_Complex16 *)(p)
 	#define ccast(p) (const MKL_Complex16 *)(p)
 #else
+	typedef double num;
 	#define cast(p) (p)
 	#define ccast(p) (p)
 #endif

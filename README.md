@@ -2,22 +2,20 @@
 
 ## Prerequisites
 
-- `git`
+- Linux is the only supported OS at this moment.
 - `make`
-
-### For compilation
-
-- Intel compiler `icc`/`icx`
-- `imkl` headers and libraries
-- `hdf5` headers and libraries
+- Intel compiler `icx`
+- Intel MKL headers and libraries
+- HDF5 headers and libraries
 
 ### For python scripts in `util/`
 - Python 3
 - `numpy`
-- `h5py`
 - `scipy`
+- `h5py`
 
-You can get these via miniconda/anaconda.
+On a local computer: you can get these via Intel oneAPI and miniconda/anaconda.
+On a cluster: these are likely installed already as modules.
 
 ## Compilation
 
@@ -27,7 +25,7 @@ Optionally, replace `-xHost` in Makefile or Makefile.icx with appropriate instru
 
 Mandatory: pick whether to compile with `-DUSE_CPLX`. Real DQMC uses 8 byte`double`, and can only be used with hdf5 files generated with `nflux=0` option, while Complex DQMC uses 16 byte `complex double`, and can only be used with hdf5 files generated with `nflux!=0` option. 
 
-Run `make` if using `icc` or `make -f Makefile.icx` when using `icx`.
+Run `make`.
 
 ## Usage
 
@@ -47,7 +45,7 @@ Run dqmc in stack mode:
 
 ### Outline
 
-1. Generate simulation files using `gen_1band_hub.py` or a similar script. Parameters can be passed through the command line. A list of parameters and their default values can be found in the function definitions of `create_1` and `create_batch` in gen_1band_hub.py.
+1. Generate simulation files using `gen_1band_hub.py` or a similar script. Parameters can be passed through the command line. A list of parameters and their default values can be found in the function definitions of `create_1` and `create_batch` in `util/gen_1band_hub.py`.
 2. Perform the Monte Carlo sweeps using `dqmc_1` (single file mode) or `dqmc_stack` (stack mode).
     1. Single file mode usage: `./build/dqmc_1 [-b] [-l log_file.log] [-t max_time] sim_file.h5`.
         * `-b`: Benchmark mode, data is not saved.
@@ -180,14 +178,14 @@ List of parameters
     * `main_1.c`: main function for a binary that runs only a single simulation file
     * `main_stack.c`: main function for a binary that runs the simulation files listed in the stack file
     * `meas.c/meas.h`: code for performing measurements
+    * `mem.c/mem.h`: minimal implementation of an aligned memory pool
     * `prof.c/prof.h`: code related to profiling
     * `rand.h`: random number generator
     * `sig.c/sig.h`: signal handling
     * `time_.h`: high resolution timer
     * `updates.c/updates.h`: propose changes to the auxiliary field and update the Green's function accordingly
-    * `util.h`: miscellaneous definitions and macros used in many files
 * `src_py`
-    * `dqmc.py`: outdated and unmaintained python implementation of dqmc code.
+    * `dqmc.py`: python implementation of dqmc code.
 * `util`: various python scripts for simulation file generation and data analysis
     * `gen_1band_hub.py`: generate HDF5 simulation file for the Hubbard model
     * `get_mu.py`: estimate desired chemical potential for a target filling based on fitting to a sweep of simulations at different chemical potentials

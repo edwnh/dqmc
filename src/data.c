@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <hdf5.h>
 #include <hdf5_hl.h>
-#include "util.h"
+#include "linalg.h"
 #include "mem.h"
 
 #define return_if(cond, val, ...) \
@@ -47,76 +47,65 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	my_read(_int, "/params/meas_energy_corr", &sim->p.meas_energy_corr);
 	my_read(_int, "/params/meas_nematic_corr", &sim->p.meas_nematic_corr);
 
-	my_read(_int, "/params/mem_pool_size", &sim->p.mem_pool_size);
-
 	const int N = sim->p.N, L = sim->p.L;
 	const int num_i = sim->p.num_i, num_ij = sim->p.num_ij;
 	const int num_b = sim->p.num_b, num_bs = sim->p.num_bs, num_bb = sim->p.num_bb;
 
-	sim->mp = pool_new(sim->p.mem_pool_size);
+#define ALLOC_TABLE(XX, _UNUSED1, _UNUSED2) \
+	XX(sim->p.map_i         , sim->mp, N        * sizeof(int)) \
+	XX(sim->p.map_ij        , sim->mp, N*N      * sizeof(int)) \
+	XX(sim->p.bonds         , sim->mp, num_b*2  * sizeof(int)) \
+	XX(sim->p.map_bs        , sim->mp, num_b*N  * sizeof(int)) \
+	XX(sim->p.map_bb        , sim->mp, num_b*num_b * sizeof(int)) \
+	XX(sim->p.peierlsu      , sim->mp, N*N      * sizeof(num)) \
+	XX(sim->p.peierlsd      , sim->mp, N*N      * sizeof(num)) \
+	XX(sim->p.degen_i       , sim->mp, num_i    * sizeof(int)) \
+	XX(sim->p.degen_ij      , sim->mp, num_ij   * sizeof(int)) \
+	XX(sim->p.degen_bs      , sim->mp, num_bs   * sizeof(int)) \
+	XX(sim->p.degen_bb      , sim->mp, num_bb   * sizeof(int)) \
+	XX(sim->p.exp_lambda    , sim->mp, N*2      * sizeof(double)) \
+	XX(sim->p.exp_Ku        , sim->mp, N*N      * sizeof(num)) \
+	XX(sim->p.exp_Kd        , sim->mp, N*N      * sizeof(num)) \
+	XX(sim->p.inv_exp_Ku    , sim->mp, N*N      * sizeof(num)) \
+	XX(sim->p.inv_exp_Kd    , sim->mp, N*N      * sizeof(num)) \
+	XX(sim->p.exp_halfKu    , sim->mp, N*N      * sizeof(num)) \
+	XX(sim->p.exp_halfKd    , sim->mp, N*N      * sizeof(num)) \
+	XX(sim->p.inv_exp_halfKu, sim->mp, N*N      * sizeof(num)) \
+	XX(sim->p.inv_exp_halfKd, sim->mp, N*N      * sizeof(num)) \
+	XX(sim->p.del           , sim->mp, N*2      * sizeof(double)) \
+	XX(sim->s.hs            , sim->mp, N*L      * sizeof(int)) \
+	XX(sim->m_eq.density    , sim->mp, num_i    * sizeof(num)) \
+	XX(sim->m_eq.double_occ , sim->mp, num_i    * sizeof(num)) \
+	XX(sim->m_eq.g00        , sim->mp, num_ij   * sizeof(num)) \
+	XX(sim->m_eq.nn         , sim->mp, num_ij   * sizeof(num)) \
+	XX(sim->m_eq.xx         , sim->mp, num_ij   * sizeof(num)) \
+	XX(sim->m_eq.zz         , sim->mp, num_ij   * sizeof(num)) \
+	XX(sim->m_eq.pair_sw    , sim->mp, num_ij   * sizeof(num)) \
+	XX(sim->m_eq.kk         , sim->mp, (sim->p.meas_energy_corr != 0)*num_bb * sizeof(num)) \
+	XX(sim->m_eq.kv         , sim->mp, (sim->p.meas_energy_corr != 0)*num_bs * sizeof(num)) \
+	XX(sim->m_eq.kn         , sim->mp, (sim->p.meas_energy_corr != 0)*num_bs * sizeof(num)) \
+	XX(sim->m_eq.vv         , sim->mp, (sim->p.meas_energy_corr != 0)*num_ij * sizeof(num)) \
+	XX(sim->m_eq.vn         , sim->mp, (sim->p.meas_energy_corr != 0)*num_ij * sizeof(num)) \
+	XX(sim->m_ue.gt0        , sim->mp, (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.nn         , sim->mp, (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.xx         , sim->mp, (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.zz         , sim->mp, (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.pair_sw    , sim->mp, (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.pair_bb    , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
+	XX(sim->m_ue.jj         , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
+	XX(sim->m_ue.jsjs       , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
+	XX(sim->m_ue.kk         , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
+	XX(sim->m_ue.ksks       , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
+	XX(sim->m_ue.kv         , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_energy_corr != 0)*num_bs*L * sizeof(num)) \
+	XX(sim->m_ue.kn         , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_energy_corr != 0)*num_bs*L * sizeof(num)) \
+	XX(sim->m_ue.vv         , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_energy_corr != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.vn         , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_energy_corr != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.nem_nnnn   , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_nematic_corr != 0)*num_bb*L * sizeof(num)) \
+	XX(sim->m_ue.nem_ssss   , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_nematic_corr != 0)*num_bb*L * sizeof(num))
 
-	sim->p.map_i         = pool_alloc(sim->mp, N        * sizeof(int));
-	sim->p.map_ij        = pool_alloc(sim->mp, N*N      * sizeof(int));
-	sim->p.bonds         = pool_alloc(sim->mp, num_b*2  * sizeof(int));
-	sim->p.map_bs        = pool_alloc(sim->mp, num_b*N  * sizeof(int));
-	sim->p.map_bb        = pool_alloc(sim->mp, num_b*num_b * sizeof(int));
-	sim->p.peierlsu      = pool_alloc(sim->mp, N*N      * sizeof(num));
-	sim->p.peierlsd      = pool_alloc(sim->mp, N*N      * sizeof(num));
-//	sim->p.K             = pool_alloc(sim->mp, N*N      * sizeof(double));
-//	sim->p.U             = pool_alloc(sim->mp, num_i    * sizeof(double));
-	sim->p.degen_i       = pool_alloc(sim->mp, num_i    * sizeof(int));
-	sim->p.degen_ij      = pool_alloc(sim->mp, num_ij   * sizeof(int));
-	sim->p.degen_bs      = pool_alloc(sim->mp, num_bs   * sizeof(int));
-	sim->p.degen_bb      = pool_alloc(sim->mp, num_bb   * sizeof(int));
-	sim->p.exp_lambda    = pool_alloc(sim->mp, N*2      * sizeof(double));
-	sim->p.exp_Ku        = pool_alloc(sim->mp, N*N      * sizeof(num));
-	sim->p.exp_Kd        = pool_alloc(sim->mp, N*N      * sizeof(num));
-	sim->p.inv_exp_Ku    = pool_alloc(sim->mp, N*N      * sizeof(num));
-	sim->p.inv_exp_Kd    = pool_alloc(sim->mp, N*N      * sizeof(num));
-	sim->p.exp_halfKu    = pool_alloc(sim->mp, N*N      * sizeof(num));
-	sim->p.exp_halfKd    = pool_alloc(sim->mp, N*N      * sizeof(num));
-	sim->p.inv_exp_halfKu= pool_alloc(sim->mp, N*N      * sizeof(num));
-	sim->p.inv_exp_halfKd= pool_alloc(sim->mp, N*N      * sizeof(num));
-	sim->p.del           = pool_alloc(sim->mp, N*2      * sizeof(double));
-	sim->s.hs            = pool_alloc(sim->mp, N*L      * sizeof(int));
-	sim->m_eq.density    = pool_alloc(sim->mp, num_i    * sizeof(num));
-	sim->m_eq.double_occ = pool_alloc(sim->mp, num_i    * sizeof(num));
-	sim->m_eq.g00        = pool_alloc(sim->mp, num_ij   * sizeof(num));
-	sim->m_eq.nn         = pool_alloc(sim->mp, num_ij   * sizeof(num));
-	sim->m_eq.xx         = pool_alloc(sim->mp, num_ij   * sizeof(num));
-	sim->m_eq.zz         = pool_alloc(sim->mp, num_ij   * sizeof(num));
-	sim->m_eq.pair_sw    = pool_alloc(sim->mp, num_ij   * sizeof(num));
-	if (sim->p.meas_energy_corr) {
-		sim->m_eq.kk = pool_alloc(sim->mp, num_bb * sizeof(num));
-		sim->m_eq.kv = pool_alloc(sim->mp, num_bs * sizeof(num));
-		sim->m_eq.kn = pool_alloc(sim->mp, num_bs * sizeof(num));
-		sim->m_eq.vv = pool_alloc(sim->mp, num_ij * sizeof(num));
-		sim->m_eq.vn = pool_alloc(sim->mp, num_ij * sizeof(num));
-	}
-	if (sim->p.period_uneqlt > 0) {
-		sim->m_ue.gt0     = pool_alloc(sim->mp, num_ij*L * sizeof(num));
-		sim->m_ue.nn      = pool_alloc(sim->mp, num_ij*L * sizeof(num));
-		sim->m_ue.xx      = pool_alloc(sim->mp, num_ij*L * sizeof(num));
-		sim->m_ue.zz      = pool_alloc(sim->mp, num_ij*L * sizeof(num));
-		sim->m_ue.pair_sw = pool_alloc(sim->mp, num_ij*L * sizeof(num));
-		if (sim->p.meas_bond_corr) {
-			sim->m_ue.pair_bb = pool_alloc(sim->mp, num_bb*L * sizeof(num));
-			sim->m_ue.jj      = pool_alloc(sim->mp, num_bb*L * sizeof(num));
-			sim->m_ue.jsjs    = pool_alloc(sim->mp, num_bb*L * sizeof(num));
-			sim->m_ue.kk      = pool_alloc(sim->mp, num_bb*L * sizeof(num));
-			sim->m_ue.ksks    = pool_alloc(sim->mp, num_bb*L * sizeof(num));
-		}
-		if (sim->p.meas_energy_corr) {
-			sim->m_ue.kv      = pool_alloc(sim->mp, num_bs*L * sizeof(num));
-			sim->m_ue.kn      = pool_alloc(sim->mp, num_bs*L * sizeof(num));
-			sim->m_ue.vv      = pool_alloc(sim->mp, num_ij*L * sizeof(num));
-			sim->m_ue.vn      = pool_alloc(sim->mp, num_ij*L * sizeof(num));
-		}
-		if (sim->p.meas_nematic_corr) {
-			sim->m_ue.nem_nnnn = pool_alloc(sim->mp, num_bb*L * sizeof(num));
-			sim->m_ue.nem_ssss = pool_alloc(sim->mp, num_bb*L * sizeof(num));
-		}
-	}
+	sim->mp = pool_new(POOL_GET_SIZE(ALLOC_TABLE));
+	POOL_DO_ALLOC(ALLOC_TABLE);
+#undef ALLOC_TABLE
 
 	my_read(_int,    "/params/map_i",          sim->p.map_i);
 	my_read(_int,    "/params/map_ij",         sim->p.map_ij);

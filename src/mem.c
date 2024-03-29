@@ -23,14 +23,14 @@ struct mem_pool *pool_new(size_t total_mem)
 
 void *pool_alloc(struct mem_pool *mp, size_t size)
 {
-	void *ret = mp->next;
-	// round up to nearest multiple of MEM_ALIGN
-	size_t used = ((size + MEM_ALIGN - 1)/MEM_ALIGN) * MEM_ALIGN;
+	if (size == 0) return NULL;
+	const size_t used = MEM_ALIGN_UP(size);
 	if (used > mp->remaining) {
         printf("Out of memory!!!\n");
         return NULL;
     }
-	mp->remaining -= used;// printf("remaining %zu\n", mp->remaining);
+	mp->remaining -= used;
+	void *ret = mp->next;
 	mp->next = ((char*)mp->next) + used;
 	return ret;
 }

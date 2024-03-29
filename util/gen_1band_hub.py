@@ -351,15 +351,6 @@ def create_1(file_sim=None, file_params=None, overwrite=False, init_rng=None,
                 f["meas_uneqlt"]["nem_nnnn"] = np.zeros(num_bb*L, dtype=dtype_num)
                 f["meas_uneqlt"]["nem_ssss"] = np.zeros(num_bb*L, dtype=dtype_num)
 
-        mem_pool_size = 0  # amount of memory needed for memory pool
-        for group_name, group in f.items():
-            if isinstance(group, h5py.Group):
-                for data_name, data in group.items():
-                    if data.shape != ():  # scalar data is not stored in memory pool
-                        size = data.dtype.itemsize * data.size
-                        mem_pool_size += ((size + MEM_ALIGN - 1)//MEM_ALIGN)*MEM_ALIGN
-        f["params"]["mem_pool_size"] = mem_pool_size
-
 def create_batch(Nfiles=1, prefix=None, seed=None, **kwargs):
     if seed is None:
         init_rng = rand_seed_urandom()

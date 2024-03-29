@@ -6,23 +6,21 @@ CFLAGS += -DMKL_DIRECT_CALL_SEQ
 CFLAGS += -DGIT_ID=\"$(shell git describe --always)\"
 CFLAGS += -DPROFILE_ENABLE
 # CFLAGS += -DUSE_CPLX  # uncomment to use complex numbers
-CFLAGS += -qopenmp  # to disable openmp, use -qopenmp-stubs
+CFLAGS += -qopenmp-stubs  # to disable openmp, use -qopenmp-stubs
 
 LDFLAGS += -lhdf5 -lhdf5_hl -lmkl_intel_lp64 -lmkl_sequential -lmkl_core
 
 OBJS = data.o dqmc.o greens.o meas.o mem.o prof.o sig.o updates.o
 
-TARGET = dqmc
+all: dqmc_1 dqmc_stack
 
-all: one stack
+dqmc_1: ${OBJS} main_1.o
+	@echo linking $@
+	@${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}
 
-one: ${OBJS} main_1.o
-	@echo linking ${TARGET}_1
-	@${CC} ${CFLAGS} -o ${TARGET}_1 $? ${LDFLAGS}
-
-stack: ${OBJS} main_stack.o
-	@echo linking ${TARGET}_stack
-	@${CC} ${CFLAGS} -o ${TARGET}_stack $? ${LDFLAGS}
+dqmc_stack: ${OBJS} main_stack.o
+	@echo linking $@
+	@${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}
 
 %.o: ../src/%.c
 	@echo compiling $<

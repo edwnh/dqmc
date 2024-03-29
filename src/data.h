@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "util.h"
+#include "linalg.h"
 #include "mem.h"
 
 struct params {
@@ -24,8 +24,6 @@ struct params {
 	num *exp_halfKu, *exp_halfKd, *inv_exp_halfKu, *inv_exp_halfKd;
 	double *exp_lambda, *del;
 	int F, n_sweep;
-
-	int mem_pool_size;
 };
 
 struct state {
@@ -68,6 +66,7 @@ struct meas_uneqlt {
 struct sim_data {
 	const char *file;
 	struct mem_pool *mp; // memory pool for everything below
+
 	struct params p;
 	struct state s;
 	struct meas_eqlt m_eq;

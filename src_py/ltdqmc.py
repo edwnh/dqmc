@@ -55,7 +55,7 @@ def calc_QdX(B, QdX):
 # for XdQ:
 # G = (1 + X.T d Q.T)^-1 = Q idb (Q idb + X.T ds)^-1, where d = idb^-1 ds
 #   = ((1 + QdX)^-1).T
-def calc_G_QdX(QdX, transpose=False):
+def calc_Gtt_last(QdX, transpose=False):
     Q, tau, d, X = QdX
     N = Q.shape[0]
     idb = np.zeros((N, N))
@@ -80,7 +80,7 @@ def calc_G_QdX(QdX, transpose=False):
 # QdX0 contains B_{t-1} ... B_0
 # QdX1 contains B_{L-1} ... B_t
 # G = (1 + Q0 d0 X0 X1.T d1 Q1.T)
-#   = Q1 id1b (id0b Q0.T Q1 id1b + d0s X0 X1.T d1s) id0b Q0.T
+#   = Q1 id1b (id0b Q0.T Q1 id1b + d0s X0 X1.T d1s)^-1 id0b Q0.T
 def calc_Gtt(QdX0, QdX1):
     Q0, tau0, d0, X0 = QdX0
     Q1, tau1, d1, X1 = QdX1
@@ -200,8 +200,8 @@ def dqmc(params, state, meas_eqlt, meas_uneqlt):
     # initialize Green's functions
     Gttu = np.zeros((params["N"], params["N"]))
     Gttd = np.zeros((params["N"], params["N"]))
-    Gttu[...], signu = calc_G_QdX(QdXLu[0], transpose=True)
-    Gttd[...], signd = calc_G_QdX(QdXLd[0], transpose=True)
+    Gttu[...], signu = calc_Gtt_last(QdXLu[0], transpose=True)
+    Gttd[...], signd = calc_Gtt_last(QdXLd[0], transpose=True)
     sign = signu*signd
 
     for state["sweep"] in range(state["sweep"], params["n_sweep"]):
@@ -227,9 +227,9 @@ def dqmc(params, state, meas_eqlt, meas_uneqlt):
                 # here, Gtt = G(l, l)
                 if m == n_matmul - 1:  # calculate accurately G(l+1, l+1)
                     QdX0u[f] = calc_QdX_first(Cu[f]) if f == 0 else calc_QdX(Cu[f], QdX0u[f-1])
-                    Gttu[...], signu = calc_G_QdX(QdX0u[f]) if f == F-1 else calc_Gtt(QdX0u[f], QdXLu[f+1])
+                    Gttu[...], signu = calc_Gtt_last(QdX0u[f]) if f == F-1 else calc_Gtt(QdX0u[f], QdXLu[f+1])
                     QdX0d[f] = calc_QdX_first(Cd[f]) if f == 0 else calc_QdX(Cd[f], QdX0d[f-1])
-                    Gttd[...], signd = calc_G_QdX(QdX0d[f]) if f == F-1 else calc_Gtt(QdX0d[f], QdXLd[f+1])
+                    Gttd[...], signd = calc_Gtt_last(QdX0d[f]) if f == F-1 else calc_Gtt(QdX0d[f], QdXLd[f+1])
                     sign = signu*signd
                 else:  # wrap forward
                     np.dot(np.dot(Bu[l], Gttu), iBu[l], out=Gttu)
@@ -264,9 +264,9 @@ def dqmc(params, state, meas_eqlt, meas_uneqlt):
 
                 if m == 0:  # recalculate accurately G(l, l)
                     QdXLu[f] = calc_QdX_first(Cu[f].T) if f == F-1 else calc_QdX(Cu[f].T, QdXLu[f+1])
-                    Gttu_new, signu = calc_G_QdX(QdXLu[f], transpose=True) if f == 0 else calc_Gtt(QdX0u[f-1], QdXLu[f])
+                    Gttu_new, signu = calc_Gtt_last(QdXLu[f], transpose=True) if f == 0 else calc_Gtt(QdX0u[f-1], QdXLu[f])
                     QdXLd[f] = calc_QdX_first(Cd[f].T) if f == F-1 else calc_QdX(Cd[f].T, QdXLd[f+1])
-                    Gttd_new, signd = calc_G_QdX(QdXLd[f], transpose=True) if f == 0 else calc_Gtt(QdX0d[f-1], QdXLd[f])
+                    Gttd_new, signd = calc_Gtt_last(QdXLd[f], transpose=True) if f == 0 else calc_Gtt(QdX0d[f-1], QdXLd[f])
                     max_diff = max(np.max(np.abs(Gttu - Gttu_new)), np.max(np.abs(Gttd - Gttd_new)))
                     if max_diff > 1e-7:
                         print(f"On sweep {state['sweep']}, G differed by {max_diff:g}. Consider increasing n_matmul.")

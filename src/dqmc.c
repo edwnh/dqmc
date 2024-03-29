@@ -10,7 +10,6 @@
 #include "sig.h"
 #include "time_.h"
 #include "updates.h"
-#include "util.h"
 
 #define N_MUL 2 // input parameter to calc_eq_g() and calc_ue_g()
 
@@ -97,88 +96,76 @@ static int dqmc(struct sim_data *sim)
 	num phase;
 
 	// lapack work array size
-	int lwork = get_lwork_eq_g(N);
+	int lwork = N*N;
 	if (sim->p.period_uneqlt > 0) {
 		const int lwork_ue = get_lwork_ue_g(N, E);
 		if (lwork_ue > lwork) lwork = lwork_ue;
 	}
 
-	size_t mem_pool_size_per_spin = (
-		2*N*N*L * sizeof(num) +
-        N*N*F * sizeof(num) +
-        3*N*N * sizeof(num) +
-        3*N * sizeof(num) +
-        N * sizeof(int) +
-        lwork * sizeof(num)
-    ) + (sim->p.period_uneqlt > 0) * (
-        N*E*N*E * sizeof(num) +
-        N*E * sizeof(num) +
-        4*N*N * sizeof(num) +
-        3*N*N*L * sizeof(num)
-    );
-    struct mem_pool *mp = pool_new(N * sizeof(int) + 2*mem_pool_size_per_spin);
+#define ALLOC_TABLE(XX, FOR, ENDFOR) \
+	XX(int *const site_order, mp, N * sizeof(int)) \
+	XX(num *const iBu, mp, N*N*L * sizeof(num)) \
+	XX(num *const Bu, mp, N*N*L * sizeof(num)) \
+	XX(num *const Cu, mp, N*N*F * sizeof(num)) \
+	XX(struct QdX *QdXLu, mp, F * sizeof(struct QdX)) \
+	XX(struct QdX *QdX0u, mp, F * sizeof(struct QdX)) \
+	FOR(f, F) \
+		XX(QdXLu[f].Q, mp, N*N * sizeof(num)) \
+		XX(QdXLu[f].tau, mp, N * sizeof(num)) \
+		XX(QdXLu[f].d, mp, N * sizeof(num)) \
+		XX(QdXLu[f].X, mp, N*N * sizeof(num)) \
+		XX(QdX0u[f].Q, mp, N*N * sizeof(num)) \
+		XX(QdX0u[f].tau, mp, N * sizeof(num)) \
+		XX(QdX0u[f].d, mp, N * sizeof(num)) \
+		XX(QdX0u[f].X, mp, N*N * sizeof(num)) \
+	ENDFOR \
+	XX(num *const restrict gu, mp, N*N * sizeof(num)) \
+	XX(num *const iBd, mp, N*N*L * sizeof(num)) \
+	XX(num *const Bd, mp, N*N*L * sizeof(num)) \
+	XX(num *const Cd, mp, N*N*F * sizeof(num)) \
+	XX(struct QdX *QdXLd, mp, F * sizeof(struct QdX)) \
+	XX(struct QdX *QdX0d, mp, F * sizeof(struct QdX)) \
+	FOR(f, F) \
+		XX(QdXLd[f].Q, mp, N*N * sizeof(num)) \
+		XX(QdXLd[f].tau, mp, N * sizeof(num)) \
+		XX(QdXLd[f].d, mp, N * sizeof(num)) \
+		XX(QdXLd[f].X, mp, N*N * sizeof(num)) \
+		XX(QdX0d[f].Q, mp, N*N * sizeof(num)) \
+		XX(QdX0d[f].tau, mp, N * sizeof(num)) \
+		XX(QdX0d[f].d, mp, N * sizeof(num)) \
+		XX(QdX0d[f].X, mp, N*N * sizeof(num)) \
+	ENDFOR \
+	XX(num *const restrict gd, mp, N*N * sizeof(num)) \
+	XX(num *const restrict tmpNN1u, mp, N*N * sizeof(num)) \
+	XX(num *const restrict tmpNN2u, mp, N*N * sizeof(num)) \
+	XX(num *const restrict tmpN1u, mp, N * sizeof(num)) \
+	XX(num *const restrict tmpN2u, mp, N * sizeof(num)) \
+	XX(num *const restrict tmpN3u, mp, N * sizeof(num)) \
+	XX(int *const restrict pvtu, mp, N * sizeof(int)) \
+	XX(num *const restrict tmpNN1d, mp, N*N * sizeof(num)) \
+	XX(num *const restrict tmpNN2d, mp, N*N * sizeof(num)) \
+	XX(num *const restrict tmpN1d, mp, N * sizeof(num)) \
+	XX(num *const restrict tmpN2d, mp, N * sizeof(num)) \
+	XX(num *const restrict tmpN3d, mp, N * sizeof(num)) \
+	XX(int *const restrict pvtd, mp, N * sizeof(int)) \
+	XX(num *const restrict worku, mp, lwork * sizeof(num)) \
+	XX(num *const restrict workd, mp, lwork * sizeof(num)) \
+	XX(num *const restrict Gredu, mp, (sim->p.period_uneqlt > 0)*N*E*N*E * sizeof(num)) \
+	XX(num *const restrict tauu, mp, (sim->p.period_uneqlt > 0)*N*E * sizeof(num)) \
+	XX(num *const restrict Qu, mp, (sim->p.period_uneqlt > 0)*4*N*N * sizeof(num)) \
+	XX(num *const restrict Gredd, mp, (sim->p.period_uneqlt > 0)*N*E*N*E * sizeof(num)) \
+	XX(num *const restrict taud, mp, (sim->p.period_uneqlt > 0)*N*E * sizeof(num)) \
+	XX(num *const restrict Qd, mp, (sim->p.period_uneqlt > 0)*4*N*N * sizeof(num)) \
+	XX(num *const restrict Gu0t, mp, (sim->p.period_uneqlt > 0)*N*N*L * sizeof(num)) \
+	XX(num *const restrict Gutt, mp, (sim->p.period_uneqlt > 0)*N*N*L * sizeof(num)) \
+	XX(num *const restrict Gut0, mp, (sim->p.period_uneqlt > 0)*N*N*L * sizeof(num)) \
+	XX(num *const restrict Gd0t, mp, (sim->p.period_uneqlt > 0)*N*N*L * sizeof(num)) \
+	XX(num *const restrict Gdtt, mp, (sim->p.period_uneqlt > 0)*N*N*L * sizeof(num)) \
+	XX(num *const restrict Gdt0, mp, (sim->p.period_uneqlt > 0)*N*N*L * sizeof(num))
 
-	int *const site_order = pool_alloc(mp, N * sizeof(int));
-
-	num *const iBu = pool_alloc(mp, N*N*L * sizeof(num));
-	num *const Bu = pool_alloc(mp, N*N*L * sizeof(num));
-	num *const Cu = pool_alloc(mp, N*N*F * sizeof(num));
-	num *const restrict gu = pool_alloc(mp, N*N * sizeof(num));
-
-	num *const iBd = pool_alloc(mp, N*N*L * sizeof(num));
-	num *const Bd = pool_alloc(mp, N*N*L * sizeof(num));
-	num *const Cd = pool_alloc(mp, N*N*F * sizeof(num));
-	num *const restrict gd = pool_alloc(mp, N*N * sizeof(num));
-
-	// work arrays for calc_eq_g and stuff. two sets for easy 2x parallelization
-	num *const restrict tmpNN1u = pool_alloc(mp, N*N * sizeof(num));
-	num *const restrict tmpNN2u = pool_alloc(mp, N*N * sizeof(num));
-	num *const restrict tmpN1u = pool_alloc(mp, N * sizeof(num));
-	num *const restrict tmpN2u = pool_alloc(mp, N * sizeof(num));
-	num *const restrict tmpN3u = pool_alloc(mp, N * sizeof(num));
-	int *const restrict pvtu = pool_alloc(mp, N * sizeof(int));
-
-	num *const restrict tmpNN1d = pool_alloc(mp, N*N * sizeof(num));
-	num *const restrict tmpNN2d = pool_alloc(mp, N*N * sizeof(num));
-	num *const restrict tmpN1d = pool_alloc(mp, N * sizeof(num));
-	num *const restrict tmpN2d = pool_alloc(mp, N * sizeof(num));
-	num *const restrict tmpN3d = pool_alloc(mp, N * sizeof(num));
-	int *const restrict pvtd = pool_alloc(mp, N * sizeof(int));
-
-	num *const restrict worku = pool_alloc(mp, lwork * sizeof(num));
-	num *const restrict workd = pool_alloc(mp, lwork * sizeof(num));
-
-	// arrays for calc_ue_g
-	num *restrict Gu0t = NULL;
-	num *restrict Gutt = NULL;
-	num *restrict Gut0 = NULL;
-	num *restrict Gredu = NULL;
-	num *restrict tauu = NULL;
-	num *restrict Qu = NULL;
-
-	num *restrict Gd0t = NULL;
-	num *restrict Gdtt = NULL;
-	num *restrict Gdt0 = NULL;
-	num *restrict Gredd = NULL;
-	num *restrict taud = NULL;
-	num *restrict Qd = NULL;
-
-	if (sim->p.period_uneqlt > 0) {
-		Gredu = pool_alloc(mp, N*E*N*E * sizeof(num));
-		tauu = pool_alloc(mp, N*E * sizeof(num));
-		Qu = pool_alloc(mp, 4*N*N * sizeof(num));
-
-		Gredd = pool_alloc(mp, N*E*N*E * sizeof(num));
-		taud = pool_alloc(mp, N*E * sizeof(num));
-		Qd = pool_alloc(mp, 4*N*N * sizeof(num));
-
-		Gu0t = pool_alloc(mp, N*N*L * sizeof(num));
-		Gutt = pool_alloc(mp, N*N*L * sizeof(num));
-		Gut0 = pool_alloc(mp, N*N*L * sizeof(num));
-		Gd0t = pool_alloc(mp, N*N*L * sizeof(num));
-		Gdtt = pool_alloc(mp, N*N*L * sizeof(num));
-		Gdt0 = pool_alloc(mp, N*N*L * sizeof(num));
-	}
+	struct mem_pool *mp = pool_new(POOL_GET_SIZE(ALLOC_TABLE));
+	POOL_DO_ALLOC(ALLOC_TABLE);
+#undef ALLOC_TABLE
 
 	{
 	num phaseu, phased;
@@ -194,8 +181,13 @@ static int dqmc(struct sim_data *sim)
 	for (int f = 0; f < F; f++)
 		mul_seq(N, L, f*n_matmul, ((f + 1)*n_matmul) % L, 1.0,
 		        Bu, Cu + N*N*f, N, tmpNN1u);
-	phaseu = calc_eq_g(0, N, F, N_MUL, Cu, gu, tmpNN1u, tmpNN2u,
-	                  tmpN1u, tmpN2u, tmpN3u, pvtu, worku, lwork);
+	calc_QdX_first(1, N, Cu + N*N*(F - 1), &QdXLu[F - 1],
+	               tmpN1u, pvtu, worku, lwork);
+	for (int f = F - 2; f >= 0; f--)
+		calc_QdX(1, N, Cu + N*N*f, &QdXLu[f + 1], &QdXLu[f],
+		         tmpN1u, pvtu, worku, lwork);
+	phaseu = calc_Gtt_last(1, N, &QdXLu[0], gu,
+	                       tmpNN1u, tmpN1u, pvtu, worku, lwork);
 	}
 	#pragma omp section
 	{
@@ -207,8 +199,13 @@ static int dqmc(struct sim_data *sim)
 	for (int f = 0; f < F; f++)
 		mul_seq(N, L, f*n_matmul, ((f + 1)*n_matmul) % L, 1.0,
 		        Bd, Cd + N*N*f, N, tmpNN1d);
-	phased = calc_eq_g(0, N, F, N_MUL, Cd, gd, tmpNN1d, tmpNN2d,
-	                  tmpN1d, tmpN2d, tmpN3d, pvtd, workd, lwork);
+	calc_QdX_first(1, N, Cd + N*N*(F - 1), &QdXLd[F - 1],
+	               tmpN1d, pvtd, workd, lwork);
+	for (int f = F - 2; f >= 0; f--)
+		calc_QdX(1, N, Cd + N*N*f, &QdXLd[f + 1], &QdXLd[f],
+		         tmpN1d, pvtd, workd, lwork);
+	phased = calc_Gtt_last(1, N, &QdXLd[0], gd,
+	                       tmpNN1d, tmpN1d, pvtd, workd, lwork);
 	}
 	}
 	phase = phaseu*phased;
@@ -224,7 +221,45 @@ static int dqmc(struct sim_data *sim)
 				fprintf(stderr, "save_file() failed: %d\n", status);
 		}
 
-		for (int l = 0; l < L; l++) {
+		const int warmed_up = (sim->s.sweep >= sim->p.n_sweep_warm);
+		const int enabled_eqlt = warmed_up && (sim->p.period_eqlt > 0);
+		const int enabled_uneqlt = warmed_up && (sim->p.period_uneqlt > 0);
+
+		for (int _l = 0; _l < L; _l++) {
+			// on even sweeps, sweep up from l = 0 to L-1
+			// on odd sweeps, sweep down from l = L-1 to 0
+			const int sweep_up = (sim->s.sweep % 2 == 0);
+			const int l = sweep_up ? _l : (L - 1 - _l);
+			const int f = (l / n_matmul);
+			const int m = (l % n_matmul);
+
+			num *const restrict Bul = Bu + N*N*l;
+			num *const restrict iBul = iBu + N*N*l;
+			num *const restrict Cuf = Cu + N*N*f;
+			num *const restrict Bdl = Bd + N*N*l;
+			num *const restrict iBdl = iBd + N*N*l;
+			num *const restrict Cdf = Cd + N*N*f;
+
+			if (!sweep_up) { // wrap for down sweep
+				#pragma omp parallel sections
+				{
+				#pragma omp section
+				{
+				profile_begin(wrap);
+				matmul(tmpNN1u, gu, Bul);
+				matmul(gu, iBul, tmpNN1u);
+				profile_end(wrap);
+				}
+				#pragma omp section
+				{
+				profile_begin(wrap);
+				matmul(tmpNN1d, gd, Bdl);
+				matmul(gd, iBdl, tmpNN1d);
+				profile_end(wrap);
+				}
+				}
+			}
+
 			profile_begin(updates);
 			shuffle(rng, N, site_order);
 			update_delayed(N, n_delay, del, site_order,
@@ -233,20 +268,15 @@ static int dqmc(struct sim_data *sim)
 			               tmpNN1d, tmpNN2d, tmpN1d);
 			profile_end(updates);
 
-			const int f = l / n_matmul;
-			const int recalc = ((l + 1) % n_matmul == 0);
+			const int recalc = sweep_up ? (m == n_matmul - 1) : (m == 0);
 			num phaseu, phased;
 			#pragma omp parallel sections
 			{
 			#pragma omp section
 			{
-			num *const restrict Bul = Bu + N*N*l;
-			num *const restrict iBul = iBu + N*N*l;
-			num *const restrict Cuf = Cu + N*N*f;
 			profile_begin(calcb);
 			calcBu(Bul, l);
-			if (!recalc || sim->p.period_uneqlt > 0)
-				calciBu(iBul, l);
+			calciBu(iBul, l);
 			profile_end(calcb);
 			if (recalc) {
 				profile_begin(multb);
@@ -254,26 +284,48 @@ static int dqmc(struct sim_data *sim)
 				        1.0, Bu, Cuf, N, tmpNN1u);
 				profile_end(multb);
 				profile_begin(recalc);
-				phaseu = calc_eq_g((f + 1) % F, N, F, N_MUL, Cu, gu,
-				                  tmpNN1u, tmpNN2u, tmpN1u, tmpN2u,
-				                  tmpN3u, pvtu, worku, lwork);
+				if (sweep_up) {
+					if (f == 0)
+						calc_QdX_first(0, N, Cuf, &QdX0u[f],
+						               tmpN1u, pvtu, worku, lwork);
+					else
+						calc_QdX(0, N, Cuf, &QdX0u[f - 1], &QdX0u[f],
+						         tmpN1u, pvtu, worku, lwork);
+					if (f == F - 1)
+						phaseu = calc_Gtt_last(0, N, &QdX0u[f], gu,
+						                       tmpNN1u, tmpN1u, pvtu, worku, lwork);
+					else
+						phaseu = calc_Gtt(N, &QdX0u[f], &QdXLu[f + 1], gu,
+						                  tmpNN1u, tmpNN2u, tmpN1u, tmpN2u, pvtu, worku, lwork);
+				} else {
+					if (f == F - 1)
+						calc_QdX_first(1, N, Cuf, &QdXLu[f],
+						               tmpN1u, pvtu, worku, lwork);
+					else
+						calc_QdX(1, N, Cuf, &QdXLu[f + 1], &QdXLu[f],
+						         tmpN1u, pvtu, worku, lwork);
+					if (f == 0)
+						phaseu = calc_Gtt_last(1, N, &QdXLu[f], gu,
+						                       tmpNN1u, tmpN1u, pvtu, worku, lwork);
+					else
+						phaseu = calc_Gtt(N, &QdX0u[f - 1], &QdXLu[f], gu,
+						                  tmpNN1u, tmpNN2u, tmpN1u, tmpN2u, pvtu, worku, lwork);
+				}
 				profile_end(recalc);
 			} else {
-				profile_begin(wrap);
-				matmul(tmpNN1u, gu, iBul);
-				matmul(gu, Bul, tmpNN1u);
-				profile_end(wrap);
+				if (sweep_up) { // wrap for up sweep
+					profile_begin(wrap);
+					matmul(tmpNN1u, gu, iBul);
+					matmul(gu, Bul, tmpNN1u);
+					profile_end(wrap);
+				}
 			}
 			}
 			#pragma omp section
 			{
-			num *const restrict Bdl = Bd + N*N*l;
-			num *const restrict iBdl = iBd + N*N*l;
-			num *const restrict Cdf = Cd + N*N*f;
 			profile_begin(calcb);
 			calcBd(Bdl, l);
-			if (!recalc || sim->p.period_uneqlt > 0)
-				calciBd(iBdl, l);
+			calciBd(iBdl, l);
 			profile_end(calcb);
 			if (recalc) {
 				profile_begin(multb);
@@ -281,24 +333,48 @@ static int dqmc(struct sim_data *sim)
 				        1.0, Bd, Cdf, N, tmpNN1d);
 				profile_end(multb);
 				profile_begin(recalc);
-				phased = calc_eq_g((f + 1) % F, N, F, N_MUL, Cd, gd,
-				                  tmpNN1d, tmpNN2d, tmpN1d, tmpN2d,
-				                  tmpN3d, pvtd, workd, lwork);
+				if (sweep_up) {
+					if (f == 0)
+						calc_QdX_first(0, N, Cdf, &QdX0d[f],
+						               tmpN1d, pvtd, workd, lwork);
+					else
+						calc_QdX(0, N, Cdf, &QdX0d[f - 1], &QdX0d[f],
+						         tmpN1d, pvtd, workd, lwork);
+					if (f == F - 1)
+						phased = calc_Gtt_last(0, N, &QdX0d[f], gd,
+						                       tmpNN1d, tmpN1d, pvtd, workd, lwork);
+					else
+						phased = calc_Gtt(N, &QdX0d[f], &QdXLd[f + 1], gd,
+						                  tmpNN1d, tmpNN2d, tmpN1d, tmpN2d, pvtd, workd, lwork);
+				} else {
+					if (f == F - 1)
+						calc_QdX_first(1, N, Cdf, &QdXLd[f],
+						               tmpN1d, pvtd, workd, lwork);
+					else
+						calc_QdX(1, N, Cdf, &QdXLd[f + 1], &QdXLd[f],
+						         tmpN1d, pvtd, workd, lwork);
+					if (f == 0)
+						phased = calc_Gtt_last(1, N, &QdXLd[f], gd,
+						                       tmpNN1d, tmpN1d, pvtd, workd, lwork);
+					else
+						phased = calc_Gtt(N, &QdX0d[f - 1], &QdXLd[f], gd,
+						                  tmpNN1d, tmpNN2d, tmpN1d, tmpN2d, pvtd, workd, lwork);
+				}
 				profile_end(recalc);
 			} else {
-				profile_begin(wrap);
-				matmul(tmpNN1d, gd, iBdl);
-				matmul(gd, Bdl, tmpNN1d);
-				profile_end(wrap);
+				if (sweep_up) {
+					profile_begin(wrap);
+					matmul(tmpNN1d, gd, iBdl);
+					matmul(gd, Bdl, tmpNN1d);
+					profile_end(wrap);
+				}
 			}
 			}
 			}
 
 			if (recalc) phase = phaseu*phased;
 
-			if ((sim->s.sweep >= sim->p.n_sweep_warm) &&
-					(sim->p.period_eqlt > 0) &&
-					(l + 1) % sim->p.period_eqlt == 0) {
+			if (enabled_eqlt && (l + sweep_up) % sim->p.period_eqlt == 0) {
 				#pragma omp parallel sections
 				{
 				#pragma omp section
@@ -316,15 +392,13 @@ static int dqmc(struct sim_data *sim)
 				profile_end(half_wrap);
 				}
 				}
-
 				profile_begin(meas_eq);
 				measure_eqlt(&sim->p, phase, tmpNN2u, tmpNN2d, &sim->m_eq);
 				profile_end(meas_eq);
 			}
 		}
 
-		if ((sim->s.sweep >= sim->p.n_sweep_warm) && (sim->p.period_uneqlt > 0) &&
-				sim->s.sweep % sim->p.period_uneqlt == 0) {
+		if (enabled_uneqlt && (sim->s.sweep % sim->p.period_uneqlt == 0) ) {
 			#pragma omp parallel sections
 			{
 			#pragma omp section
@@ -372,7 +446,6 @@ static int dqmc(struct sim_data *sim)
 			profile_end(half_wrap);
 			}
 			}
-
 			profile_begin(meas_uneq);
 			measure_uneqlt(&sim->p, phase,
 			               Gu0t, Gutt, Gut0, Gd0t, Gdtt, Gdt0,
