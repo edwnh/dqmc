@@ -11,7 +11,7 @@ struct QdX {
 
 void mul_seq(const int N, const int L,
 		const int min, const int maxp1,
-		const num alpha, const num *const restrict B,
+		const num alpha, num *const restrict *const restrict B,
 		num *const restrict A, const int ldA,
 		num *const restrict tmpNN);
 
@@ -62,8 +62,9 @@ num calc_Gtt(
 int get_lwork_ue_g(const int N, const int L);
 
 void calc_ue_g(const int N, const int L, const int F, const int n_mul,
-		const num *const restrict B, const num *const restrict iB,
-		const num *const restrict C,
+		num *const restrict *const restrict B,
+		num *const restrict *const restrict iB,
+		num *const restrict *const restrict C,
 		num *const restrict G0t, num *const restrict Gtt,
 		num *const restrict Gt0,
 		num *const restrict Gred,

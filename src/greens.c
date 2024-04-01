@@ -5,7 +5,7 @@
 
 void mul_seq(const int N, const int L,
 		const int min, const int maxp1,
-		const num alpha, const num *const restrict B,
+		const num alpha, num *const restrict *const restrict B,
 		num *const restrict A, const int ldA,
 		num *const restrict tmpNN)
 {
@@ -13,27 +13,27 @@ void mul_seq(const int N, const int L,
 	if (n_mul == 1) {
 		for (int j = 0; j < N; j++)
 		for (int i = 0; i < N; i++)
-			A[i + ldA*j] = alpha*B[i + N*j + N*N*min];
+			A[i + ldA*j] = alpha*B[min][i + N*j];
 		return;
 	}
 
 	int l = min;
 	if (n_mul % 2 == 0) {
-		xgemm("N", "N", N, N, N, alpha, B + N*N*((l + 1)%L),
-		      N, B + N*N*l, N, 0.0, A, ldA);
+		xgemm("N", "N", N, N, N, alpha, B[(l + 1)%L],
+		      N, B[l], N, 0.0, A, ldA);
 		l = (l + 2) % L;
 	} else {
-		xgemm("N", "N", N, N, N, alpha, B + N*N*((l + 1)%L),
-		      N, B + N*N*l, N, 0.0, tmpNN, N);
-		xgemm("N", "N", N, N, N, 1.0, B + N*N*((l + 2)%L),
+		xgemm("N", "N", N, N, N, alpha, B[(l + 1)%L],
+		      N, B[l], N, 0.0, tmpNN, N);
+		xgemm("N", "N", N, N, N, 1.0, B[(l + 2)%L],
 		      N, tmpNN, N, 0.0, A, ldA);
 		l = (l + 3) % L;
 	}
 
 	for (; l != maxp1; l = (l + 2) % L) {
-		xgemm("N", "N", N, N, N, 1.0, B + N*N*l,
+		xgemm("N", "N", N, N, N, 1.0, B[l],
 		      N, A, ldA, 0.0, tmpNN, N);
-		xgemm("N", "N", N, N, N, 1.0, B + N*N*((l + 1)%L),
+		xgemm("N", "N", N, N, N, 1.0, B[(l + 1)%L],
 		      N, tmpNN, N, 0.0, A, ldA);
 	}
 }
@@ -379,7 +379,7 @@ int get_lwork_ue_g(const int N, const int L)
 }
 
 static void calc_o(const int N, const int L, const int n_mul,
-		const num *const restrict B, num *const restrict G,
+		num *const restrict *const restrict B, num *const restrict G,
 		num *const restrict tmpNN)
 {
 	const int E = 1 + (L - 1) / n_mul;
@@ -471,8 +471,8 @@ static void bsofi(const int N, const int L,
 }
 
 static void expand_g(const int N, const int L, const int E, const int n_matmul,
-		const num *const restrict B,
-		const num *const restrict iB,
+		num *const restrict *const restrict B,
+		num *const restrict *const restrict iB,
 		const num *const restrict Gred,
 		num *const restrict G0t, num *const restrict Gtt,
 		num *const restrict Gt0)
@@ -506,7 +506,7 @@ static void expand_g(const int N, const int L, const int E, const int n_matmul,
 			const int next = (m - 1 + L) % L;
 			const num alpha = (m == 0) ? -1.0 : 1.0;
 			xgemm("N", "N", N, N, N, alpha,
-			      G0t + N*N*m, N, B + N*N*next, N, 0.0,
+			      G0t + N*N*m, N, B[next], N, 0.0,
 			      G0t + N*N*next, N);
 			m = next;
 		}
@@ -517,9 +517,9 @@ static void expand_g(const int N, const int L, const int E, const int n_matmul,
 			if (m == 0)
 				for (int j = 0; j < N; j++)
 				for (int i = 0; i < N; i++)
-					G0t[i + N*j + N*N*next] = iB[i + N*j + N*N*m];
+					G0t[i + N*j + N*N*next] = iB[m][i + N*j];
 			xgemm("N", "N", N, N, N, alpha,
-			      G0t + N*N*m, N, iB + N*N*m, N, beta,
+			      G0t + N*N*m, N, iB[m], N, beta,
 			      G0t + N*N*next, N);
 			m = next;
 		}
@@ -543,20 +543,20 @@ static void expand_g(const int N, const int L, const int E, const int n_matmul,
 		for (int m = k; m != ustop;) {
 			const int next = (m - 1 + L) % L;
 			xgemm("N", "N", N, N, N, 1.0,
-			      Gtt + N*N*m, N, B + N*N*next, N, 0.0,
+			      Gtt + N*N*m, N, B[next], N, 0.0,
 			      Gt0, N); // use Gt0 as temporary
 			xgemm("N", "N", N, N, N, 1.0,
-			      iB + N*N*next, N, Gt0, N, 0.0,
+			      iB[next], N, Gt0, N, 0.0,
 			      Gtt + N*N*next, N);
 			m = next;
 		}
 		for (int m = k; m != dstop;) {
 			const int next = (m + 1) % L;
 			xgemm("N", "N", N, N, N, 1.0,
-			      Gtt + N*N*m, N, iB + N*N*m, N, 0.0,
+			      Gtt + N*N*m, N, iB[m], N, 0.0,
 			      Gt0, N);
 			xgemm("N", "N", N, N, N, 1.0,
-			      B + N*N*m, N, Gt0, N, 0.0,
+			      B[m], N, Gt0, N, 0.0,
 			      Gtt + N*N*next, N);
 			m = next;
 		}
@@ -582,9 +582,9 @@ static void expand_g(const int N, const int L, const int E, const int n_matmul,
 			if (m == 0)
 				for (int j = 0; j < N; j++)
 				for (int i = 0; i < N; i++)
-					Gt0[i + N*j + N*N*next] = iB[i + N*j + N*N*next];
+					Gt0[i + N*j + N*N*next] = iB[next][i + N*j];
 			xgemm("N", "N", N, N, N, alpha,
-			      iB + N*N*next, N, Gt0 + N*N*m, N, beta,
+			      iB[next], N, Gt0 + N*N*m, N, beta,
 			      Gt0 + N*N*next, N);
 			m = next;
 		}
@@ -592,7 +592,7 @@ static void expand_g(const int N, const int L, const int E, const int n_matmul,
 			const int next = (m + 1) % L;
 			const num alpha = (next == 0) ? -1.0 : 1.0;
 			xgemm("N", "N", N, N, N, alpha,
-			      B + N*N*m, N, Gt0 + N*N*m, N, 0.0,
+			      B[m], N, Gt0 + N*N*m, N, 0.0,
 			      Gt0 + N*N*next, N);
 			if (next == 0) // should never happen
 				for (int i = 0; i < N; i++)
@@ -603,8 +603,9 @@ static void expand_g(const int N, const int L, const int E, const int n_matmul,
 }
 
 void calc_ue_g(const int N, const int L, const int F, const int n_mul,
-		const num *const restrict B, const num *const restrict iB,
-		const num *const restrict C,
+		num *const restrict *const restrict B,
+		num *const restrict *const restrict iB,
+		num *const restrict *const restrict C,
 		num *const restrict G0t, num *const restrict Gtt,
 		num *const restrict Gt0,
 		num *const restrict Gred,
