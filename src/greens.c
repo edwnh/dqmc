@@ -75,12 +75,7 @@ void calc_QdX_first(
 {
 	int info = 0;
 	for (int i = 0; i < N; i++) pvt[i] = 0;
-	if (trans) {
-		for (int j = 0; j < N; j++)
-			for (int i = 0; i < N; i++)
-				QdX->Q[i + j*N] = conj(B[j + i*N]);
-	} else
-		my_copy(QdX->Q, B, N*N);
+	xomatcopy('C', trans ? 'C' : 'N', N, N, 1.0, B, N, QdX->Q, N);
 
 	// use d as RWORK for zgeqp3
 	xgeqp3(N, N, QdX->Q, N, pvt, QdX->tau, work, lwork, (double *)QdX->d, &info);
@@ -110,12 +105,7 @@ void calc_QdX(
 {
 	// use X as temp N*N storage
 	int info = 0;
-	if (trans) {
-		for (int j = 0; j < N; j++)
-			for (int i = 0; i < N; i++)
-				QdX->X[i + j*N] = conj(B[j + i*N]);
-	} else
-		my_copy(QdX->X, B, N*N);
+	xomatcopy('C', trans ? 'C' : 'N', N, N, 1.0, B, N, QdX->X, N);
 
 	xunmqr("R", "N", N, N, N, QdX_prev->Q, N, QdX_prev->tau, QdX->X, N, work, lwork, &info);
 	for (int j = 0; j < N; j++)
@@ -193,13 +183,8 @@ num calc_Gtt_last(
 	xgetrf(N, N, tmpNN, N, pvt, &info);
 	xgetrs("N", N, N, tmpNN, N, pvt, G, N, &info);
 
-	if (trans) {
-#ifdef USE_CPLX
-		mkl_zimatcopy('C', 'C', N, N, (MKL_Complex16){1.0, 0.0}, (MKL_Complex16 *)(G), N, N);
-#else
-		mkl_dimatcopy('C', 'T', N, N, 1.0, G, N, N);		
-#endif
-	}
+	if (trans)
+		ximatcopy('C', 'C', N, N, 1.0, G, N, N);
 
 	// determinant
 	// num det = 1.0;
