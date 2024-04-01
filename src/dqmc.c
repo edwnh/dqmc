@@ -218,7 +218,7 @@ static int dqmc(struct sim_data *sim)
 	for (int l = 0; l < L; l++)
 		calcBu(l, N, exp_lambda, hs, exp_Ku, Bu[l]);
 	for (int f = 0; f < F; f++)
-		mul_seq(N, L, f*n_matmul, ((f + 1)*n_matmul) % L, 1.0,
+		mul_seq(N, f*n_matmul, (f + 1)*n_matmul, 1.0,
 		        Bu, Cu[f], N, tmpNN1u);
 	calc_QdX_first(1, N, Cu[F - 1], &QdXLu[F - 1],
 	               tmpN1u, pvtu, worku, lwork);
@@ -236,7 +236,7 @@ static int dqmc(struct sim_data *sim)
 	for (int l = 0; l < L; l++)
 		calcBd(l, N, exp_lambda, hs, exp_Kd, Bd[l]);
 	for (int f = 0; f < F; f++)
-		mul_seq(N, L, f*n_matmul, ((f + 1)*n_matmul) % L, 1.0,
+		mul_seq(N, f*n_matmul, (f + 1)*n_matmul, 1.0,
 		        Bd, Cd[f], N, tmpNN1d);
 	calc_QdX_first(1, N, Cd[F - 1], &QdXLd[F - 1],
 	               tmpN1d, pvtd, workd, lwork);
@@ -312,7 +312,7 @@ static int dqmc(struct sim_data *sim)
 			profile_end(calcb);
 			if (recalc) {
 				profile_begin(multb);
-				mul_seq(N, L, f*n_matmul, ((f + 1)*n_matmul) % L,
+				mul_seq(N, f*n_matmul, (f + 1)*n_matmul,
 				        1.0, Bu, Cu[f], N, tmpNN1u);
 				profile_end(multb);
 				profile_begin(recalc);
@@ -361,7 +361,7 @@ static int dqmc(struct sim_data *sim)
 			profile_end(calcb);
 			if (recalc) {
 				profile_begin(multb);
-				mul_seq(N, L, f*n_matmul, ((f + 1)*n_matmul) % L,
+				mul_seq(N, f*n_matmul, (f + 1)*n_matmul,
 				        1.0, Bd, Cd[f], N, tmpNN1d);
 				profile_end(multb);
 				profile_begin(recalc);

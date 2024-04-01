@@ -9,7 +9,7 @@ struct QdX {
     num *restrict X;
 };
 
-void mul_seq(const int N, const int L,
+void mul_seq(const int N,
 		const int min, const int maxp1,
 		const num alpha, num *const restrict *const restrict B,
 		num *const restrict A, const int ldA,

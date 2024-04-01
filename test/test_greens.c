@@ -18,6 +18,41 @@
 } while (0);
 
 // old code
+void mul_seq_old(const int N, const int L,
+		const int min, const int maxp1,
+		const num alpha, const num *const restrict B,
+		num *const restrict A, const int ldA,
+		num *const restrict work)
+{
+	const int n_mul = (min == maxp1) ? L : (L + maxp1 - min) % L;
+	if (n_mul == 1) {
+		for (int j = 0; j < N; j++)
+		for (int i = 0; i < N; i++)
+			A[i + ldA*j] = alpha*B[i + N*j + N*N*min];
+		return;
+	}
+
+	int l = min;
+	if (n_mul % 2 == 0) {
+		xgemm("N", "N", N, N, N, alpha, B + N*N*((l + 1)%L),
+		      N, B + N*N*l, N, 0.0, A, ldA);
+		l = (l + 2) % L;
+	} else {
+		xgemm("N", "N", N, N, N, alpha, B + N*N*((l + 1)%L),
+		      N, B + N*N*l, N, 0.0, work, N);
+		xgemm("N", "N", N, N, N, 1.0, B + N*N*((l + 2)%L),
+		      N, work, N, 0.0, A, ldA);
+		l = (l + 3) % L;
+	}
+
+	for (; l != maxp1; l = (l + 2) % L) {
+		xgemm("N", "N", N, N, N, 1.0, B + N*N*l,
+		      N, A, ldA, 0.0, work, N);
+		xgemm("N", "N", N, N, N, 1.0, B + N*N*((l + 1)%L),
+		      N, work, N, 0.0, A, ldA);
+	}
+}
+
 num calc_eq_g(const int l, const int N, const int L, const int n_mul,
 		const num *const restrict B, num *const restrict g,
 		num *const restrict Q, num *const restrict T,
@@ -35,7 +70,7 @@ num calc_eq_g(const int l, const int N, const int L, const int n_mul,
 
 	// (1)
 	int m = (l + 1 + (L - 1) % n_mul) % L;
-	mul_seq(N, L, l, m, 1.0, B, Q, N, work);
+	mul_seq_old(N, L, l, m, 1.0, B, Q, N, work);
 
 	for (int i = 0; i < N; i++) pvt[i] = 0;
 	xgeqp3(N, N, Q, N, pvt, tau, work, lwork, (double *)d, &info); // use d as RWORK
@@ -55,7 +90,7 @@ num calc_eq_g(const int l, const int N, const int L, const int n_mul,
 
 	while (m != l) {
 		const int next = (m + n_mul) % L;
-		mul_seq(N, L, m, next, 1.0, B, g, N, work);
+		mul_seq_old(N, L, m, next, 1.0, B, g, N, work);
 		m = next;
 
 		// (3a)

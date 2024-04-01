@@ -3,13 +3,15 @@
 #include "prof.h"
 #include "mem.h"
 
-void mul_seq(const int N, const int L,
+void mul_seq(const int N,
 		const int min, const int maxp1,
 		const num alpha, num *const restrict *const restrict B,
 		num *const restrict A, const int ldA,
 		num *const restrict tmpNN)
 {
-	const int n_mul = (min == maxp1) ? L : (L + maxp1 - min) % L;
+	const int n_mul = maxp1 - min;
+	if (n_mul <= 0)
+		return;
 	if (n_mul == 1) {
 		for (int j = 0; j < N; j++)
 		for (int i = 0; i < N; i++)
@@ -19,21 +21,21 @@ void mul_seq(const int N, const int L,
 
 	int l = min;
 	if (n_mul % 2 == 0) {
-		xgemm("N", "N", N, N, N, alpha, B[(l + 1)%L],
+		xgemm("N", "N", N, N, N, alpha, B[l + 1],
 		      N, B[l], N, 0.0, A, ldA);
-		l = (l + 2) % L;
+		l += 2;
 	} else {
-		xgemm("N", "N", N, N, N, alpha, B[(l + 1)%L],
+		xgemm("N", "N", N, N, N, alpha, B[l + 1],
 		      N, B[l], N, 0.0, tmpNN, N);
-		xgemm("N", "N", N, N, N, 1.0, B[(l + 2)%L],
+		xgemm("N", "N", N, N, N, 1.0, B[l + 2],
 		      N, tmpNN, N, 0.0, A, ldA);
-		l = (l + 3) % L;
+		l += 3;
 	}
 
-	for (; l != maxp1; l = (l + 2) % L) {
+	for (; l != maxp1; l += 2) {
 		xgemm("N", "N", N, N, N, 1.0, B[l],
 		      N, A, ldA, 0.0, tmpNN, N);
-		xgemm("N", "N", N, N, N, 1.0, B[(l + 1)%L],
+		xgemm("N", "N", N, N, N, 1.0, B[l + 1],
 		      N, tmpNN, N, 0.0, A, ldA);
 	}
 }
@@ -388,10 +390,10 @@ static void calc_o(const int N, const int L, const int n_mul,
 	for (int i = 0; i < NE * NE; i++) G[i] = 0.0;
 
 	for (int e = 0; e < E - 1; e++) // subdiagonal blocks
-		mul_seq(N, L, e*n_mul, (e + 1)*n_mul, -1.0, B,
+		mul_seq(N, e*n_mul, (e + 1)*n_mul, -1.0, B,
 		        G + N*(e + 1) + NE*N*e, NE, tmpNN);
 
-	mul_seq(N, L, (E - 1)*n_mul, 0, 1.0, B, // top right corner
+	mul_seq(N, (E - 1)*n_mul, L, 1.0, B, // top right corner
 		G + NE*N*(E - 1), NE, tmpNN);
 
 	for (int i = 0; i < NE; i++) G[i + NE*i] += 1.0; // 1 on diagonal
