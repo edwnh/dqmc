@@ -73,24 +73,29 @@ void calc_QdX_first(
 		int *const restrict pvt,
 		num *const restrict work, const int lwork)
 {
+	num *const restrict Q = QdX->Q;
+	num *const restrict tau = QdX->tau;
+	num *const restrict d = QdX->d;
+	num *const restrict X = QdX->X;
+
 	int info = 0;
 	for (int i = 0; i < N; i++) pvt[i] = 0;
-	xomatcopy('C', trans ? 'C' : 'N', N, N, 1.0, B, N, QdX->Q, N);
+	xomatcopy('C', trans ? 'C' : 'N', N, N, 1.0, B, N, Q, N);
 
 	// use d as RWORK for zgeqp3
-	xgeqp3(N, N, QdX->Q, N, pvt, QdX->tau, work, lwork, (double *)QdX->d, &info);
+	xgeqp3(N, N, Q, N, pvt, tau, work, lwork, (double *)d, &info);
 
 	for (int i = 0; i < N; i++) {
-		QdX->d[i] = QdX->Q[i + i*N];
-		if (QdX->d[i] == 0.0) QdX->d[i] = 1.0;
-		tmpN[i] = 1.0/QdX->d[i];
+		d[i] = Q[i + i*N];
+		if (d[i] == 0.0) d[i] = 1.0;
+		tmpN[i] = 1.0/d[i];
 	}
 
-	for (int i = 0; i < N*N; i++) QdX->X[i] = 0.0;
+	for (int i = 0; i < N*N; i++) X[i] = 0.0;
 
 	for (int j = 0; j < N; j++)
 		for (int i = 0; i <= j; i++)
-			QdX->X[i + (pvt[j]-1)*N] = tmpN[i] * QdX->Q[i + j*N];
+			X[i + (pvt[j]-1)*N] = tmpN[i] * Q[i + j*N];
 }
 
 void calc_QdX(
@@ -103,19 +108,28 @@ void calc_QdX(
 		int *const restrict pvt,
 		num *const restrict work, const int lwork)
 {
+	const num *const restrict prevQ = QdX_prev->Q;
+	const num *const restrict prevtau = QdX_prev->tau;
+	const num *const restrict prevd = QdX_prev->d;
+	const num *const restrict prevX = QdX_prev->X;
+	num *const restrict Q = QdX->Q;
+	num *const restrict tau = QdX->tau;
+	num *const restrict d = QdX->d;
+	num *const restrict X = QdX->X;
+
 	// use X as temp N*N storage
 	int info = 0;
-	xomatcopy('C', trans ? 'C' : 'N', N, N, 1.0, B, N, QdX->X, N);
+	xomatcopy('C', trans ? 'C' : 'N', N, N, 1.0, B, N, X, N);
 
-	xunmqr("R", "N", N, N, N, QdX_prev->Q, N, QdX_prev->tau, QdX->X, N, work, lwork, &info);
+	xunmqr("R", "N", N, N, N, prevQ, N, prevtau, X, N, work, lwork, &info);
 	for (int j = 0; j < N; j++)
 		for (int i = 0; i < N; i++)
-			QdX->X[i + j*N] *= QdX_prev->d[j];
+			X[i + j*N] *= prevd[j];
 
 	for (int j = 0; j < N; j++) { // use tmpN for norms
 		tmpN[j] = 0.0;
 		for (int i = 0; i < N; i++)
-			tmpN[j] += QdX->X[i + j*N] * conj(QdX->X[i + j*N]);
+			tmpN[j] += X[i + j*N] * conj(X[i + j*N]);
 	}
 
 	pvt[0] = 0;
@@ -127,25 +141,25 @@ void calc_QdX(
 	}
 
 	for (int j = 0; j < N; j++) // pre-pivot
-		my_copy(QdX->Q + j*N, QdX->X + pvt[j]*N, N);
+		my_copy(Q + j*N, X + pvt[j]*N, N);
 
-	xgeqrf(N, N, QdX->Q, N, QdX->tau, work, lwork, &info);
+	xgeqrf(N, N, Q, N, tau, work, lwork, &info);
 
 	for (int i = 0; i < N; i++) {
-		QdX->d[i] = QdX->Q[i + i*N];
-		if (QdX->d[i] == 0.0) QdX->d[i] = 1.0;
-		tmpN[i] = 1.0/QdX->d[i];
+		d[i] = Q[i + i*N];
+		if (d[i] == 0.0) d[i] = 1.0;
+		tmpN[i] = 1.0/d[i];
 	}
 
 	for (int j = 0; j < N; j++)
 		for (int i = 0; i <= j; i++)
-			QdX->Q[i + j*N] *= tmpN[i];
+			Q[i + j*N] *= tmpN[i];
 
 	for (int j = 0; j < N; j++)
 		for (int i = 0; i < N; i++)
-			QdX->X[i + j*N] = QdX_prev->X[pvt[i] + j*N];
+			X[i + j*N] = prevX[pvt[i] + j*N];
 
-	xtrmm("L", "U", "N", "N", N, N, 1.0, QdX->Q, N, QdX->X, N);
+	xtrmm("L", "U", "N", "N", N, N, 1.0, Q, N, X, N);
 }
 
 num calc_Gtt_last(
@@ -158,25 +172,30 @@ num calc_Gtt_last(
 		int *const restrict pvt,
 		num *const restrict work, const int lwork)
 {
+	const num *const restrict Q = QdX->Q;
+	const num *const restrict tau = QdX->tau;
+	const num *const restrict d = QdX->d;
+	const num *const restrict X = QdX->X;
+
 	int info = 0;
 
 	// construct g from Eq 2.12 of 10.1016/j.laa.2010.06.023
-//todo try double d = 1.0/QdX->d[i];
+//todo try double d = 1.0/d[i];
 	for (int i = 0; i < N*N; i++) G[i] = 0.0;
 	for (int i = 0; i < N; i++) {
-		if (fabs(QdX->d[i]) > 1.0) { // tmpN = 1/Db; tmpNN = Ds X
-			tmpN[i] = 1.0/QdX->d[i];
+		if (fabs(d[i]) > 1.0) { // tmpN = 1/Db; tmpNN = Ds X
+			tmpN[i] = 1.0/d[i];
 			for (int j = 0; j < N; j++)
-				tmpNN[i + j*N] = QdX->X[i + j*N];
+				tmpNN[i + j*N] = X[i + j*N];
 		} else {
 			tmpN[i] = 1.0;
 			for (int j = 0; j < N; j++)
-				tmpNN[i + j*N] = QdX->d[i] * QdX->X[i + j*N];
+				tmpNN[i + j*N] = d[i] * X[i + j*N];
 		}
 		G[i + i*N] = tmpN[i];
 	}
 
-	xunmqr("R", "C", N, N, N, QdX->Q, N, QdX->tau, G, N, work, lwork, &info);
+	xunmqr("R", "C", N, N, N, Q, N, tau, G, N, work, lwork, &info);
 
 	for (int i = 0; i < N*N; i++) tmpNN[i] += G[i];
 
@@ -207,9 +226,9 @@ num calc_Gtt_last(
 		phase *= c/cabs(c);
 		double vv = 1.0;
 		for (int j = i + 1; j < N; j++)
-			vv += creal(QdX->Q[j + i*N])*creal(QdX->Q[j + i*N])
-			    + cimag(QdX->Q[j + i*N])*cimag(QdX->Q[j + i*N]);
-		const num ref = 1.0 - QdX->tau[i]*vv;
+			vv += creal(Q[j + i*N])*creal(Q[j + i*N])
+			    + cimag(Q[j + i*N])*cimag(Q[j + i*N]);
+		const num ref = 1.0 - tau[i]*vv;
 		phase *= ref/cabs(ref);
 		if (pvt[i] != i+1) phase *= -1.0;
 	}
@@ -217,7 +236,7 @@ num calc_Gtt_last(
 #else
 	int sign = 1.0;
 	for (int i = 0; i < N; i++) 
-		if ((tmpN[i] < 0) ^ (QdX->tau[i] > 0) ^ (pvt[i] != i+1) ^ (tmpNN[i + i*N] < 0))
+		if ((tmpN[i] < 0) ^ (tau[i] > 0) ^ (pvt[i] != i+1) ^ (tmpNN[i + i*N] < 0))
 			sign *= -1;
 	return (double)sign;
 #endif
@@ -244,24 +263,33 @@ num calc_Gtt(
 		int *const restrict pvt,
 		num *const restrict work, const int lwork)
 {
+	const num *const restrict Q0 = QdX0->Q;
+	const num *const restrict tau0 = QdX0->tau;
+	const num *const restrict d0 = QdX0->d;
+	const num *const restrict X0 = QdX0->X;
+	const num *const restrict Q1 = QdX1->Q;
+	const num *const restrict tau1 = QdX1->tau;
+	const num *const restrict d1 = QdX1->d;
+	const num *const restrict X1 = QdX1->X;
+
 	int info = 0;
 
 	// 1. tmpNN0 = d0s X0 X1.T d1s
 	// tmpNN0 = X0 X1.T
-	xgemm("N", "C", N, N, N, 1.0, QdX0->X, N, QdX1->X, N, 0.0, tmpNN0, N);
+	xgemm("N", "C", N, N, N, 1.0, X0, N, X1, N, 0.0, tmpNN0, N);
 	// tmpN1 = d0s, tmpN0 = id0b
 	for (int i = 0; i < N; i++) {
-		if (fabs(QdX0->d[i]) > 1.0) {
-			tmpN0[i] = 1.0/QdX0->d[i];
+		if (fabs(d0[i]) > 1.0) {
+			tmpN0[i] = 1.0/d0[i];
 			tmpN1[i] = 1.0;
 		} else {
 			tmpN0[i] = 1.0;
-			tmpN1[i] = QdX0->d[i];
+			tmpN1[i] = d0[i];
 		}
 	}
 	// tmpNN0 = d0s tmpNN0 d1s
 	for (int j = 0; j < N; j++) {
-		const num d1s = fabs(QdX1->d[j]) > 1.0 ? 1.0 : QdX1->d[j];
+		const num d1s = fabs(d1[j]) > 1.0 ? 1.0 : d1[j];
 		for (int i = 0; i < N; i++)
 			tmpNN0[i + j*N] *= tmpN1[i] * d1s;
 	}
@@ -271,16 +299,16 @@ num calc_Gtt(
 	for (int i = 0; i < N*N; i++) G[i] = 0.0;
 	for (int i = 0; i < N; i++) G[i + i*N] = tmpN0[i];
 	// G = G Q0.T
-	xunmqr("R", "C", N, N, N, QdX0->Q, N, QdX0->tau, G, N, work, lwork, &info);
+	xunmqr("R", "C", N, N, N, Q0, N, tau0, G, N, work, lwork, &info);
 
 	// 3. tmpNN1 = G Q1 id1b
 	// tmpNN1 = G Q1
 	my_copy(tmpNN1, G, N*N);
-	xunmqr("R", "N", N, N, N, QdX1->Q, N, QdX1->tau, tmpNN1, N, work, lwork, &info);
+	xunmqr("R", "N", N, N, N, Q1, N, tau1, tmpNN1, N, work, lwork, &info);
 	// tmpN1 = id1b
 	for (int i = 0; i < N; i++) {
-		if (fabs(QdX1->d[i]) > 1.0)
-			tmpN1[i] = 1.0/QdX1->d[i];
+		if (fabs(d1[i]) > 1.0)
+			tmpN1[i] = 1.0/d1[i];
 		else
 			tmpN1[i] = 1.0;
 	}
@@ -301,7 +329,7 @@ num calc_Gtt(
 		for (int i = 0; i < N; i++)
 			G[i + j*N] *= tmpN1[i];
 	// G = Q1 G
-	xunmqr("L", "N", N, N, N, QdX1->Q, N, QdX1->tau, G, N, work, lwork, &info);
+	xunmqr("L", "N", N, N, N, Q1, N, tau1, G, N, work, lwork, &info);
 
 #ifdef USE_CPLX
 	num phase = 1.0;
@@ -311,12 +339,12 @@ num calc_Gtt(
 
 		double x0 = 1.0, x1 = 1.0;
 		for (int j = i + 1; j < N; j++) {
-			x0 += creal(QdX0->Q[j + i*N])*creal(QdX0->Q[j + i*N])
-			    + cimag(QdX0->Q[j + i*N])*cimag(QdX0->Q[j + i*N]);
-			x1 += creal(QdX1->Q[j + i*N])*creal(QdX1->Q[j + i*N])
-			    + cimag(QdX1->Q[j + i*N])*cimag(QdX1->Q[j + i*N]);
+			x0 += creal(Q0[j + i*N])*creal(Q0[j + i*N])
+			    + cimag(Q0[j + i*N])*cimag(Q0[j + i*N]);
+			x1 += creal(Q1[j + i*N])*creal(Q1[j + i*N])
+			    + cimag(Q1[j + i*N])*cimag(Q1[j + i*N]);
 		}
-		const num refs = (1.0 - QdX0->tau[i]*x0)/(1.0 - QdX1->tau[i]*x1);
+		const num refs = (1.0 - tau0[i]*x0)/(1.0 - tau1[i]*x1);
 		phase *= refs/cabs(refs);
 
 		if (pvt[i] != i+1) phase *= -1.0;
@@ -326,7 +354,7 @@ num calc_Gtt(
 	int sign = 1.0;
 	for (int i = 0; i < N; i++) 
 		if ((tmpNN1[i + i*N] < 0) ^ (tmpN0[i] < 0) ^ (tmpN1[i] < 0) ^
-				(QdX0->tau[i] > 0) ^ (QdX1->tau[i] > 0) ^ (pvt[i] != i+1))
+				(tau0[i] > 0) ^ (tau1[i] > 0) ^ (pvt[i] != i+1))
 			sign *= -1;
 	return (double)sign;
 #endif
