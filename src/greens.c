@@ -82,7 +82,7 @@ void calc_QdX_first(
 
 	// use d as RWORK for zgeqp3
 	xgeqp3(N, N, QdX->Q, N, pvt, QdX->tau, work, lwork, (double *)QdX->d, &info);
-//todo check avoid tmpN
+
 	for (int i = 0; i < N; i++) {
 		QdX->d[i] = QdX->Q[i + i*N];
 		if (QdX->d[i] == 0.0) QdX->d[i] = 1.0;
@@ -120,7 +120,7 @@ void calc_QdX(
 		for (int i = 0; i < N; i++)
 			QdX->X[i + j*N] *= QdX_prev->d[j];
 
-	for (int j = 0; j < N; j++) { // use v for norms
+	for (int j = 0; j < N; j++) { // use tmpN for norms
 		tmpN[j] = 0.0;
 		for (int i = 0; i < N; i++)
 			tmpN[j] += QdX->X[i + j*N] * conj(QdX->X[i + j*N]);
@@ -136,9 +136,9 @@ void calc_QdX(
 
 	for (int j = 0; j < N; j++) // pre-pivot
 		my_copy(QdX->Q + j*N, QdX->X + pvt[j]*N, N);
-//todo compare vs pre-pivoted geqp3
+
 	xgeqrf(N, N, QdX->Q, N, QdX->tau, work, lwork, &info);
-//todo check remove tmpN
+
 	for (int i = 0; i < N; i++) {
 		QdX->d[i] = QdX->Q[i + i*N];
 		if (QdX->d[i] == 0.0) QdX->d[i] = 1.0;

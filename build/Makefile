@@ -6,7 +6,7 @@ CFLAGS += -DMKL_DIRECT_CALL_SEQ
 CFLAGS += -DGIT_ID=\"$(shell git describe --always)\"
 CFLAGS += -DPROFILE_ENABLE
 # CFLAGS += -DUSE_CPLX  # uncomment to use complex numbers
-CFLAGS += -qopenmp-stubs  # to disable openmp, use -qopenmp-stubs
+CFLAGS += -qopenmp-stubs # to enable 2x threading, use -qopenmp
 
 LDFLAGS += -lhdf5 -lhdf5_hl -lmkl_intel_lp64 -lmkl_sequential -lmkl_core
 

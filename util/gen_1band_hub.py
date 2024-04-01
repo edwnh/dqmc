@@ -64,8 +64,7 @@ def create_1(file_sim=None, file_params=None, overwrite=False, init_rng=None,
              n_delay=16, n_matmul=8, n_sweep_warm=200, n_sweep_meas=2000,
              period_eqlt=8, period_uneqlt=0,
              meas_bond_corr=1, meas_energy_corr=0, meas_nematic_corr=0,
-             trans_sym=1,
-             MEM_ALIGN=64): # must be same as in src/mem.h
+             trans_sym=1):
     assert L % n_matmul == 0 and L % period_eqlt == 0
     N = Nx * Ny
 

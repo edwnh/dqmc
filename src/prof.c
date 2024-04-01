@@ -18,9 +18,18 @@ void profile_print(FILE *log, tick_t wall_time)
 	};
 	#undef X
 
+	int n_threads;
+	#pragma omp parallel
+	{
+		#pragma omp single
+		{
+			n_threads = omp_get_num_threads();
+		}
+	}
+
 	// ordered for loop through all threads
 	#pragma omp parallel for ordered schedule(static, 1)
-	for (int thread = 0; thread < omp_get_num_threads(); thread++) {
+	for (int thread = 0; thread < n_threads; thread++) {
 		#pragma omp ordered
 		{
 		// insertion sort for time
@@ -33,7 +42,7 @@ void profile_print(FILE *log, tick_t wall_time)
 		}
 
 		fprintf(log, "thread_%d/%d_______|_%% of all_|___total (s)_|___us per call_|___# calls\n",
-			thread + 1, omp_get_num_threads());
+			thread + 1, n_threads);
 		for (int j = 0; j < n_profile; j++) {
 			const int i = i_sorted[j];
 			if (profile_count[i] == 0) continue;
