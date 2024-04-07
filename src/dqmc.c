@@ -28,6 +28,33 @@
 	printf(#A " - " #B ":\tmax %.3e\tavg %.3e\n", max, avg); \
 } while (0);
 
+// B = A diag(d)
+static inline void mul_mat_diag(const int N, const int ld, const num *const A, const num *const d, num *const B)
+{
+	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
+	(void)__builtin_assume_aligned(A, MEM_ALIGN);
+	(void)__builtin_assume_aligned(d, MEM_ALIGN);
+	(void)__builtin_assume_aligned(B, MEM_ALIGN);
+
+	for (int j = 0; j < N; j++)
+		for (int i = 0; i < N; i++)
+			B[i + ld*j] = A[i + ld*j] * d[j];
+}
+
+
+// B = diag(d) A
+static inline void mul_diag_mat(const int N, const int ld, const num *const d, const num *const A, num *const B)
+{
+	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
+	(void)__builtin_assume_aligned(d, MEM_ALIGN);
+	(void)__builtin_assume_aligned(A, MEM_ALIGN);
+	(void)__builtin_assume_aligned(B, MEM_ALIGN);
+
+	for (int j = 0; j < N; j++)
+		for (int i = 0; i < N; i++)
+			B[i + ld*j] = d[i] * A[i + ld*j];
+}
+
 static int dqmc(struct sim_data *sim)
 {
 	const int N = sim->p.N;
@@ -171,9 +198,7 @@ static int dqmc(struct sim_data *sim)
 			const int hsil = hs[i + N*l];
 			exp_Vu[i] = exp_lambda[i + ld*hsil];
 		}
-		for (int j = 0; j < N; j++)
-			for (int i = 0; i < N; i++)
-				Bu[l][i + ld*j] = exp_Ku[i + ld*j] * exp_Vu[j];
+		mul_mat_diag(N, ld, exp_Ku, exp_Vu, Bu[l]);
 	}
 	for (int f = 0; f < F; f++)
 		mul_seq(N, f*n_matmul, (f + 1)*n_matmul, 1.0,
@@ -193,9 +218,7 @@ static int dqmc(struct sim_data *sim)
 			const int hsil = hs[i + N*l];
 			exp_Vd[i] = exp_lambda[i + ld*!hsil];
 		}
-		for (int j = 0; j < N; j++)
-			for (int i = 0; i < N; i++)
-				Bd[l][i + ld*j] = exp_Kd[i + ld*j] * exp_Vd[j];
+		mul_mat_diag(N, ld, exp_Kd, exp_Vd, Bd[l]);
 	}
 	for (int f = 0; f < F; f++)
 		mul_seq(N, f*n_matmul, (f + 1)*n_matmul, 1.0,
@@ -274,12 +297,8 @@ static int dqmc(struct sim_data *sim)
 			#pragma omp section
 			{
 			profile_begin(calcb);
-			for (int j = 0; j < N; j++)
-				for (int i = 0; i < N; i++)
-					Bu[l][i + ld*j] = exp_Ku[i + ld*j] * exp_Vu[j];
-			for (int j = 0; j < N; j++)
-				for (int i = 0; i < N; i++)
-					iBu[l][i + ld*j] = exp_Vd[i] * inv_exp_Ku[i + ld*j];
+			mul_mat_diag(N, ld, exp_Ku, exp_Vu, Bu[l]);
+			mul_diag_mat(N, ld, exp_Vd, inv_exp_Ku, iBu[l]);
 			profile_end(calcb);
 			if (recalc) {
 				profile_begin(multb);
@@ -327,12 +346,8 @@ static int dqmc(struct sim_data *sim)
 			#pragma omp section
 			{
 			profile_begin(calcb);
-			for (int j = 0; j < N; j++)
-				for (int i = 0; i < N; i++)
-					Bd[l][i + ld*j] = exp_Kd[i + ld*j] * exp_Vd[j];
-			for (int j = 0; j < N; j++)
-				for (int i = 0; i < N; i++)
-					iBd[l][i + ld*j] = exp_Vu[i] * inv_exp_Kd[i + ld*j];
+			mul_mat_diag(N, ld, exp_Kd, exp_Vd, Bd[l]);
+			mul_diag_mat(N, ld, exp_Vu, inv_exp_Kd, iBd[l]);
 			profile_end(calcb);
 			if (recalc) {
 				profile_begin(multb);
