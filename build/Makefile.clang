@@ -1,0 +1,35 @@
+CC = clang
+
+CFLAGS = -std=gnu17 -O3 -flto -march=x86-64-v4
+#CFLAGS += -mavx512f -mavx512cd -mavx512er -mavx512pf -mavx512vl -mavx512dq -mavx512bw
+CFLAGS += -Wall -Wextra -Wno-unused-variable -Wno-unused-parameter -Wno-unknown-pragmas
+CFLAGS += -DMKL_DIRECT_CALL_SEQ
+CFLAGS += -DGIT_ID=\"$(shell git describe --always)\"
+CFLAGS += -DPROFILE_ENABLE
+# CFLAGS += -DUSE_CPLX  # uncomment to use complex numbers
+# CFLAGS += -qopenmp-stubs # to enable 2x threading, use -qopenmp
+
+OPTFLAGS = #-fargument-noalias
+
+LDFLAGS += -lhdf5 -lhdf5_hl
+LDFLAGS +=  -Wl,--start-group ${MKLROOT}/lib/libmkl_intel_lp64.a ${MKLROOT}/lib/libmkl_sequential.a ${MKLROOT}/lib/libmkl_core.a -Wl,--end-group -lpthread -lm -ldl
+# LDFLAGS += -lmkl_intel_lp64 -lmkl_sequential -lmkl_core
+
+OBJS = data.o dqmc.o greens.o meas.o mem.o prof.o sig.o updates.o
+
+all: dqmc_1 dqmc_stack
+
+dqmc_1: ${OBJS} main_1.o
+	@echo linking $@
+	@${CC} ${CFLAGS} -o $@.${CC} $^ ${LDFLAGS}
+
+dqmc_stack: ${OBJS} main_stack.o
+	@echo linking $@
+	@${CC} ${CFLAGS} -o $@.${CC} $^ ${LDFLAGS}
+
+%.o: ../src/%.c
+	@echo compiling $<
+	@${CC} -c ${CFLAGS} ${OPTFLAGS} $<
+
+clean:
+	rm -f *.o *.optrpt *.yaml *.tmp

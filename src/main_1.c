@@ -1,7 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <omp.h>
+#ifdef _OPENMP
+	#include <omp.h>
+#else
+	static inline void omp_set_num_threads(int n)
+	{
+		(void)n;
+	}
+#endif
 #include "dqmc.h"
 #include "time_.h"
 

@@ -3,7 +3,14 @@
 #include "prof.h"
 #include <stdio.h>
 #include <string.h>
-#include <omp.h>
+#ifdef _OPENMP
+	#include <omp.h>
+#else
+	static inline int omp_get_num_threads(void)
+	{
+		return 1;
+	}
+#endif
 #include "time_.h"
 
 tick_t profile_time[n_profile] = {0};
