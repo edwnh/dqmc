@@ -1,22 +1,33 @@
 #include "updates.h"
 #include <tgmath.h>
 #include "linalg.h"
+#include "mem.h"
 #include "rand.h"
 
-void update_delayed(const int N, const int n_delay, const double *const restrict del,
-		const int *const restrict site_order,
-		uint64_t *const restrict rng, int *const restrict hs,
-		num *const restrict gu, num *const restrict gd, num *const restrict phase,
-		num *const restrict au, num *const restrict bu, num *const restrict du,
-		num *const restrict ad, num *const restrict bd, num *const restrict dd)
+void update_delayed(const int N, const int ld, const int n_delay, const double *const del,
+		const int *const site_order,
+		uint64_t *const rng, int *const hs,
+		num *const gu, num *const gd, num *const phase,
+		num *const au, num *const bu, num *const du,
+		num *const ad, num *const bd, num *const dd)
 {
+	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
+	(void)__builtin_assume_aligned(gu, MEM_ALIGN);
+	(void)__builtin_assume_aligned(gd, MEM_ALIGN);
+	(void)__builtin_assume_aligned(au, MEM_ALIGN);
+	(void)__builtin_assume_aligned(bu, MEM_ALIGN);
+	(void)__builtin_assume_aligned(du, MEM_ALIGN);
+	(void)__builtin_assume_aligned(ad, MEM_ALIGN);
+	(void)__builtin_assume_aligned(bd, MEM_ALIGN);
+	(void)__builtin_assume_aligned(dd, MEM_ALIGN);
+
 	int k = 0;
-	for (int j = 0; j < N; j++) du[j] = gu[j + N*j];
-	for (int j = 0; j < N; j++) dd[j] = gd[j + N*j];
+	for (int j = 0; j < N; j++) du[j] = gu[j + ld*j];
+	for (int j = 0; j < N; j++) dd[j] = gd[j + ld*j];
 	for (int ii = 0; ii < N; ii++) {
 		const int i = site_order[ii];
-		const double delu = del[i + N*hs[i]];
-		const double deld = del[i + N*!hs[i]];
+		const double delu = del[i + ld*hs[i]];
+		const double deld = del[i + ld*!hs[i]];
 		if (delu == 0.0 && deld == 0.0) continue;
 		const num ru = 1.0 + (1.0 - du[i]) * delu;
 		const num rd = 1.0 + (1.0 - dd[i]) * deld;
@@ -27,27 +38,27 @@ void update_delayed(const int N, const int n_delay, const double *const restrict
 			{
 			#pragma omp section
 			{
-			for (int j = 0; j < N; j++) au[j + N*k] = gu[j + N*i];
-			for (int j = 0; j < N; j++) bu[j + N*k] = gu[i + N*j];
-			xgemv("N", N, k, 1.0, au, N, bu + i,
-			      N, 1.0, au + N*k, 1);
-			xgemv("N", N, k, 1.0, bu, N, au + i,
-			      N, 1.0, bu + N*k, 1);
-			au[i + N*k] -= 1.0;
-			for (int j = 0; j < N; j++) au[j + N*k] *= delu/ru;
-			for (int j = 0; j < N; j++) du[j] += au[j + N*k] * bu[j + N*k];
+			for (int j = 0; j < N; j++) au[j + ld*k] = gu[j + ld*i];
+			for (int j = 0; j < N; j++) bu[j + ld*k] = gu[i + ld*j];
+			xgemv("N", N, k, 1.0, au, ld, bu + i,
+			      ld, 1.0, au + ld*k, 1);
+			xgemv("N", N, k, 1.0, bu, ld, au + i,
+			      ld, 1.0, bu + ld*k, 1);
+			au[i + ld*k] -= 1.0;
+			for (int j = 0; j < N; j++) au[j + ld*k] *= delu/ru;
+			for (int j = 0; j < N; j++) du[j] += au[j + ld*k] * bu[j + ld*k];
 			}
 			#pragma omp section
 			{
-			for (int j = 0; j < N; j++) ad[j + N*k] = gd[j + N*i];
-			for (int j = 0; j < N; j++) bd[j + N*k] = gd[i + N*j];
-			xgemv("N", N, k, 1.0, ad, N, bd + i,
-			      N, 1.0, ad + N*k, 1);
-			xgemv("N", N, k, 1.0, bd, N, ad + i,
-			      N, 1.0, bd + N*k, 1);
-			ad[i + N*k] -= 1.0;
-			for (int j = 0; j < N; j++) ad[j + N*k] *= deld/rd;
-			for (int j = 0; j < N; j++) dd[j] += ad[j + N*k] * bd[j + N*k];
+			for (int j = 0; j < N; j++) ad[j + ld*k] = gd[j + ld*i];
+			for (int j = 0; j < N; j++) bd[j + ld*k] = gd[i + ld*j];
+			xgemv("N", N, k, 1.0, ad, ld, bd + i,
+			      ld, 1.0, ad + ld*k, 1);
+			xgemv("N", N, k, 1.0, bd, ld, ad + i,
+			      ld, 1.0, bd + ld*k, 1);
+			ad[i + ld*k] -= 1.0;
+			for (int j = 0; j < N; j++) ad[j + ld*k] *= deld/rd;
+			for (int j = 0; j < N; j++) dd[j] += ad[j + ld*k] * bd[j + ld*k];
 			}
 			}
 			k++;
@@ -61,14 +72,14 @@ void update_delayed(const int N, const int n_delay, const double *const restrict
 			#pragma omp section
 			{
 			xgemm("N", "T", N, N, n_delay, 1.0,
-			      au, N, bu, N, 1.0, gu, N);
-			for (int j = 0; j < N; j++) du[j] = gu[j + N*j];
+			      au, ld, bu, ld, 1.0, gu, ld);
+			for (int j = 0; j < N; j++) du[j] = gu[j + ld*j];
 			}
 			#pragma omp section
 			{
 			xgemm("N", "T", N, N, n_delay, 1.0,
-			      ad, N, bd, N, 1.0, gd, N);
-			for (int j = 0; j < N; j++) dd[j] = gd[j + N*j];
+			      ad, ld, bd, ld, 1.0, gd, ld);
+			for (int j = 0; j < N; j++) dd[j] = gd[j + ld*j];
 			}
 			}
 		}
@@ -76,19 +87,19 @@ void update_delayed(const int N, const int n_delay, const double *const restrict
 	#pragma omp parallel sections
 	{
 	#pragma omp section
-	xgemm("N", "T", N, N, k, 1.0, au, N, bu, N, 1.0, gu, N);
+	xgemm("N", "T", N, N, k, 1.0, au, ld, bu, ld, 1.0, gu, ld);
 	#pragma omp section
-	xgemm("N", "T", N, N, k, 1.0, ad, N, bd, N, 1.0, gd, N);
+	xgemm("N", "T", N, N, k, 1.0, ad, ld, bd, ld, 1.0, gd, ld);
 	}
 }
 
 /*
-void update_shermor(const int N, const double *const restrict del,
-		const int *const restrict site_order,
-		uint64_t *const restrict rng, int *const restrict hs,
-		double *const restrict gu, double *const restrict gd, int *const restrict sign,
-		double *const restrict cu, double *const restrict du,
-		double *const restrict cd, double *const restrict dd)
+void update_shermor(const int N, const double *const del,
+		const int *const site_order,
+		uint64_t *const rng, int *const hs,
+		double *const gu, double *const gd, int *const sign,
+		double *const cu, double *const du,
+		double *const cd, double *const dd)
 {
 	for (int ii = 0; ii < N; ii++) {
 		const int i = site_order[ii];
@@ -116,18 +127,18 @@ void update_shermor(const int N, const double *const restrict del,
 	}
 }
 
-void update_submat(const int N, const int q, const double *const restrict del,
-		const int *const restrict site_order,
-		uint64_t *const restrict rng, int *const restrict hs,
-		double *const restrict gu, double *const restrict gd, int *const restrict sign,
-		double *const restrict gr_u, double *const restrict g_ru,
-		double *const restrict DDu, double *const restrict yu, double *const restrict xu,
-		double *const restrict gr_d, double *const restrict g_rd,
-		double *const restrict DDd, double *const restrict yd, double *const restrict xd)
+void update_submat(const int N, const int q, const double *const del,
+		const int *const site_order,
+		uint64_t *const rng, int *const hs,
+		double *const gu, double *const gd, int *const sign,
+		double *const gr_u, double *const g_ru,
+		double *const DDu, double *const yu, double *const xu,
+		double *const gr_d, double *const g_rd,
+		double *const DDd, double *const yd, double *const xd)
 {
-	int *const restrict r = my_calloc(q * sizeof(int)); _aa(r);
-	double *const restrict LUu = my_calloc(q*q * sizeof(double)); _aa(LUu);
-	double *const restrict LUd = my_calloc(q*q * sizeof(double)); _aa(LUd);
+	int *const r = my_calloc(q * sizeof(int)); _aa(r);
+	double *const LUu = my_calloc(q*q * sizeof(double)); _aa(LUu);
+	double *const LUd = my_calloc(q*q * sizeof(double)); _aa(LUd);
 
 	int k = 0;
 	for (int ii = 0; ii < N; ii++) {
