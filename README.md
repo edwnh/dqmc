@@ -168,8 +168,7 @@ List of parameters
 #### Code description
 
 * `build`: build directory
-    * `Makefile`: makefile for use with icc compiler
-    * `Makefile.icx`: makefile for use with icx compiler
+    * `Makefile`: makefile
 * `src`: C code
     * `data.c/data.h`: loading and saving simulation data to and from the simulation file
     * `dqmc.c/dqmc.h`: core DQMC algorithm
