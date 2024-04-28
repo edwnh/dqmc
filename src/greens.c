@@ -68,7 +68,7 @@ void calc_QdX_first(
 		const int trans, // if 1, calculate QdX of B^T (conjugate transpose for complex)
 		const int N, const int ld,
 		const num *const B, // input
-		const struct QdX *const QdX, // output
+		struct QdX *const QdX, // output
 		num *const tmpN, // work arrays
 		int *const pvt,
 		num *const work, const int lwork)
@@ -78,16 +78,17 @@ void calc_QdX_first(
 	(void)__builtin_assume_aligned(tmpN, MEM_ALIGN);
 	(void)__builtin_assume_aligned(work, MEM_ALIGN);
 	num *const Q = __builtin_assume_aligned(QdX->Q, MEM_ALIGN);
-	num *const tau = __builtin_assume_aligned(QdX->tau, MEM_ALIGN);
 	num *const d = __builtin_assume_aligned(QdX->d, MEM_ALIGN);
 	num *const X = __builtin_assume_aligned(QdX->X, MEM_ALIGN);
+	num *const iL = __builtin_assume_aligned(QdX->iL, MEM_ALIGN);
+	num *const R = __builtin_assume_aligned(QdX->R, MEM_ALIGN);
 
 	int info = 0;
 	for (int i = 0; i < N; i++) pvt[i] = 0;
 	xomatcopy('C', trans ? 'C' : 'N', N, N, 1.0, B, ld, Q, ld);
 
-	// use d as RWORK for zgeqp3
-	xgeqp3(N, N, Q, ld, pvt, tau, work, lwork, (double *)d, &info);
+	// use R as tau, and use d as RWORK for zgeqp3
+	xgeqp3(N, N, Q, ld, pvt, R, work, lwork, (double *)d, &info);
 
 	for (int i = 0; i < N; i++) {
 		d[i] = Q[i + i*ld];
@@ -102,6 +103,46 @@ void calc_QdX_first(
 	for (int j = 0; j < N; j++)
 		for (int i = 0; i <= j; i++)
 			X[i + (pvt[j]-1)*ld] = tmpN[i] * Q[i + j*ld];
+
+	// calculate phase of det(Q)
+	num phase = 1.0;
+#ifdef USE_CPLX
+	for (int i = 0; i < N; i++) {
+		double vv = 1.0;
+		for (int j = i + 1; j < N; j++)
+			vv += creal(Q[j + i*ld])*creal(Q[j + i*ld])
+			    + cimag(Q[j + i*ld])*cimag(Q[j + i*ld]);
+		const num ref = 1.0 - R[i]*vv;
+		phase *= ref/cabs(ref);
+	}
+#else
+	for (int i = 0; i < N; i++)
+		if (R[i] > 0)
+			phase *= -1;
+#endif
+
+	xungqr(N, N, N, Q, ld, R, work, lwork, &info); // form Q
+
+	// form iL = invdb Q.T, R = ds X
+	for (int i = 0; i < N; i++) {
+		if (fabs(d[i]) > 1.0) {
+#ifdef USE_CPLX
+			phase *= cabs(tmpN[i])/tmpN[i];
+#else
+			if (tmpN[i] < 0) phase *= -1;
+#endif
+			for (int j = 0; j < N; j++)
+				iL[i + j*ld] = tmpN[i] * conj(Q[j + i*ld]);
+			for (int j = 0; j < N; j++)
+				R[i + j*ld] = X[i + j*ld];
+		} else {
+			for (int j = 0; j < N; j++)
+				iL[i + j*ld] = conj(Q[j + i*ld]);
+			for (int j = 0; j < N; j++)
+				R[i + j*ld] = d[i] * X[i + j*ld];
+		}
+	}
+	QdX->phase_iL = phase;
 }
 
 void calc_QdX(
@@ -109,7 +150,7 @@ void calc_QdX(
 		const int N, const int ld,
 		const num *const B, // input
 		const struct QdX *const QdX_prev,  // input, previous QdX
-		const struct QdX *const QdX,  // output
+		struct QdX *const QdX,  // output
 		num *const tmpN, // work arrays
 		int *const pvt,
 		num *const work, const int lwork)
@@ -119,27 +160,30 @@ void calc_QdX(
 	(void)__builtin_assume_aligned(tmpN, MEM_ALIGN);
 	(void)__builtin_assume_aligned(work, MEM_ALIGN);
 	const num *const prevQ = __builtin_assume_aligned(QdX_prev->Q, MEM_ALIGN);
-	const num *const prevtau = __builtin_assume_aligned(QdX_prev->tau, MEM_ALIGN);
 	const num *const prevd = __builtin_assume_aligned(QdX_prev->d, MEM_ALIGN);
 	const num *const prevX = __builtin_assume_aligned(QdX_prev->X, MEM_ALIGN);
+	const num *const previL = __builtin_assume_aligned(QdX_prev->iL, MEM_ALIGN);
+	const num *const prevR = __builtin_assume_aligned(QdX_prev->R, MEM_ALIGN);
 	num *const Q = __builtin_assume_aligned(QdX->Q, MEM_ALIGN);
-	num *const tau = __builtin_assume_aligned(QdX->tau, MEM_ALIGN);
 	num *const d = __builtin_assume_aligned(QdX->d, MEM_ALIGN);
 	num *const X = __builtin_assume_aligned(QdX->X, MEM_ALIGN);
+	num *const iL = __builtin_assume_aligned(QdX->iL, MEM_ALIGN);
+	num *const R = __builtin_assume_aligned(QdX->R, MEM_ALIGN);
+
+	int info = 0;
 
 	// use X as temp N*N storage
-	int info = 0;
-	xomatcopy('C', trans ? 'C' : 'N', N, N, 1.0, B, ld, X, ld);
+	xgemm(trans ? "C" : "N", "N", N, N, N, 1.0, B, ld, prevQ, ld, 0.0, X, ld);
 
-	xunmqr("R", "N", N, N, N, prevQ, ld, prevtau, X, ld, work, lwork, &info);
 	for (int j = 0; j < N; j++)
 		for (int i = 0; i < N; i++)
 			X[i + j*ld] *= prevd[j];
 
 	for (int j = 0; j < N; j++) { // use tmpN for norms
-		tmpN[j] = 0.0;
+		num norm = 0;
 		for (int i = 0; i < N; i++)
-			tmpN[j] += X[i + j*ld] * conj(X[i + j*ld]);
+			norm += X[i + j*ld] * conj(X[i + j*ld]);
+		tmpN[j] = norm;
 	}
 
 	pvt[0] = 0;
@@ -153,7 +197,8 @@ void calc_QdX(
 	for (int j = 0; j < N; j++) // pre-pivot
 		my_copy(Q + j*ld, X + pvt[j]*ld, N);
 
-	xgeqrf(N, N, Q, ld, tau, work, lwork, &info);
+	// use R as tau
+	xgeqrf(N, N, Q, ld, R, work, lwork, &info);
 
 	for (int i = 0; i < N; i++) {
 		d[i] = Q[i + i*ld];
@@ -170,6 +215,46 @@ void calc_QdX(
 			X[i + j*ld] = prevX[pvt[i] + j*ld];
 
 	xtrmm("L", "U", "N", "N", N, N, 1.0, Q, ld, X, ld);
+
+	// calculate phase of det(Q)
+	num phase = 1.0;
+#ifdef USE_CPLX
+	for (int i = 0; i < N; i++) {
+		double vv = 1.0;
+		for (int j = i + 1; j < N; j++)
+			vv += creal(Q[j + i*ld])*creal(Q[j + i*ld])
+			    + cimag(Q[j + i*ld])*cimag(Q[j + i*ld]);
+		const num ref = 1.0 - R[i]*vv;
+		phase *= ref/cabs(ref);
+	}
+#else
+	for (int i = 0; i < N; i++)
+		if (R[i] > 0)
+			phase *= -1;
+#endif
+
+	xungqr(N, N, N, Q, ld, R, work, lwork, &info); // form Q
+
+	// form iL = invdb Q.T, R = ds X
+	for (int i = 0; i < N; i++) {
+		if (fabs(d[i]) > 1.0) {
+#ifdef USE_CPLX
+			phase *= cabs(tmpN[i])/tmpN[i];
+#else
+			if (tmpN[i] < 0) phase *= -1;
+#endif
+			for (int j = 0; j < N; j++)
+				iL[i + j*ld] = tmpN[i] * conj(Q[j + i*ld]);
+			for (int j = 0; j < N; j++)
+				R[i + j*ld] = X[i + j*ld];
+		} else {
+			for (int j = 0; j < N; j++)
+				iL[i + j*ld] = conj(Q[j + i*ld]);
+			for (int j = 0; j < N; j++)
+				R[i + j*ld] = d[i] * X[i + j*ld];
+		}
+	}
+	QdX->phase_iL = phase;
 }
 
 num calc_Gtt_last(
@@ -178,45 +263,24 @@ num calc_Gtt_last(
 		const struct QdX *const QdX, // input
 		num *const G, // output
 		num *const tmpNN, // work arrays
-		num *const tmpN,
-		int *const pvt,
-		num *const work, const int lwork)
+		int *const pvt)
 {
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	(void)__builtin_assume_aligned(G, MEM_ALIGN);
 	(void)__builtin_assume_aligned(tmpNN, MEM_ALIGN);
-	(void)__builtin_assume_aligned(tmpN, MEM_ALIGN);
-	(void)__builtin_assume_aligned(work, MEM_ALIGN);
-	const num *const Q = __builtin_assume_aligned(QdX->Q, MEM_ALIGN);
-	const num *const tau = __builtin_assume_aligned(QdX->tau, MEM_ALIGN);
-	const num *const d = __builtin_assume_aligned(QdX->d, MEM_ALIGN);
-	const num *const X = __builtin_assume_aligned(QdX->X, MEM_ALIGN);
+	const num *const iL = __builtin_assume_aligned(QdX->iL, MEM_ALIGN);
+	const num *const R = __builtin_assume_aligned(QdX->R, MEM_ALIGN);
 
 	int info = 0;
 
 	// construct g from Eq 2.12 of 10.1016/j.laa.2010.06.023
-//todo try double d = 1.0/d[i];
 	for (int j = 0; j < N; j++)
 		for (int i = 0; i < N; i++)
-			G[i + j*ld] = 0.0;
-	for (int i = 0; i < N; i++) {
-		if (fabs(d[i]) > 1.0) { // tmpN = 1/Db; tmpNN = Ds X
-			tmpN[i] = 1.0/d[i];
-			for (int j = 0; j < N; j++)
-				tmpNN[i + j*ld] = X[i + j*ld];
-		} else {
-			tmpN[i] = 1.0;
-			for (int j = 0; j < N; j++)
-				tmpNN[i + j*ld] = d[i] * X[i + j*ld];
-		}
-		G[i + i*ld] = tmpN[i];
-	}
-
-	xunmqr("R", "C", N, N, N, Q, ld, tau, G, ld, work, lwork, &info);
+			G[i + j*ld] = iL[i + j*ld];
 
 	for (int j = 0; j < N; j++)
 		for (int i = 0; i < N; i++)
-			tmpNN[i + j*ld] += G[i + j*ld];
+			tmpNN[i + j*ld] = G[i + j*ld] + R[i + j*ld];
 
 	xgetrf(N, N, tmpNN, ld, pvt, &info);
 	xgetrs("N", N, N, tmpNN, ld, pvt, G, ld, &info);
@@ -228,23 +292,17 @@ num calc_Gtt_last(
 #ifdef USE_CPLX
 	num phase = 1.0;
 	for (int i = 0; i < N; i++) {
-		const num c = tmpNN[i + i*ld]/tmpN[i];
+		const num c = tmpNN[i + i*ld];
 		phase *= c/cabs(c);
-		double vv = 1.0;
-		for (int j = i + 1; j < N; j++)
-			vv += creal(Q[j + i*ld])*creal(Q[j + i*ld])
-			    + cimag(Q[j + i*ld])*cimag(Q[j + i*ld]);
-		const num ref = 1.0 - tau[i]*vv;
-		phase *= ref/cabs(ref);
 		if (pvt[i] != i+1) phase *= -1.0;
 	}
-	return phase;
+	return phase*QdX->phase_iL;
 #else
 	int sign = 1.0;
 	for (int i = 0; i < N; i++) 
-		if ((tmpN[i] < 0) ^ (tau[i] > 0) ^ (pvt[i] != i+1) ^ (tmpNN[i + i*ld] < 0))
+		if ((pvt[i] != i+1) ^ (tmpNN[i + i*ld] < 0))
 			sign *= -1;
-	return (double)sign;
+	return sign*QdX->phase_iL;
 #endif
 }
 
@@ -257,6 +315,14 @@ num calc_Gtt_last(
 // 4. tmpNN1 += tmpNN0
 // 5. G = tmpNN1^-1 G
 // 6. G = Q1 id1b G
+
+// G = (1 + L0 R0 R1.T L1.T)^-1
+//   = iL1.T (iL0 iL1.T + R0 R1.T)^-1 iL0
+// 1. tmpNN0 = R0 R1.T
+// 2. tmpNN0 += iL0 iL1.T
+// 3. tmpNN1 = iL0
+// 4. tmpNN1 = tmpNN0^-1 tmpNN1
+// 5. G = iL1.T tmpNN1
 num calc_Gtt(
 		const int N, const int ld,
 		const struct QdX *const QdX0, // input
@@ -264,114 +330,45 @@ num calc_Gtt(
 		num *const G, // output
 		num *const tmpNN0, // work arrays
 		num *const tmpNN1,
-		num *const tmpN0,
-		num *const tmpN1,
-		int *const pvt,
-		num *const work, const int lwork)
+		int *const pvt)
 {
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	(void)__builtin_assume_aligned(G, MEM_ALIGN);
 	(void)__builtin_assume_aligned(tmpNN0, MEM_ALIGN);
 	(void)__builtin_assume_aligned(tmpNN1, MEM_ALIGN);
-	(void)__builtin_assume_aligned(tmpN0, MEM_ALIGN);
-	(void)__builtin_assume_aligned(tmpN1, MEM_ALIGN);
-	(void)__builtin_assume_aligned(work, MEM_ALIGN);
-	const num *const Q0 = __builtin_assume_aligned(QdX0->Q, MEM_ALIGN);
-	const num *const tau0 = __builtin_assume_aligned(QdX0->tau, MEM_ALIGN);
-	const num *const d0 = __builtin_assume_aligned(QdX0->d, MEM_ALIGN);
-	const num *const X0 = __builtin_assume_aligned(QdX0->X, MEM_ALIGN);
-	const num *const Q1 = __builtin_assume_aligned(QdX1->Q, MEM_ALIGN);
-	const num *const tau1 = __builtin_assume_aligned(QdX1->tau, MEM_ALIGN);
-	const num *const d1 = __builtin_assume_aligned(QdX1->d, MEM_ALIGN);
-	const num *const X1 = __builtin_assume_aligned(QdX1->X, MEM_ALIGN);
+	const num *const iL0 = __builtin_assume_aligned(QdX0->iL, MEM_ALIGN);
+	const num *const R0 = __builtin_assume_aligned(QdX0->R, MEM_ALIGN);
+	const num *const iL1 = __builtin_assume_aligned(QdX1->iL, MEM_ALIGN);
+	const num *const R1 = __builtin_assume_aligned(QdX1->R, MEM_ALIGN);
 
 	int info = 0;
 
-	// 1. tmpNN0 = d0s X0 X1.T d1s
-	// tmpNN0 = X0 X1.T
-	xgemm("N", "C", N, N, N, 1.0, X0, ld, X1, ld, 0.0, tmpNN0, ld);
-	// tmpN1 = d0s, tmpN0 = id0b
-	for (int i = 0; i < N; i++) {
-		if (fabs(d0[i]) > 1.0) {
-			tmpN0[i] = 1.0/d0[i];
-			tmpN1[i] = 1.0;
-		} else {
-			tmpN0[i] = 1.0;
-			tmpN1[i] = d0[i];
-		}
-	}
-	// tmpNN0 = d0s tmpNN0 d1s
-	for (int j = 0; j < N; j++) {
-		const num d1s = fabs(d1[j]) > 1.0 ? 1.0 : d1[j];
-		for (int i = 0; i < N; i++)
-			tmpNN0[i + j*ld] *= tmpN1[i] * d1s;
-	}
-
-	// 2. G = id0b Q0.T
-	// G = id0b
-	for (int j = 0; j < N; j++)
-		for (int i = 0; i < N; i++)
-			G[i + j*ld] = 0.0;
-	for (int i = 0; i < N; i++) G[i + i*ld] = tmpN0[i];
-	// G = G Q0.T
-	xunmqr("R", "C", N, N, N, Q0, ld, tau0, G, ld, work, lwork, &info);
-
-	// 3. tmpNN1 = G Q1 id1b
-	// tmpNN1 = G Q1
-	xomatcopy('C', 'N', N, N, 1.0, G, ld, tmpNN1, ld);
-	xunmqr("R", "N", N, N, N, Q1, ld, tau1, tmpNN1, ld, work, lwork, &info);
-	// tmpN1 = id1b
-	for (int i = 0; i < N; i++) {
-		if (fabs(d1[i]) > 1.0)
-			tmpN1[i] = 1.0/d1[i];
-		else
-			tmpN1[i] = 1.0;
-	}
-
-	// combine last part of 3 with 4. tmpNN1 += tmpNN0
-	// tmpNN1 = tmpNN1 tmpN1 + tmpNN0
-	for (int j = 0; j < N; j++)
-		for (int i = 0; i < N; i++)
-			tmpNN1[i + j*ld] = tmpNN1[i + j*ld]*tmpN1[j] + tmpNN0[i + j*ld];
-
-	// 5. G = tmpNN1^-1 G
-	xgetrf(N, N, tmpNN1, ld, pvt, &info);
-	xgetrs("N", N, N, tmpNN1, ld, pvt, G, ld, &info);
-
-	// 6. G = Q1 id1b G
-	// G = id1b G
-	for (int j = 0; j < N; j++)
-		for (int i = 0; i < N; i++)
-			G[i + j*ld] *= tmpN1[i];
-	// G = Q1 G
-	xunmqr("L", "N", N, N, N, Q1, ld, tau1, G, ld, work, lwork, &info);
+	// 1. tmpNN0 = R0 R1.T
+	xgemm("N", "C", N, N, N, 1.0, R0, ld, R1, ld, 0.0, tmpNN0, ld);
+	// 2. tmpNN0 += iL0 iL1.T
+	xgemm("N", "C", N, N, N, 1.0, iL0, ld, iL1, ld, 1.0, tmpNN0, ld);
+	// 3. tmpNN1 = iL0
+	xomatcopy('C', 'N', N, N, 1.0, iL0, ld, tmpNN1, ld);
+	// 4. tmpNN1 = tmpNN0^-1 tmpNN1
+	xgetrf(N, N, tmpNN0, ld, pvt, &info);
+	xgetrs("N", N, N, tmpNN0, ld, pvt, tmpNN1, ld, &info);
+	// 5. G = iL1.T tmpNN1
+	xgemm("C", "N", N, N, N, 1.0, iL1, ld, tmpNN1, ld, 0.0, G, ld);
 
 #ifdef USE_CPLX
 	num phase = 1.0;
 	for (int i = 0; i < N; i++) {
-		const num c = tmpNN1[i + i*ld]/(tmpN0[i] * tmpN1[i]);
+		const num c = tmpNN0[i + i*ld];
 		phase *= c/cabs(c);
-
-		double x0 = 1.0, x1 = 1.0;
-		for (int j = i + 1; j < N; j++) {
-			x0 += creal(Q0[j + i*ld])*creal(Q0[j + i*ld])
-			    + cimag(Q0[j + i*ld])*cimag(Q0[j + i*ld]);
-			x1 += creal(Q1[j + i*ld])*creal(Q1[j + i*ld])
-			    + cimag(Q1[j + i*ld])*cimag(Q1[j + i*ld]);
-		}
-		const num refs = (1.0 - tau0[i]*x0)/(1.0 - tau1[i]*x1);
-		phase *= refs/cabs(refs);
-
 		if (pvt[i] != i+1) phase *= -1.0;
 	}
-	return phase;
+	return phase*QdX0->phase_iL*QdX1->phase_iL;
 #else
 	int sign = 1.0;
 	for (int i = 0; i < N; i++) 
-		if ((tmpNN1[i + i*ld] < 0) ^ (tmpN0[i] < 0) ^ (tmpN1[i] < 0) ^
-				(tau0[i] > 0) ^ (tau1[i] > 0) ^ (pvt[i] != i+1))
+		if ((tmpNN0[i + i*ld] < 0) ^ (pvt[i] != i+1))
 			sign *= -1;
-	return (double)sign;
+	return sign*QdX0->phase_iL*QdX1->phase_iL;
 #endif
 }
 

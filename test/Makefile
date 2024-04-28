@@ -1,11 +1,15 @@
 CC = icx
 
-CFLAGS = -I../src -std=gnu17 -fast -xHost
+CFLAGS = -std=gnu17 -fast -xCORE-AVX2 -axCOMMON-AVX512
 CFLAGS += -Wall -Wextra -Wno-unused-variable -Wno-unused-parameter
 CFLAGS += -DMKL_DIRECT_CALL_SEQ
+CFLAGS += -I../src
 # CFLAGS += -DUSE_CPLX  # make clean and uncomment to use complex numbers
 
-LDFLAGS += -lhdf5 -lhdf5_hl -lmkl_intel_lp64 -lmkl_sequential -lmkl_core
+OPTFLAGS = -fargument-noalias
+
+LDFLAGS +=  -Wl,--start-group ${MKLROOT}/lib/libmkl_intel_lp64.a ${MKLROOT}/lib/libmkl_sequential.a ${MKLROOT}/lib/libmkl_core.a -Wl,--end-group
+# LDFLAGS += -lmkl_intel_lp64 -lmkl_sequential -lmkl_core
 
 all: test_greens bench_linalg
 
@@ -21,7 +25,7 @@ vpath %.c ../src ../test
 
 %.o: %.c
 	@echo compiling $<
-	@${CC} -c ${CFLAGS} $<
+	@${CC} -c ${CFLAGS} ${OPTFLAGS} $<
 
 clean:
-	rm -f *.o *.optrpt *.seq *.par
+	rm -f *.o *.optrpt *.yaml *.tmp

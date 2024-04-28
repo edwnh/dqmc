@@ -100,13 +100,15 @@ static int dqmc(struct sim_data *sim)
 	XX(struct QdX *QdX0u, mp, F * sizeof(struct QdX)) \
 	FOR(f, F) \
 		XX(QdXLu[f].Q, mp, ld*N * sizeof(num)) \
-		XX(QdXLu[f].tau, mp, N * sizeof(num)) \
 		XX(QdXLu[f].d, mp, N * sizeof(num)) \
 		XX(QdXLu[f].X, mp, ld*N * sizeof(num)) \
+		XX(QdXLu[f].iL, mp, ld*N * sizeof(num)) \
+		XX(QdXLu[f].R, mp, ld*N * sizeof(num)) \
 		XX(QdX0u[f].Q, mp, ld*N * sizeof(num)) \
-		XX(QdX0u[f].tau, mp, N * sizeof(num)) \
 		XX(QdX0u[f].d, mp, N * sizeof(num)) \
 		XX(QdX0u[f].X, mp, ld*N * sizeof(num)) \
+		XX(QdX0u[f].iL, mp, ld*N * sizeof(num)) \
+		XX(QdX0u[f].R, mp, ld*N * sizeof(num)) \
 	ENDFOR \
 	XX(num *const gu, mp, ld*N * sizeof(num)) \
 	XX(num *const exp_halfKu, mp, ld*N * sizeof(num)) \
@@ -130,13 +132,15 @@ static int dqmc(struct sim_data *sim)
 	XX(struct QdX *QdX0d, mp, F * sizeof(struct QdX)) \
 	FOR(f, F) \
 		XX(QdXLd[f].Q, mp, ld*N * sizeof(num)) \
-		XX(QdXLd[f].tau, mp, N * sizeof(num)) \
 		XX(QdXLd[f].d, mp, N * sizeof(num)) \
 		XX(QdXLd[f].X, mp, ld*N * sizeof(num)) \
+		XX(QdXLd[f].iL, mp, ld*N * sizeof(num)) \
+		XX(QdXLd[f].R, mp, ld*N * sizeof(num)) \
 		XX(QdX0d[f].Q, mp, ld*N * sizeof(num)) \
-		XX(QdX0d[f].tau, mp, N * sizeof(num)) \
 		XX(QdX0d[f].d, mp, N * sizeof(num)) \
 		XX(QdX0d[f].X, mp, ld*N * sizeof(num)) \
+		XX(QdX0d[f].iL, mp, ld*N * sizeof(num)) \
+		XX(QdX0d[f].R, mp, ld*N * sizeof(num)) \
 	ENDFOR \
 	XX(num *const gd, mp, ld*N * sizeof(num)) \
 	XX(num *const exp_halfKd, mp, ld*N * sizeof(num)) \
@@ -208,8 +212,7 @@ static int dqmc(struct sim_data *sim)
 	for (int f = F - 2; f >= 0; f--)
 		calc_QdX(1, N, ld, Cu[f], &QdXLu[f + 1], &QdXLu[f],
 		         tmpN1u, pvtu, worku, lwork);
-	phaseu = calc_Gtt_last(1, N, ld, &QdXLu[0], gu,
-	                       tmpNN1u, tmpN1u, pvtu, worku, lwork);
+	phaseu = calc_Gtt_last(1, N, ld, &QdXLu[0], gu, tmpNN1u, pvtu);
 	}
 	#pragma omp section
 	{
@@ -228,8 +231,7 @@ static int dqmc(struct sim_data *sim)
 	for (int f = F - 2; f >= 0; f--)
 		calc_QdX(1, N, ld, Cd[f], &QdXLd[f + 1], &QdXLd[f],
 		         tmpN1d, pvtd, workd, lwork);
-	phased = calc_Gtt_last(1, N, ld, &QdXLd[0], gd,
-	                       tmpNN1d, tmpN1d, pvtd, workd, lwork);
+	phased = calc_Gtt_last(1, N, ld, &QdXLd[0], gd, tmpNN1d, pvtd);
 	}
 	}
 	phase = phaseu*phased;
@@ -314,11 +316,9 @@ static int dqmc(struct sim_data *sim)
 						calc_QdX(0, N, ld, Cu[f], &QdX0u[f - 1], &QdX0u[f],
 						         tmpN1u, pvtu, worku, lwork);
 					if (f == F - 1)
-						phaseu = calc_Gtt_last(0, N, ld, &QdX0u[f], gu,
-						                       tmpNN1u, tmpN1u, pvtu, worku, lwork);
+						phaseu = calc_Gtt_last(0, N, ld, &QdX0u[f], gu, tmpNN1u, pvtu);
 					else
-						phaseu = calc_Gtt(N, ld, &QdX0u[f], &QdXLu[f + 1], gu,
-						                  tmpNN1u, tmpNN2u, tmpN1u, tmpN2u, pvtu, worku, lwork);
+						phaseu = calc_Gtt(N, ld, &QdX0u[f], &QdXLu[f + 1], gu, tmpNN1u, tmpNN2u, pvtu);
 				} else {
 					if (f == F - 1)
 						calc_QdX_first(1, N, ld, Cu[f], &QdXLu[f],
@@ -327,11 +327,9 @@ static int dqmc(struct sim_data *sim)
 						calc_QdX(1, N, ld, Cu[f], &QdXLu[f + 1], &QdXLu[f],
 						         tmpN1u, pvtu, worku, lwork);
 					if (f == 0)
-						phaseu = calc_Gtt_last(1, N, ld, &QdXLu[f], gu,
-						                       tmpNN1u, tmpN1u, pvtu, worku, lwork);
+						phaseu = calc_Gtt_last(1, N, ld, &QdXLu[f], gu, tmpNN1u, pvtu);
 					else
-						phaseu = calc_Gtt(N, ld, &QdX0u[f - 1], &QdXLu[f], gu,
-						                  tmpNN1u, tmpNN2u, tmpN1u, tmpN2u, pvtu, worku, lwork);
+						phaseu = calc_Gtt(N, ld, &QdX0u[f - 1], &QdXLu[f], gu, tmpNN1u, tmpNN2u, pvtu);
 				}
 				profile_end(recalc);
 			} else {
@@ -363,11 +361,9 @@ static int dqmc(struct sim_data *sim)
 						calc_QdX(0, N, ld, Cd[f], &QdX0d[f - 1], &QdX0d[f],
 						         tmpN1d, pvtd, workd, lwork);
 					if (f == F - 1)
-						phased = calc_Gtt_last(0, N, ld, &QdX0d[f], gd,
-						                       tmpNN1d, tmpN1d, pvtd, workd, lwork);
+						phased = calc_Gtt_last(0, N, ld, &QdX0d[f], gd, tmpNN1d, pvtd);
 					else
-						phased = calc_Gtt(N, ld, &QdX0d[f], &QdXLd[f + 1], gd,
-						                  tmpNN1d, tmpNN2d, tmpN1d, tmpN2d, pvtd, workd, lwork);
+						phased = calc_Gtt(N, ld, &QdX0d[f], &QdXLd[f + 1], gd, tmpNN1d, tmpNN2d, pvtd);
 				} else {
 					if (f == F - 1)
 						calc_QdX_first(1, N, ld, Cd[f], &QdXLd[f],
@@ -376,11 +372,9 @@ static int dqmc(struct sim_data *sim)
 						calc_QdX(1, N, ld, Cd[f], &QdXLd[f + 1], &QdXLd[f],
 						         tmpN1d, pvtd, workd, lwork);
 					if (f == 0)
-						phased = calc_Gtt_last(1, N, ld, &QdXLd[f], gd,
-						                       tmpNN1d, tmpN1d, pvtd, workd, lwork);
+						phased = calc_Gtt_last(1, N, ld, &QdXLd[f], gd, tmpNN1d, pvtd);
 					else
-						phased = calc_Gtt(N, ld, &QdX0d[f - 1], &QdXLd[f], gd,
-						                  tmpNN1d, tmpNN2d, tmpN1d, tmpN2d, pvtd, workd, lwork);
+						phased = calc_Gtt(N, ld, &QdX0d[f - 1], &QdXLd[f], gd, tmpNN1d, tmpNN2d, pvtd);
 				}
 				profile_end(recalc);
 			} else {

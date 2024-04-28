@@ -4,9 +4,11 @@
 
 struct QdX {
     num *Q;
-    num *tau;
     num *d;
     num *X;
+	num *iL;
+	num *R;
+	num phase_iL;
 };
 
 void mul_seq(const int N,
@@ -21,7 +23,7 @@ void calc_QdX_first(
 		const int trans, // if 1, calculate QdX of B^T (conjugate transpose for complex)
 		const int N, const int ld,
 		const num *const B, // input
-		const struct QdX *const QdX, // output
+		struct QdX *const QdX, // output
 		num *const tmpN, // work arrays
 		int *const pvt,
 		num *const work, const int lwork);
@@ -31,7 +33,7 @@ void calc_QdX(
 		const int N, const int ld,
 		const num *const B, // input
 		const struct QdX *const QdX_prev,  // input, previous QdX
-		const struct QdX *const QdX,  // output
+		struct QdX *const QdX,  // output
 		num *const tmpN, // work arrays
 		int *const pvt,
 		num *const work, const int lwork);
@@ -42,9 +44,7 @@ num calc_Gtt_last(
 		const struct QdX *const QdX, // input
 		num *const G, // output
 		num *const tmpNN, // work arrays
-		num *const tmpN,
-		int *const pvt,
-		num *const work, const int lwork);
+		int *const pvt);
 
 num calc_Gtt(
 		const int N, const int ld,
@@ -53,10 +53,7 @@ num calc_Gtt(
 		num *const G, // output
 		num *const tmpNN0, // work arrays
 		num *const tmpNN1,
-		num *const tmpN0,
-		num *const tmpN1,
-		int *const pvt,
-		num *const work, const int lwork);
+		int *const pvt);
 
 
 int get_lwork_ue_g(const int N, const int L);

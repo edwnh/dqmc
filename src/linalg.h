@@ -132,6 +132,17 @@ static inline void xunmqr(const char* side, const char* trans,
 	cast(c), &ldc, cast(work), &lwork, info);
 }
 
+static inline void xungqr(const int m, const int n, const int k, num* a,
+		const int lda, const num* tau, num* work, const int lwork, int* info)
+{
+#ifdef USE_CPLX
+	zungqr(
+#else
+	dorgqr(
+#endif
+	&m, &n, &k, cast(a), &lda, ccast(tau), cast(work), &lwork, info);
+}
+
 static inline void xtrtri(const char* uplo, const char* diag, const int n,
 		num* a, const int lda, int* info)
 {
