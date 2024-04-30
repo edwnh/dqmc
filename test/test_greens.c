@@ -194,6 +194,98 @@ num calc_eq_g(const int l, const int N, const int ld, const int L, const int n_m
 	return 1.0/phase;
 }
 
+static void calc_o(const int N, const int ld, const int L, const int n_mul,
+		const num *const B, num *const G,
+		num *const tmpNN)
+{
+	const int E = 1 + (L - 1) / n_mul;
+	const int NE = N*E;
+
+	for (int i = 0; i < NE * NE; i++) G[i] = 0.0;
+
+	for (int e = 0; e < E - 1; e++) // subdiagonal blocks
+		mul_seq_old(N, L, e*n_mul, (e + 1)*n_mul, -1.0, B, ld,
+		        G + N*(e + 1) + NE*N*e, NE, tmpNN);
+
+	mul_seq_old(N, L, (E - 1)*n_mul, 0, 1.0, B, ld, // top right corner
+		G + NE*N*(E - 1), NE, tmpNN);
+
+	for (int i = 0; i < NE; i++) G[i + NE*i] += 1.0; // 1 on diagonal
+}
+
+static void bsofi(const int N, const int L,
+		num *const G, // input: O matrix, output: G = O^-1
+		num *const tau, // NL
+		num *const Q, // 2*N * 2*N
+		num *const work, const int lwork)
+{
+	int info;
+
+	if (L == 1) {
+		xgetrf(N, N, G, N, (int *)tau, &info);
+		xgetri(N, G, N, (int *)tau, work, lwork, &info);
+		return;
+	}
+
+	const int NL = N*L;
+	const int N2 = 2*N;
+
+	#define G_BLK(i, j) (G + N*(i) + NL*N*(j))
+	// block qr
+	for (int l = 0; l < L - 2; l++) {
+		xgeqrf(N2, N, G_BLK(l, l), NL, tau + N*l, work, lwork, &info);
+		xunmqr("L", "C", N2, N, N, G_BLK(l, l), NL, tau + N*l,
+		       G_BLK(l, l + 1), NL, work, lwork, &info);
+		xunmqr("L", "C", N2, N, N, G_BLK(l, l), NL, tau + N*l,
+		       G_BLK(l, L - 1), NL, work, lwork, &info);
+	}
+	xgeqrf(N2, N2, G_BLK(L - 2, L - 2), NL, tau + N*(L - 2), work, lwork, &info);
+
+	// invert r
+	if (L <= 2) {
+		xtrtri("U", "N", NL, G, NL, &info);
+	} else {
+		xtrtri("U", "N", 3*N, G_BLK(L - 3, L - 3), NL, &info);
+		if (L > 3) {
+			xtrmm("R", "U", "N", "N", N*(L - 3), N, 1.0,
+			      G_BLK(L - 1, L - 1), NL, G_BLK(0, L - 1), NL);
+			for (int l = L - 4; l >= 0; l--) {
+				xtrtri("U", "N", N, G_BLK(l, l), NL, &info);
+				xtrmm("L", "U", "N", "N", N, N, -1.0,
+				      G_BLK(l, l), NL, G_BLK(l, L - 1), NL);
+				xtrmm("L", "U", "N", "N", N, N, -1.0,
+				      G_BLK(l, l), NL, G_BLK(l, l + 1), NL);
+				xgemm("N", "N", N, N*(L - l - 2), N, 1.0,
+				      G_BLK(l, l + 1), NL, G_BLK(l + 1, l + 2), NL, 1.0,
+				      G_BLK(l, l + 2), NL);
+				xtrmm("R", "U", "N", "N", N, N, 1.0,
+				      G_BLK(l + 1, l + 1), NL, G_BLK(l, l + 1), NL);
+			}
+		}
+	}
+
+	// multiply by q inverse
+	for (int i = 0; i < 4*N*N; i++) Q[i] = 0.0;
+
+	for (int j = 0; j < N2; j++)
+	for (int i = j + 1; i < N2; i++) {
+		Q[i + N2*j] = G_BLK(L - 2, L - 2)[i + NL*j];
+		G_BLK(L - 2, L - 2)[i + NL*j] = 0.0;
+	}
+	xunmqr("R", "C", NL, N2, N2, Q, N2, tau + N*(L - 2),
+	       G_BLK(0, L - 2), NL, work, lwork, &info);
+	for (int l = L - 3; l >= 0; l--) {
+		for (int j = 0; j < N; j++)
+		for (int i = j + 1; i < N2; i++) {
+			Q[i + N2*j] = G_BLK(l, l)[i + NL*j];
+			G_BLK(l, l)[i + NL*j] = 0.0;
+		}
+		xunmqr("R", "C", NL, N2, N, Q, N2, tau + N*l,
+		       G_BLK(0, l), NL, work, lwork, &info);
+	}
+	#undef G_BLK
+}
+
 
 int main(void)
 {
@@ -202,7 +294,7 @@ int main(void)
 	const int ld = mem_best_ld(N);
 	printf("%d\n", ld);
 
-	const int lwork = get_lwork_eq_g(N, N);
+	const int lwork = N*N;//get_lwork(N, N);
 
 	printf("lwork = %d\n", lwork);
 
@@ -224,13 +316,19 @@ int main(void)
 		ENDFOR \
 		XX(num *const restrict GuA, mp, ld*N * sizeof(num)) \
 		XX(num *const restrict GuB, mp, ld*N * sizeof(num)) \
+		XX(num *const restrict Gu0t, mp, ld*N * sizeof(num)) \
+		XX(num *const restrict Gutt, mp, ld*N * sizeof(num)) \
+		XX(num *const restrict Gut0, mp, ld*N * sizeof(num)) \
 		XX(num *const restrict tmpNN0u, mp, ld*N * sizeof(num)) \
 		XX(num *const restrict tmpNN1u, mp, ld*N * sizeof(num)) \
 		XX(num *const restrict tmpN0u, mp, N * sizeof(num)) \
 		XX(num *const restrict tmpN1u, mp, N * sizeof(num)) \
 		XX(num *const restrict tmpN2u, mp, N * sizeof(num)) \
 		XX(num *const restrict worku, mp, lwork * sizeof(num)) \
-		XX(int *const restrict pvtu, mp, N * sizeof(int))
+		XX(int *const restrict pvtu, mp, N * sizeof(int)) \
+		XX(num *const Gredu, mp, N*F*N*F * sizeof(num)) \
+		XX(num *const tauu, mp, N*F * sizeof(num)) \
+		XX(num *const Qu, mp, 4*N*N * sizeof(num))
 
 	struct mem_pool *mp = pool_new(POOL_GET_SIZE(ALLOC_TABLE));
 	POOL_DO_ALLOC(ALLOC_TABLE);
@@ -268,15 +366,23 @@ printf("GuB: %f\t%f\t%f\n", creal(phaseuB), creal(GuB[0]), creal(GuB[2 + 3*ld]))
 
 	matdiff(N, N, GuA, ld, GuB, ld);
 
+	calc_o(N, ld, F, 1, Cu, Gredu, Qu); // use Q as tmpNN
+	bsofi(N, F, Gredu, tauu, Qu, worku, lwork);
 
 	// sweep:
 	for (int f = 1; f < F; f++) {
 		printf("f=%d\n", f);
 		phaseuA = calc_eq_g(f, N, ld, F, 1, Cu, GuA, tmpNN0u, tmpNN1u, tmpN0u, tmpN1u, tmpN2u, pvtu, worku, lwork);
 
-		phaseuB = calc_Gtt(N, ld, &QdX0u[f - 1], &QdXLu[f], GuB, tmpNN0u, tmpNN1u, pvtu);
+		phaseuB = calc_Gtt(N, ld, &QdX0u[f - 1], &QdXLu[f], GuB, tmpNN0u, pvtu);
 		printf("phase %f %f\n", creal(phaseuA), creal(phaseuB));
 		matdiff(N, N, GuA, ld, GuB, ld);
+
+		calc_G0t_Gtt_Gt0(N, ld, &QdX0u[f - 1], &QdXLu[f], Gu0t, Gutt, Gut0, tmpNN0u, pvtu);
+		matdiff(N, N, GuA, ld, Gutt, ld);
+		matdiff(N, N, Gutt, ld, Gredu + f*N + f*N*N*F, N*F);
+		matdiff(N, N, Gu0t, ld, Gredu + 0*N + f*N*N*F, N*F);
+		matdiff(N, N, Gut0, ld, Gredu + f*N + 0*N*N*F, N*F);
 	}
 
 	pool_free(mp);

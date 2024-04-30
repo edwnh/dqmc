@@ -1,6 +1,5 @@
 #include "greens.h"
 #include "linalg.h"
-#include "prof.h"
 #include "mem.h"
 
 void mul_seq(const int N,
@@ -40,7 +39,7 @@ void mul_seq(const int N,
 	}
 }
 
-int get_lwork_eq_g(const int N, const int ld)
+int get_lwork(const int N, const int ld)
 {
 	num lwork;
 	int info = 0;
@@ -85,7 +84,7 @@ void calc_QdX_first(
 
 	int info = 0;
 	for (int i = 0; i < N; i++) pvt[i] = 0;
-	xomatcopy('C', trans ? 'C' : 'N', N, N, 1.0, B, ld, Q, ld);
+	xomatcopy(trans ? 'C' : 'N', N, N, 1.0, B, ld, Q, ld);
 
 	// use R as tau, and use d as RWORK for zgeqp3
 	xgeqp3(N, N, Q, ld, pvt, R, work, lwork, (double *)d, &info);
@@ -257,8 +256,32 @@ void calc_QdX(
 	QdX->phase_iL = phase;
 }
 
+static inline num calc_phase_LU(const int N, const int ld, const num *A, const int *pvt)
+{
+#ifdef USE_CPLX
+	num phase = 1.0;
+	for (int i = 0; i < N; i++) {
+		const num c = A[i + i*ld];
+		phase *= c/cabs(c);
+		if (pvt[i] != i+1)
+			phase *= -1.0;
+	}
+	return phase;
+#else
+	int sign = 1.0;
+	for (int i = 0; i < N; i++)
+		if ((pvt[i] != i+1) ^ (A[i + i*ld] < 0))
+			sign *= -1;
+	return (num)sign;
+#endif
+}
+
+// G = (1 + L R)^-1 = (iL + R)^-1 iL
+// 1. G = iL
+// 2. tmpNN = G + R
+// 3. G = tmpNN^-1 G
 num calc_Gtt_last(
-		const int trans, // if 0 calculate, calculate G = (1 + Q d X)^-1. if 1, calculate G = (1 + X.T d Q.T)^-1
+		const int trans, // if 0 calculate, calculate G = (1 + L R)^-1. if 1, calculate G = (1 + R.T L.T)^-1
 		const int N, const int ld,
 		const struct QdX *const QdX, // input
 		num *const G, // output
@@ -273,69 +296,35 @@ num calc_Gtt_last(
 
 	int info = 0;
 
-	// construct g from Eq 2.12 of 10.1016/j.laa.2010.06.023
+	xomatcopy('N', N, N, 1.0, iL, ld, G, ld); // 1
 	for (int j = 0; j < N; j++)
 		for (int i = 0; i < N; i++)
-			G[i + j*ld] = iL[i + j*ld];
-
-	for (int j = 0; j < N; j++)
-		for (int i = 0; i < N; i++)
-			tmpNN[i + j*ld] = G[i + j*ld] + R[i + j*ld];
-
+			tmpNN[i + j*ld] = G[i + j*ld] + R[i + j*ld]; // 2
 	xgetrf(N, N, tmpNN, ld, pvt, &info);
-	xgetrs("N", N, N, tmpNN, ld, pvt, G, ld, &info);
-
+	xgetrs("N", N, N, tmpNN, ld, pvt, G, ld, &info); // 3
 	if (trans)
-		ximatcopy('C', 'C', N, N, 1.0, G, ld, ld);
-
-	// probably can be done more efficiently but it's O(N) so whatev
-#ifdef USE_CPLX
-	num phase = 1.0;
-	for (int i = 0; i < N; i++) {
-		const num c = tmpNN[i + i*ld];
-		phase *= c/cabs(c);
-		if (pvt[i] != i+1) phase *= -1.0;
-	}
-	return phase*QdX->phase_iL;
-#else
-	int sign = 1.0;
-	for (int i = 0; i < N; i++) 
-		if ((pvt[i] != i+1) ^ (tmpNN[i + i*ld] < 0))
-			sign *= -1;
-	return sign*QdX->phase_iL;
-#endif
+		ximatcopy('C', N, N, 1.0, G, ld, ld);
+	return calc_phase_LU(N, ld, tmpNN, pvt)*QdX->phase_iL;
 }
-
-// G = (1 + Q0 d0 X0 X1.T d1 Q1.T)^-1
-//   = Q1 id1b (id0b Q0.T Q1 id1b + d0s X0 X1.T d1s)^-1 id0b Q0.T
-// step by step:
-// 1. tmpNN0 = d0s X0 X1.T d1s
-// 2. G = id0b Q0.T
-// 3. tmpNN1 = G Q1 id1b
-// 4. tmpNN1 += tmpNN0
-// 5. G = tmpNN1^-1 G
-// 6. G = Q1 id1b G
 
 // G = (1 + L0 R0 R1.T L1.T)^-1
 //   = iL1.T (iL0 iL1.T + R0 R1.T)^-1 iL0
-// 1. tmpNN0 = R0 R1.T
-// 2. tmpNN0 += iL0 iL1.T
-// 3. tmpNN1 = iL0
-// 4. tmpNN1 = tmpNN0^-1 tmpNN1
-// 5. G = iL1.T tmpNN1
+// 1. G = R0 R1.T
+// 2. G += iL0 iL1.T
+// 3. tmpNN = iL0
+// 4. tmpNN = G^-1 tmpNN
+// 5. G = iL1.T tmpNN
 num calc_Gtt(
 		const int N, const int ld,
 		const struct QdX *const QdX0, // input
 		const struct QdX *const QdX1, // input
 		num *const G, // output
-		num *const tmpNN0, // work arrays
-		num *const tmpNN1,
+		num *const tmpNN, // work arrays
 		int *const pvt)
 {
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	(void)__builtin_assume_aligned(G, MEM_ALIGN);
-	(void)__builtin_assume_aligned(tmpNN0, MEM_ALIGN);
-	(void)__builtin_assume_aligned(tmpNN1, MEM_ALIGN);
+	(void)__builtin_assume_aligned(tmpNN, MEM_ALIGN);
 	const num *const iL0 = __builtin_assume_aligned(QdX0->iL, MEM_ALIGN);
 	const num *const R0 = __builtin_assume_aligned(QdX0->R, MEM_ALIGN);
 	const num *const iL1 = __builtin_assume_aligned(QdX1->iL, MEM_ALIGN);
@@ -343,165 +332,73 @@ num calc_Gtt(
 
 	int info = 0;
 
-	// 1. tmpNN0 = R0 R1.T
-	xgemm("N", "C", N, N, N, 1.0, R0, ld, R1, ld, 0.0, tmpNN0, ld);
-	// 2. tmpNN0 += iL0 iL1.T
-	xgemm("N", "C", N, N, N, 1.0, iL0, ld, iL1, ld, 1.0, tmpNN0, ld);
-	// 3. tmpNN1 = iL0
-	xomatcopy('C', 'N', N, N, 1.0, iL0, ld, tmpNN1, ld);
-	// 4. tmpNN1 = tmpNN0^-1 tmpNN1
-	xgetrf(N, N, tmpNN0, ld, pvt, &info);
-	xgetrs("N", N, N, tmpNN0, ld, pvt, tmpNN1, ld, &info);
-	// 5. G = iL1.T tmpNN1
-	xgemm("C", "N", N, N, N, 1.0, iL1, ld, tmpNN1, ld, 0.0, G, ld);
-
-#ifdef USE_CPLX
-	num phase = 1.0;
-	for (int i = 0; i < N; i++) {
-		const num c = tmpNN0[i + i*ld];
-		phase *= c/cabs(c);
-		if (pvt[i] != i+1) phase *= -1.0;
-	}
-	return phase*QdX0->phase_iL*QdX1->phase_iL;
-#else
-	int sign = 1.0;
-	for (int i = 0; i < N; i++) 
-		if ((tmpNN0[i + i*ld] < 0) ^ (pvt[i] != i+1))
-			sign *= -1;
-	return sign*QdX0->phase_iL*QdX1->phase_iL;
-#endif
+	xgemm("N", "C", N, N, N, 1.0, R0, ld, R1, ld, 0.0, G, ld); // 1
+	xgemm("N", "C", N, N, N, 1.0, iL0, ld, iL1, ld, 1.0, G, ld); // 2
+	xomatcopy('N', N, N, 1.0, iL0, ld, tmpNN, ld); // 3
+	xgetrf(N, N, G, ld, pvt, &info); // 4
+	const num phase_LU = calc_phase_LU(N, ld, G, pvt);
+	xgetrs("N", N, N, G, ld, pvt, tmpNN, ld, &info);
+	xgemm("C", "N", N, N, N, 1.0, iL1, ld, tmpNN, ld, 0.0, G, ld); //5
+	return phase_LU*QdX0->phase_iL*QdX1->phase_iL;
 }
 
-int get_lwork_ue_g(const int N, const int L)
+// G00 = (1 + R1.T L1.T L0 R0)^-1
+// Gtt = (1 + L0 R0 R1.T L1.T)^-1
+//     = iL1.T (iL0 iL1.T + R0 R1.T)^-1 iL0
+// G0t = -(L1.T^-1 R1.T^-1 + L0 R0)^-1
+//     = -R1.T (iL0 iL1.T + R0 R1.T)^-1 iL0
+// Gt0 = (X0^-1 d0^-1 Q0.T + X1.T d1 Q1.T)^-1
+//     = iL1.T (iL0 iL1.T + R0 R1.T)^-1 R0
+// 1. Gt0 = R0 R1.T
+// 2. Gt0 += iL0 iL1.T
+// 3. tmpNN = iL0
+// 4. tmpNN = Gt0^-1 tmpNN
+// 5. G0t = -R1.T tmpNN
+// 6. Gtt = iL1.T tmpNN
+// 7. tmpNN = R0
+// 8. tmpNN = Gt0^-1 tmpNN
+// 9. Gt0 = iL1.T tmpNN
+void calc_G0t_Gtt_Gt0(
+		const int N, const int ld,
+		const struct QdX *const QdX0, // input
+		const struct QdX *const QdX1, // input
+		num *const G0t, // output
+		num *const Gtt, // output
+		num *const Gt0, // output
+		num *const tmpNN, // work arrays
+		int *const pvt)
 {
-	num lwork;
+	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
+	(void)__builtin_assume_aligned(Gtt, MEM_ALIGN);
+	(void)__builtin_assume_aligned(G0t, MEM_ALIGN);
+	(void)__builtin_assume_aligned(Gt0, MEM_ALIGN);
+	(void)__builtin_assume_aligned(tmpNN, MEM_ALIGN);
+	const num *const iL0 = __builtin_assume_aligned(QdX0->iL, MEM_ALIGN);
+	const num *const R0 = __builtin_assume_aligned(QdX0->R, MEM_ALIGN);
+	const num *const iL1 = __builtin_assume_aligned(QdX1->iL, MEM_ALIGN);
+	const num *const R1 = __builtin_assume_aligned(QdX1->R, MEM_ALIGN);
+
 	int info = 0;
-	int max_lwork = 0;
 
-	if (L == 1) {  // then bsofi doesn't use QR
-		xgetri(N, NULL, N, NULL, &lwork, -1, &info);
-		if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
-		return max_lwork;
-	}
-
-	const int NL = N*L;
-	const int N2 = 2*N;
-
-	xgeqrf(N2, N, NULL, NL, NULL, &lwork, -1, &info);
-	if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
-
-	xunmqr("L", "C", N2, N, N, NULL, NL, NULL, NULL, NL, &lwork, -1, &info);
-	if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
-
-	xgeqrf(N2, N2, NULL, NL, NULL, &lwork, -1, &info);
-	if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
-
-	xunmqr("R", "C", NL, N2, N2, NULL, N2, NULL, NULL, NL, &lwork, -1, &info);
-	if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
-
-	xunmqr("R", "C", NL, N2, N, NULL, N2, NULL, NULL, NL, &lwork, -1, &info);
-	if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
-
-	return max_lwork;
-}
-
-static void calc_o(const int N, const int ld, const int L, const int n_mul,
-		num *const *const B, num *const G,
-		num *const tmpNN)
-{
-	const int E = 1 + (L - 1) / n_mul;
-	const int NE = N*E;
-
-	for (int i = 0; i < NE * NE; i++) G[i] = 0.0;
-
-	for (int e = 0; e < E - 1; e++) // subdiagonal blocks
-		mul_seq(N, e*n_mul, (e + 1)*n_mul, -1.0, B, ld,
-		        G + N*(e + 1) + NE*N*e, NE, tmpNN);
-
-	mul_seq(N, (E - 1)*n_mul, L, 1.0, B, ld, // top right corner
-		G + NE*N*(E - 1), NE, tmpNN);
-
-	for (int i = 0; i < NE; i++) G[i + NE*i] += 1.0; // 1 on diagonal
-}
-
-static void bsofi(const int N, const int L,
-		num *const G, // input: O matrix, output: G = O^-1
-		num *const tau, // NL
-		num *const Q, // 2*N * 2*N
-		num *const work, const int lwork)
-{
-	int info;
-
-	if (L == 1) {
-		xgetrf(N, N, G, N, (int *)tau, &info);
-		xgetri(N, G, N, (int *)tau, work, lwork, &info);
-		return;
-	}
-
-	const int NL = N*L;
-	const int N2 = 2*N;
-
-	#define G_BLK(i, j) (G + N*(i) + NL*N*(j))
-	// block qr
-	for (int l = 0; l < L - 2; l++) {
-		xgeqrf(N2, N, G_BLK(l, l), NL, tau + N*l, work, lwork, &info);
-		xunmqr("L", "C", N2, N, N, G_BLK(l, l), NL, tau + N*l,
-		       G_BLK(l, l + 1), NL, work, lwork, &info);
-		xunmqr("L", "C", N2, N, N, G_BLK(l, l), NL, tau + N*l,
-		       G_BLK(l, L - 1), NL, work, lwork, &info);
-	}
-	xgeqrf(N2, N2, G_BLK(L - 2, L - 2), NL, tau + N*(L - 2), work, lwork, &info);
-
-	// invert r
-	if (L <= 2) {
-		xtrtri("U", "N", NL, G, NL, &info);
-	} else {
-		xtrtri("U", "N", 3*N, G_BLK(L - 3, L - 3), NL, &info);
-		if (L > 3) {
-			xtrmm("R", "U", "N", "N", N*(L - 3), N, 1.0,
-			      G_BLK(L - 1, L - 1), NL, G_BLK(0, L - 1), NL);
-			for (int l = L - 4; l >= 0; l--) {
-				xtrtri("U", "N", N, G_BLK(l, l), NL, &info);
-				xtrmm("L", "U", "N", "N", N, N, -1.0,
-				      G_BLK(l, l), NL, G_BLK(l, L - 1), NL);
-				xtrmm("L", "U", "N", "N", N, N, -1.0,
-				      G_BLK(l, l), NL, G_BLK(l, l + 1), NL);
-				xgemm("N", "N", N, N*(L - l - 2), N, 1.0,
-				      G_BLK(l, l + 1), NL, G_BLK(l + 1, l + 2), NL, 1.0,
-				      G_BLK(l, l + 2), NL);
-				xtrmm("R", "U", "N", "N", N, N, 1.0,
-				      G_BLK(l + 1, l + 1), NL, G_BLK(l, l + 1), NL);
-			}
-		}
-	}
-
-	// multiply by q inverse
-	for (int i = 0; i < 4*N*N; i++) Q[i] = 0.0;
-
-	for (int j = 0; j < N2; j++)
-	for (int i = j + 1; i < N2; i++) {
-		Q[i + N2*j] = G_BLK(L - 2, L - 2)[i + NL*j];
-		G_BLK(L - 2, L - 2)[i + NL*j] = 0.0;
-	}
-	xunmqr("R", "C", NL, N2, N2, Q, N2, tau + N*(L - 2),
-	       G_BLK(0, L - 2), NL, work, lwork, &info);
-	for (int l = L - 3; l >= 0; l--) {
-		for (int j = 0; j < N; j++)
-		for (int i = j + 1; i < N2; i++) {
-			Q[i + N2*j] = G_BLK(l, l)[i + NL*j];
-			G_BLK(l, l)[i + NL*j] = 0.0;
-		}
-		xunmqr("R", "C", NL, N2, N, Q, N2, tau + N*l,
-		       G_BLK(0, l), NL, work, lwork, &info);
-	}
-	#undef G_BLK
+	xgemm("N", "C", N, N, N, 1.0, R0, ld, R1, ld, 0.0, Gt0, ld); // 1
+	xgemm("N", "C", N, N, N, 1.0, iL0, ld, iL1, ld, 1.0, Gt0, ld); // 2
+	xomatcopy('N', N, N, 1.0, iL0, ld, tmpNN, ld); // 3
+	xgetrf(N, N, Gt0, ld, pvt, &info); // 4
+	xgetrs("N", N, N, Gt0, ld, pvt, tmpNN, ld, &info);
+	xgemm("C", "N", N, N, N, -1.0, R1, ld, tmpNN, ld, 0.0, G0t, ld); // 5
+	xgemm("C", "N", N, N, N, 1.0, iL1, ld, tmpNN, ld, 0.0, Gtt, ld); // 6
+	xomatcopy('N', N, N, 1.0, R0, ld, tmpNN, ld); // 7
+	xgetrs("N", N, N, Gt0, ld, pvt, tmpNN, ld, &info); // 8
+	xgemm("C", "N", N, N, N, 1.0, iL1, ld, tmpNN, ld, 0.0, Gt0, ld); // 9
 }
 
 static void expand_g(const int N, const int ld, const int L, const int E, const int n_matmul,
 		num *const *const B,
 		num *const *const iB,
-		const num *const Gred,
-		num *const G0t, num *const Gtt, num *const Gt0)
+		num *const *const G0t,
+		num *const *const Gtt,
+		num *const *const Gt0,
+		num *const tmpNN)
 {
 	// number of steps to move in each direction
 	// except for boundaries, when L % n_matmul != 0
@@ -515,14 +412,6 @@ static void expand_g(const int N, const int ld, const int L, const int E, const 
 	const int dstop_last = rstop_last;
 	const int ustop_first = lstop_first;
 
-	// copy Gred to G0t
-	for (int f = 0; f < E; f++) {
-		const int t = f*n_matmul;
-		for (int j = 0; j < N; j++)
-		for (int i = 0; i < N; i++)
-			G0t[i + ld*j + ld*N*t] = Gred[i + N*E*(j + N*f)];
-	}
-
 	// expand G0t
 	for (int f = 0; f < E; f++) {
 		const int l = f*n_matmul;
@@ -532,8 +421,8 @@ static void expand_g(const int N, const int ld, const int L, const int E, const 
 			const int next = (m - 1 + L) % L;
 			const num alpha = (m == 0) ? -1.0 : 1.0;
 			xgemm("N", "N", N, N, N, alpha,
-			      G0t + ld*N*m, ld, B[next], ld, 0.0,
-			      G0t + ld*N*next, ld);
+			      G0t[m], ld, B[next], ld, 0.0,
+			      G0t[next], ld);
 			m = next;
 		}
 		for (int m = l; m != rstop;) {
@@ -543,21 +432,12 @@ static void expand_g(const int N, const int ld, const int L, const int E, const 
 			if (m == 0)
 				for (int j = 0; j < N; j++)
 				for (int i = 0; i < N; i++)
-					G0t[i + ld*j + ld*N*next] = iB[m][i + ld*j];
+					G0t[next][i + ld*j] = iB[m][i + ld*j];
 			xgemm("N", "N", N, N, N, alpha,
-			      G0t + ld*N*m, ld, iB[m], ld, beta,
-			      G0t + ld*N*next, ld);
+			      G0t[m], ld, iB[m], ld, beta,
+			      G0t[next], ld);
 			m = next;
 		}
-	}
-
-
-	// copy Gred to Gtt
-	for (int e = 0; e < E; e++) {
-		const int k = e*n_matmul;
-		for (int j = 0; j < N; j++)
-		for (int i = 0; i < N; i++)
-			Gtt[i + ld*j + ld*N*k] = Gred[(i + N*e) + N*E*(j + N*e)];
 	}
 
 	// expand Gtt
@@ -569,31 +449,23 @@ static void expand_g(const int N, const int ld, const int L, const int E, const 
 		for (int m = k; m != ustop;) {
 			const int next = (m - 1 + L) % L;
 			xgemm("N", "N", N, N, N, 1.0,
-			      Gtt + ld*N*m, ld, B[next], ld, 0.0,
-			      Gt0, ld); // use Gt0 as temporary
+			      Gtt[m], ld, B[next], ld, 0.0,
+			      tmpNN, ld);
 			xgemm("N", "N", N, N, N, 1.0,
-			      iB[next], ld, Gt0, ld, 0.0,
-			      Gtt + ld*N*next, ld);
+			      iB[next], ld, tmpNN, ld, 0.0,
+			      Gtt[next], ld);
 			m = next;
 		}
 		for (int m = k; m != dstop;) {
 			const int next = (m + 1) % L;
 			xgemm("N", "N", N, N, N, 1.0,
-			      Gtt + ld*N*m, ld, iB[m], ld, 0.0,
-			      Gt0, ld);
+			      Gtt[m], ld, iB[m], ld, 0.0,
+			      tmpNN, ld);
 			xgemm("N", "N", N, N, N, 1.0,
-			      B[m], ld, Gt0, ld, 0.0,
-			      Gtt + ld*N*next, ld);
+			      B[m], ld, tmpNN, ld, 0.0,
+			      Gtt[next], ld);
 			m = next;
 		}
-	}
-
-	// copy Gred to Gt0
-	for (int e = 0; e < E; e++) {
-		const int t = e*n_matmul;
-		for (int j = 0; j < N; j++)
-		for (int i = 0; i < N; i++)
-			Gt0[i + ld*j + ld*N*t] = Gred[(i + N*e) + N*E*j];
 	}
 
 	// expand Gt0
@@ -608,48 +480,42 @@ static void expand_g(const int N, const int ld, const int L, const int E, const 
 			if (m == 0)
 				for (int j = 0; j < N; j++)
 				for (int i = 0; i < N; i++)
-					Gt0[i + ld*j + ld*N*next] = iB[next][i + ld*j];
+					Gt0[next][i + ld*j] = iB[next][i + ld*j];
 			xgemm("N", "N", N, N, N, alpha,
-			      iB[next], ld, Gt0 + ld*N*m, ld, beta,
-			      Gt0 + ld*N*next, ld);
+			      iB[next], ld, Gt0[m], ld, beta,
+			      Gt0[next], ld);
 			m = next;
 		}
 		for (int m = k; m != dstop;) {
 			const int next = (m + 1) % L;
 			const num alpha = (next == 0) ? -1.0 : 1.0;
 			xgemm("N", "N", N, N, N, alpha,
-			      B[m], ld, Gt0 + ld*N*m, ld, 0.0,
-			      Gt0 + ld*N*next, ld);
+			      B[m], ld, Gt0[m], ld, 0.0,
+			      Gt0[next], ld);
 			if (next == 0) // should never happen
 				for (int i = 0; i < N; i++)
-					Gt0[i + ld*i + ld*N*next] += 1.0;
+					Gt0[next][i + ld*i] += 1.0;
 			m = next;
 		}
 	}
 }
 
-void calc_ue_g(const int N, const int ld, const int L, const int F, const int n_mul,
+void calc_ue_g(const int N, const int ld, const int L, const int F, const int n_matmul,
 		num *const *const B,
 		num *const *const iB,
-		num *const *const C,
-		num *const G0t, num *const Gtt,
-		num *const Gt0,
-		num *const Gred,
-		num *const tau,
-		num *const Q,
-		num *const work, const int lwork)
+		const struct QdX *const QdX0, // input
+		const struct QdX *const QdXL, // input
+		num *const *const G0t, // output
+		num *const *const Gtt, // output
+		num *const *const Gt0, // output
+		num *const tmpNN, // work arrays
+		int *const pvt)
 {
-	const int E = 1 + (F - 1) / n_mul;
-
-	profile_begin(calc_o);
-	calc_o(N, ld, F, n_mul, C, Gred, Q); // use Q as tmpNN
-	profile_end(calc_o);
-
-	profile_begin(bsofi);
-	bsofi(N, E, Gred, tau, Q, work, lwork);
-	profile_end(bsofi);
-
-	profile_begin(expand_g);
-	expand_g(N, ld, L, E, (L/F) * n_mul, B, iB, Gred, G0t, Gtt, Gt0);
-	profile_end(expand_g);
+	// assumes G0t[0], Gtt[0], Gt0[0] already initialized
+	// only need to do every other f
+	for (int f = 2; f < F; f += 2) {
+		const int l = f*n_matmul;
+		calc_G0t_Gtt_Gt0(N, ld, &QdX0[f - 1], &QdXL[f], G0t[l], Gtt[l], Gt0[l], tmpNN, pvt);
+	}
+	expand_g(N, ld, L, 1 + (F - 1)/2, 2*n_matmul, B, iB, G0t, Gtt, Gt0, tmpNN);
 }

@@ -154,23 +154,32 @@ static inline void xtrtri(const char* uplo, const char* diag, const int n,
 	uplo, diag, &n, cast(a), &lda, info);
 }
 
-static inline void ximatcopy(const char ordering, const char trans, const size_t rows, const size_t cols,
+static inline void ximatcopy(const char trans, const size_t rows, const size_t cols,
 const num alpha, num *AB, const size_t lda, const size_t ldb)
 {
 #ifdef USE_CPLX
-	mkl_zimatcopy(ordering, trans, rows, cols, *cast(&alpha), cast(AB), lda, ldb);
+	mkl_zimatcopy('C', trans, rows, cols, *cast(&alpha), cast(AB), lda, ldb);
 #else
-	mkl_dimatcopy(ordering, trans, rows, cols, alpha, AB, lda, ldb);
+	mkl_dimatcopy('C', trans, rows, cols, alpha, AB, lda, ldb);
 #endif
 }
 
-static inline void xomatcopy(const char ordering, const char trans, const size_t rows, const size_t cols,
+static inline void xomatcopy(const char trans, const size_t rows, const size_t cols,
 const num alpha, const num *A, const size_t lda, num *B, const size_t ldb)
 {
+	// if (trans == 'N') {
+	// 	for (size_t j = 0; j < cols; j++)
+	// 		for (size_t i = 0; i < rows; i++)
+	// 			B[i + j*ldb] = alpha*conj(A[i + j*lda]);
+	// } else {
+	// 	for (size_t j = 0; j < cols; j++)
+	// 		for (size_t i = 0; i < rows; i++)
+	// 			B[i + j*ldb] = alpha*conj(A[j + i*lda]);
+	// }
 #ifdef USE_CPLX
-	mkl_zomatcopy(ordering, trans, rows, cols, *cast(&alpha), ccast(A), lda, cast(B), ldb);
+	mkl_zomatcopy('C', trans, rows, cols, *cast(&alpha), ccast(A), lda, cast(B), ldb);
 #else
-	mkl_domatcopy(ordering, trans, rows, cols, alpha, A, lda, B, ldb);
+	mkl_domatcopy('C', trans, rows, cols, alpha, A, lda, B, ldb);
 #endif
 }
 

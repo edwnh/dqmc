@@ -71,11 +71,7 @@ static int dqmc(struct sim_data *sim)
 	int *const hs = sim->s.hs;
 
 	// lapack work array size
-	int lwork = get_lwork_eq_g(N, ld);
-	if (sim->p.period_uneqlt > 0) {
-		const int lwork_ue = get_lwork_ue_g(N, E);
-		if (lwork_ue > lwork) lwork = lwork_ue;
-	}
+	int lwork = get_lwork(N, ld);
 
 #define ALLOC_TABLE(XX, FOR, ENDFOR) \
 	XX(int *const site_order, mp, N * sizeof(int)) \
@@ -157,38 +153,46 @@ static int dqmc(struct sim_data *sim)
 	XX(int *const pvtd, mp, N * sizeof(int)) \
 	XX(num *const worku, mp, lwork * sizeof(num)) \
 	XX(num *const workd, mp, lwork * sizeof(num)) \
-	XX(num *const Gredu, mp, (sim->p.period_uneqlt > 0)*N*E*N*E * sizeof(num)) \
-	XX(num *const tauu, mp, (sim->p.period_uneqlt > 0)*N*E * sizeof(num)) \
-	XX(num *const Qu, mp, (sim->p.period_uneqlt > 0)*4*N*N * sizeof(num)) \
-	XX(num *const Gredd, mp, (sim->p.period_uneqlt > 0)*N*E*N*E * sizeof(num)) \
-	XX(num *const taud, mp, (sim->p.period_uneqlt > 0)*N*E * sizeof(num)) \
-	XX(num *const Qd, mp, (sim->p.period_uneqlt > 0)*4*N*N * sizeof(num)) \
-	XX(num *const Gu0t, mp, (sim->p.period_uneqlt > 0)*ld*N*L * sizeof(num)) \
-	XX(num *const Gutt, mp, (sim->p.period_uneqlt > 0)*ld*N*L * sizeof(num)) \
-	XX(num *const Gut0, mp, (sim->p.period_uneqlt > 0)*ld*N*L * sizeof(num)) \
-	XX(num *const Gd0t, mp, (sim->p.period_uneqlt > 0)*ld*N*L * sizeof(num)) \
-	XX(num *const Gdtt, mp, (sim->p.period_uneqlt > 0)*ld*N*L * sizeof(num)) \
-	XX(num *const Gdt0, mp, (sim->p.period_uneqlt > 0)*ld*N*L * sizeof(num))
+	XX(num **const Gu0t, mp, (sim->p.period_uneqlt > 0)*L * sizeof(num *)) \
+	XX(num **const Gutt, mp, (sim->p.period_uneqlt > 0)*L * sizeof(num *)) \
+	XX(num **const Gut0, mp, (sim->p.period_uneqlt > 0)*L * sizeof(num *)) \
+	FOR(l, (sim->p.period_uneqlt > 0)*L) \
+		XX(Gu0t[l], mp, ld*N * sizeof(num)) \
+	ENDFOR\
+	FOR(l, (sim->p.period_uneqlt > 0)*L) \
+		XX(Gutt[l], mp, ld*N * sizeof(num)) \
+	ENDFOR\
+	FOR(l, (sim->p.period_uneqlt > 0)*L) \
+		XX(Gut0[l], mp, ld*N * sizeof(num)) \
+	ENDFOR \
+	XX(num **const Gd0t, mp, (sim->p.period_uneqlt > 0)*L * sizeof(num *)) \
+	XX(num **const Gdtt, mp, (sim->p.period_uneqlt > 0)*L * sizeof(num *)) \
+	XX(num **const Gdt0, mp, (sim->p.period_uneqlt > 0)*L * sizeof(num *)) \
+	FOR(l, (sim->p.period_uneqlt > 0)*L) \
+		XX(Gd0t[l], mp, ld*N * sizeof(num)) \
+	ENDFOR\
+	FOR(l, (sim->p.period_uneqlt > 0)*L) \
+		XX(Gdtt[l], mp, ld*N * sizeof(num)) \
+	ENDFOR\
+	FOR(l, (sim->p.period_uneqlt > 0)*L) \
+		XX(Gdt0[l], mp, ld*N * sizeof(num)) \
+	ENDFOR
 
 	struct mem_pool *mp = pool_new(POOL_GET_SIZE(ALLOC_TABLE));
 	POOL_DO_ALLOC(ALLOC_TABLE);
 #undef ALLOC_TABLE
 
 	// copy into matrices with leading dimension ld
-	for (int j = 0; j < 2; j++) {
-		for (int i = 0; i < N; i++) {
-			del[i + ld*j] = sim->p.del[i + N*j];
-			exp_lambda[i + ld*j] = sim->p.exp_lambda[i + N*j];
-		}
-	}
-	xomatcopy('C', 'N', N, N, 1.0, sim->p.exp_Ku,         N, exp_Ku,         ld);
-	xomatcopy('C', 'N', N, N, 1.0, sim->p.inv_exp_Ku,     N, inv_exp_Ku,     ld);
-	xomatcopy('C', 'N', N, N, 1.0, sim->p.exp_halfKu,     N, exp_halfKu,     ld);
-	xomatcopy('C', 'N', N, N, 1.0, sim->p.inv_exp_halfKu, N, inv_exp_halfKu, ld);
-	xomatcopy('C', 'N', N, N, 1.0, sim->p.exp_Kd,         N, exp_Kd,         ld);
-	xomatcopy('C', 'N', N, N, 1.0, sim->p.inv_exp_Kd,     N, inv_exp_Kd,     ld);
-	xomatcopy('C', 'N', N, N, 1.0, sim->p.exp_halfKd,     N, exp_halfKd,     ld);
-	xomatcopy('C', 'N', N, N, 1.0, sim->p.inv_exp_halfKd, N, inv_exp_halfKd, ld);
+	xomatcopy('N', N, 2, 1.0, sim->p.del,            N, del,            ld);
+	xomatcopy('N', N, 2, 1.0, sim->p.exp_lambda,     N, exp_lambda,     ld);
+	xomatcopy('N', N, N, 1.0, sim->p.exp_Ku,         N, exp_Ku,         ld);
+	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_Ku,     N, inv_exp_Ku,     ld);
+	xomatcopy('N', N, N, 1.0, sim->p.exp_halfKu,     N, exp_halfKu,     ld);
+	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_halfKu, N, inv_exp_halfKu, ld);
+	xomatcopy('N', N, N, 1.0, sim->p.exp_Kd,         N, exp_Kd,         ld);
+	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_Kd,     N, inv_exp_Kd,     ld);
+	xomatcopy('N', N, N, 1.0, sim->p.exp_halfKd,     N, exp_halfKd,     ld);
+	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_halfKd, N, inv_exp_halfKd, ld);
 
 	num phase;
 	{
@@ -318,7 +322,7 @@ static int dqmc(struct sim_data *sim)
 					if (f == F - 1)
 						phaseu = calc_Gtt_last(0, N, ld, &QdX0u[f], gu, tmpNN1u, pvtu);
 					else
-						phaseu = calc_Gtt(N, ld, &QdX0u[f], &QdXLu[f + 1], gu, tmpNN1u, tmpNN2u, pvtu);
+						phaseu = calc_Gtt(N, ld, &QdX0u[f], &QdXLu[f + 1], gu, tmpNN1u, pvtu);
 				} else {
 					if (f == F - 1)
 						calc_QdX_first(1, N, ld, Cu[f], &QdXLu[f],
@@ -329,7 +333,7 @@ static int dqmc(struct sim_data *sim)
 					if (f == 0)
 						phaseu = calc_Gtt_last(1, N, ld, &QdXLu[f], gu, tmpNN1u, pvtu);
 					else
-						phaseu = calc_Gtt(N, ld, &QdX0u[f - 1], &QdXLu[f], gu, tmpNN1u, tmpNN2u, pvtu);
+						phaseu = calc_Gtt(N, ld, &QdX0u[f - 1], &QdXLu[f], gu, tmpNN1u, pvtu);
 				}
 				profile_end(recalc);
 			} else {
@@ -363,7 +367,7 @@ static int dqmc(struct sim_data *sim)
 					if (f == F - 1)
 						phased = calc_Gtt_last(0, N, ld, &QdX0d[f], gd, tmpNN1d, pvtd);
 					else
-						phased = calc_Gtt(N, ld, &QdX0d[f], &QdXLd[f + 1], gd, tmpNN1d, tmpNN2d, pvtd);
+						phased = calc_Gtt(N, ld, &QdX0d[f], &QdXLd[f + 1], gd, tmpNN1d, pvtd);
 				} else {
 					if (f == F - 1)
 						calc_QdX_first(1, N, ld, Cd[f], &QdXLd[f],
@@ -374,7 +378,7 @@ static int dqmc(struct sim_data *sim)
 					if (f == 0)
 						phased = calc_Gtt_last(1, N, ld, &QdXLd[f], gd, tmpNN1d, pvtd);
 					else
-						phased = calc_Gtt(N, ld, &QdX0d[f - 1], &QdXLd[f], gd, tmpNN1d, tmpNN2d, pvtd);
+						phased = calc_Gtt(N, ld, &QdX0d[f - 1], &QdXLd[f], gd, tmpNN1d, pvtd);
 				}
 				profile_end(recalc);
 			} else {
@@ -415,56 +419,87 @@ static int dqmc(struct sim_data *sim)
 		}
 
 		if (enabled_uneqlt && (sim->s.sweep % sim->p.period_uneqlt == 0) ) {
-			#pragma omp parallel sections
-			{
-			#pragma omp section
-			calc_ue_g(N, ld, L, F, 2, Bu, iBu, Cu, Gu0t, Gutt, Gut0,
-			          Gredu, tauu, Qu, worku, lwork);
-			#pragma omp section
-			calc_ue_g(N, ld, L, F, 2, Bd, iBd, Cd, Gd0t, Gdtt, Gdt0,
-			          Gredd, taud, Qd, workd, lwork);
-			}
+			// todo: skip this by setting GuXX[0] = tmpNN2u if last eqlt meas was at l=0
+			xomatcopy('N', N, N, 1.0, gu, ld, Gu0t[0], ld);
+			xomatcopy('N', N, N, 1.0, gu, ld, Gutt[0], ld);
+			xomatcopy('N', N, N, 1.0, gu, ld, Gut0[0], ld);
+			xomatcopy('N', N, N, 1.0, gd, ld, Gd0t[0], ld);
+			xomatcopy('N', N, N, 1.0, gd, ld, Gdtt[0], ld);
+			xomatcopy('N', N, N, 1.0, gd, ld, Gdt0[0], ld);
 
 			#pragma omp parallel sections
 			{
 			#pragma omp section
 			{
+			profile_begin(calc_ue);
+			if (sweep_up) { // then QdX0 is fresh, QdXL is old
+				calc_QdX_first(1, N, ld, Cu[F - 1], &QdXLu[F - 1],
+							tmpN1u, pvtu, worku, lwork);
+				for (int f = F - 2; f >= 0; f--)
+					calc_QdX(1, N, ld, Cu[f], &QdXLu[f + 1], &QdXLu[f],
+							tmpN1u, pvtu, worku, lwork);
+			} else {
+				calc_QdX_first(0, N, ld, Cu[0], &QdX0u[0],
+							tmpN1u, pvtu, worku, lwork);
+				for (int f = 1; f < F; f++)
+					calc_QdX(0, N, ld, Cu[f], &QdX0u[f - 1], &QdX0u[f],
+							tmpN1u, pvtu, worku, lwork);
+			}
+			calc_ue_g(N, ld, L, F, n_matmul, Bu, iBu, QdX0u, QdXLu, Gu0t, Gutt, Gut0, tmpNN1u, pvtu);
+			profile_end(calc_ue);
 			profile_begin(half_wrap);
 			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1u, Gu0t + ld*N*l, exp_halfKu);
-				matmul(Gu0t + ld*N*l, inv_exp_halfKu, tmpNN1u);
+				matmul(tmpNN1u, Gu0t[l], exp_halfKu);
+				matmul(Gu0t[l], inv_exp_halfKu, tmpNN1u);
 			}
 			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1u, Gutt + ld*N*l, exp_halfKu);
-				matmul(Gutt + ld*N*l, inv_exp_halfKu, tmpNN1u);
+				matmul(tmpNN1u, Gutt[l], exp_halfKu);
+				matmul(Gutt[l], inv_exp_halfKu, tmpNN1u);
 			}
 			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1u, Gut0 + ld*N*l, exp_halfKu);
-				matmul(Gut0 + ld*N*l, inv_exp_halfKu, tmpNN1u);
+				matmul(tmpNN1u, Gut0[l], exp_halfKu);
+				matmul(Gut0[l], inv_exp_halfKu, tmpNN1u);
 			}
 			profile_end(half_wrap);
 			}
 			#pragma omp section
 			{
+			profile_begin(calc_ue);
+			if (sweep_up) { // then QdX0 is fresh, QdXL is old
+				calc_QdX_first(1, N, ld, Cd[F - 1], &QdXLd[F - 1],
+							tmpN1d, pvtd, workd, lwork);
+				for (int f = F - 2; f >= 0; f--)
+					calc_QdX(1, N, ld, Cd[f], &QdXLd[f + 1], &QdXLd[f],
+							tmpN1d, pvtd, workd, lwork);
+			} else {
+				calc_QdX_first(0, N, ld, Cd[0], &QdX0d[0],
+							tmpN1d, pvtd, workd, lwork);
+				for (int f = 1; f < F; f++)
+					calc_QdX(0, N, ld, Cd[f], &QdX0d[f - 1], &QdX0d[f],
+							tmpN1d, pvtd, workd, lwork);
+			}
+			calc_ue_g(N, ld, L, F, n_matmul, Bd, iBd, QdX0d, QdXLd, Gd0t, Gdtt, Gdt0, tmpNN1d, pvtd);
+			profile_end(calc_ue);
 			profile_begin(half_wrap);
 			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1d, Gd0t + ld*N*l, exp_halfKd);
-				matmul(Gd0t + ld*N*l, inv_exp_halfKd, tmpNN1d);
+				matmul(tmpNN1d, Gd0t[l], exp_halfKd);
+				matmul(Gd0t[l], inv_exp_halfKd, tmpNN1d);
 			}
 			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1d, Gdtt + ld*N*l, exp_halfKd);
-				matmul(Gdtt + ld*N*l, inv_exp_halfKd, tmpNN1d);
+				matmul(tmpNN1d, Gdtt[l], exp_halfKd);
+				matmul(Gdtt[l], inv_exp_halfKd, tmpNN1d);
 			}
 			for (int l = 0; l < L; l++) {
-				matmul(tmpNN1d, Gdt0 + ld*N*l, exp_halfKd);
-				matmul(Gdt0 + ld*N*l, inv_exp_halfKd, tmpNN1d);
+				matmul(tmpNN1d, Gdt0[l], exp_halfKd);
+				matmul(Gdt0[l], inv_exp_halfKd, tmpNN1d);
 			}
 			profile_end(half_wrap);
 			}
 			}
 			profile_begin(meas_uneq);
+			// abuse fact that GuXX[l] is allocated contiguously
 			measure_uneqlt(&sim->p, phase, ld,
-			               Gu0t, Gutt, Gut0, Gd0t, Gdtt, Gdt0,
+			               Gu0t[0], Gutt[0], Gut0[0], Gd0t[0], Gdtt[0], Gdt0[0],
 			               &sim->m_ue);
 			profile_end(meas_uneq);
 		}

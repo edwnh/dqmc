@@ -17,7 +17,7 @@ void mul_seq(const int N,
 		num *const A, const int ldA,
 		num *const tmpNN);
 
-int get_lwork_eq_g(const int N, const int ld);
+int get_lwork(const int N, const int ld);
 
 void calc_QdX_first(
 		const int trans, // if 1, calculate QdX of B^T (conjugate transpose for complex)
@@ -39,7 +39,7 @@ void calc_QdX(
 		num *const work, const int lwork);
 
 num calc_Gtt_last(
-		const int trans, // if 0 calculate, calculate G = (1 + Q d X)^-1. if 1, calculate G = (1 + X.T d Q.T)^-1
+		const int trans, // if 0 calculate, calculate G = (1 + L R)^-1. if 1, calculate G = (1 + R.T L.T)^-1
 		const int N, const int ld,
 		const struct QdX *const QdX, // input
 		num *const G, // output
@@ -51,20 +51,26 @@ num calc_Gtt(
 		const struct QdX *const QdX0, // input
 		const struct QdX *const QdX1, // input
 		num *const G, // output
-		num *const tmpNN0, // work arrays
-		num *const tmpNN1,
+		num *const tmpNN, // work arrays
 		int *const pvt);
 
+void calc_G0t_Gtt_Gt0(
+		const int N, const int ld,
+		const struct QdX *const QdX0, // input
+		const struct QdX *const QdX1, // input
+		num *const G0t, // output
+		num *const Gtt, // output
+		num *const Gt0, // output
+		num *const tmpNN, // work arrays
+		int *const pvt);
 
-int get_lwork_ue_g(const int N, const int L);
-
-void calc_ue_g(const int N, const int ld, const int L, const int F, const int n_mul,
+void calc_ue_g(const int N, const int ld, const int L, const int F, const int n_matmul,
 		num *const *const B,
 		num *const *const iB,
-		num *const *const C,
-		num *const G0t, num *const Gtt,
-		num *const Gt0,
-		num *const Gred,
-		num *const tau,
-		num *const Q,
-		num *const work, const int lwork);
+		const struct QdX *const QdX0, // input
+		const struct QdX *const QdXL, // input
+		num *const *const G0t, // output
+		num *const *const Gtt, // output
+		num *const *const Gt0, // output
+		num *const tmpNN, // work arrays
+		int *const pvt);
