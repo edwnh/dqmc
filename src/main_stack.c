@@ -31,7 +31,7 @@ static int pid;
 
 static void usage(const char *name)
 {
-	my_printf("usage: %s [-t max_time] stack_file\n", name);
+	my_printf("usage: %s [-s save_interval] [-t max_time] stack_file\n", name);
 }
 
 // sleep a number of seconds between min and max (assumes both > 0)
@@ -282,12 +282,16 @@ int main(int argc, char **argv)
 	gethostname(hostname, 64);
 	pid = getpid();
 
-	char *str_max_time = NULL;
+	char *save_interval_str = "0";
+	char *max_time_str = "0";
 	int c;
-	while ((c = getopt(argc, argv, "t:")) != -1)
+	while ((c = getopt(argc, argv, "s:t:")) != -1)
 		switch (c) {
+		case 's':
+			save_interval_str = optarg;
+			break;
 		case 't':
-			str_max_time = optarg;
+			max_time_str = optarg;
 			break;
 		default:
 			usage(argv[0]);
@@ -303,7 +307,8 @@ int main(int argc, char **argv)
 	sleep_rand(0.0, 4.0);
 
 	const char *stack_file = argv[optind];
-	const int max_time = (str_max_time == NULL) ? 0 : atoi(str_max_time);
+	const int save_interval = atoi(save_interval_str) * TICK_PER_SEC;
+	const int max_time = atoi(max_time_str);
 	const tick_t t_stop = t_start + max_time * TICK_PER_SEC;
 
 	#define MAX_LEN 512
@@ -321,18 +326,17 @@ int main(int argc, char **argv)
 		memcpy(log_file, sim_file, len_sim_file);
 		memcpy(log_file + len_sim_file, ".log", 5);
 
-		tick_t t_remain;
+		tick_t t_remain = 0;
 		if (max_time > 0) {
 			t_remain = t_stop - time_wall();
 			if (t_remain <= 0) {
 				push_stack(stack_file, sim_file);
 				break;
 			}
-		} else
-			t_remain = 0;
+		}
 
 		my_printf("starting: %s\n", sim_file);
-		status = dqmc_wrapper(sim_file, log_file, t_remain, 0);
+		status = dqmc_wrapper(sim_file, log_file, save_interval, t_remain, 0);
 
 		if (status > 0) {
 			my_printf("checkpointed: %s\n", sim_file);

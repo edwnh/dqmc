@@ -11,11 +11,13 @@ static void stop(int signum) { stop_flag = signum; }
 
 static FILE *log = NULL;
 static tick_t wall_start = 0;
+static tick_t save_interval = 0;
+static tick_t t_next_save = 0;
 static tick_t max_time = 0;
 static int first = 0;
 static tick_t t_first = 0;
 
-void sig_init(FILE *_log, const tick_t _wall_start, const tick_t _max_time)
+void sig_init(FILE *_log, const tick_t _wall_start, const tick_t _save_interval, const tick_t _max_time)
 {
 	static int called = 0; // could be called multiple times
 	if (called == 0) {
@@ -27,6 +29,8 @@ void sig_init(FILE *_log, const tick_t _wall_start, const tick_t _max_time)
 
 	log = _log;
 	wall_start = _wall_start;
+	save_interval = _save_interval;
+	t_next_save = wall_start + save_interval;
 	max_time = _max_time;
 	first = 0;
 	t_first = 0;
@@ -35,6 +39,11 @@ void sig_init(FILE *_log, const tick_t _wall_start, const tick_t _max_time)
 int sig_check_state(const int sweep, const int n_sweep_warm, const int n_sweep)
 {
 	const tick_t t_now = time_wall();
+
+	if (save_interval > 0 && t_now >= t_next_save) {
+		progress_flag = -1;
+		t_next_save = t_now + save_interval;
+	}
 
 	if (max_time > 0 && t_now >= wall_start + max_time)
 		stop_flag = -1;
@@ -73,9 +82,11 @@ int sig_check_state(const int sweep, const int n_sweep_warm, const int n_sweep)
 	if (stop_flag < 0)
 		fprintf(log, "reached time limit, checkpointing\n");
 	else if (stop_flag > 0)
-		fprintf(log, "signal %d received, checkpointing\n", stop_flag);
-	else if (progress_flag != 0)
-		fprintf(log, "signal %d received, checkpointing\n", progress_flag);
+		fprintf(log, "signal %d received, saving data\n", stop_flag);
+	else if (progress_flag < 0)
+		fprintf(log, "periodic checkpoint, saving data\n");
+	else if (progress_flag > 0)
+		fprintf(log, "signal %d received, saving data\n", progress_flag);
 
 	const int retval = (stop_flag != 0) ? 1 : (progress_flag != 0) ? 2 : 0;
 	progress_flag = 0;

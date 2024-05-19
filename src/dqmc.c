@@ -510,7 +510,7 @@ static int dqmc(struct sim_data *sim)
 }
 
 int dqmc_wrapper(const char *sim_file, const char *log_file,
-		const tick_t max_time, const int bench)
+		const tick_t save_interval, const tick_t max_time, const int bench)
 {
 	const tick_t wall_start = time_wall();
 	profile_clear();
@@ -528,7 +528,7 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 	fprintf(log, "compiled on %s %s\n", __DATE__, __TIME__);
 
 	// initialize signal handling
-	sig_init(log, wall_start, max_time);
+	sig_init(log, wall_start, save_interval, max_time);
 
 	// open and read simulation file
 	struct sim_data *sim = my_calloc(sizeof(struct sim_data));
