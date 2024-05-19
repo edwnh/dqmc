@@ -307,7 +307,7 @@ int main(int argc, char **argv)
 	sleep_rand(0.0, 4.0);
 
 	const char *stack_file = argv[optind];
-	const int save_interval = atoi(save_interval_str) * TICK_PER_SEC;
+	const tick_t save_interval = atoi(save_interval_str) * TICK_PER_SEC;
 	const int max_time = atoi(max_time_str);
 	const tick_t t_stop = t_start + max_time * TICK_PER_SEC;
 
