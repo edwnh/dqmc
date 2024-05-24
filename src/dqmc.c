@@ -196,18 +196,22 @@ static int dqmc(struct sim_data *sim)
 
 	num phase;
 	{
+	for (int l = 0; l < L; l++) {
+		for (int i = 0; i < N; i++) {
+			const int hsil = hs[i + N*l];
+			exp_Vu[i] = exp_lambda[i + ld*hsil];
+			exp_Vd[i] = exp_lambda[i + ld*!hsil];
+		}
+		mul_mat_diag(N, ld, exp_Ku, exp_Vu, Bu[l]);
+		mul_diag_mat(N, ld, exp_Vd, inv_exp_Ku, iBu[l]);
+		mul_mat_diag(N, ld, exp_Kd, exp_Vd, Bd[l]);
+		mul_diag_mat(N, ld, exp_Vu, inv_exp_Kd, iBd[l]);
+	}
 	num phaseu, phased;
 	#pragma omp parallel sections
 	{
 	#pragma omp section
 	{
-	for (int l = 0; l < L; l++) {
-		for (int i = 0; i < N; i++) {
-			const int hsil = hs[i + N*l];
-			exp_Vu[i] = exp_lambda[i + ld*hsil];
-		}
-		mul_mat_diag(N, ld, exp_Ku, exp_Vu, Bu[l]);
-	}
 	for (int f = 0; f < F; f++)
 		mul_seq(N, f*n_matmul, (f + 1)*n_matmul, 1.0,
 		        Bu, ld, Cu[f], ld, tmpNN1u);
@@ -229,13 +233,6 @@ static int dqmc(struct sim_data *sim)
 	}
 	#pragma omp section
 	{
-	for (int l = 0; l < L; l++) {
-		for (int i = 0; i < N; i++) {
-			const int hsil = hs[i + N*l];
-			exp_Vd[i] = exp_lambda[i + ld*!hsil];
-		}
-		mul_mat_diag(N, ld, exp_Kd, exp_Vd, Bd[l]);
-	}
 	for (int f = 0; f < F; f++)
 		mul_seq(N, f*n_matmul, (f + 1)*n_matmul, 1.0,
 		        Bd, ld, Cd[f], ld, tmpNN1d);
