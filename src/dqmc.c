@@ -211,12 +211,21 @@ static int dqmc(struct sim_data *sim)
 	for (int f = 0; f < F; f++)
 		mul_seq(N, f*n_matmul, (f + 1)*n_matmul, 1.0,
 		        Bu, ld, Cu[f], ld, tmpNN1u);
-	calc_QdX_first(1, N, ld, Cu[F - 1], &QdXLu[F - 1],
-	               tmpN1u, pvtu, worku, lwork);
-	for (int f = F - 2; f >= 0; f--)
-		calc_QdX(1, N, ld, Cu[f], &QdXLu[f + 1], &QdXLu[f],
-		         tmpN1u, pvtu, worku, lwork);
-	phaseu = calc_Gtt_last(1, N, ld, &QdXLu[0], gu, tmpNN1u, pvtu);
+	if (sim->s.sweep % 2 == 0) { // first sweep is up, initialize QdXL
+		calc_QdX_first(1, N, ld, Cu[F - 1], &QdXLu[F - 1],
+		               tmpN1u, pvtu, worku, lwork);
+		for (int f = F - 2; f >= 0; f--)
+			calc_QdX(1, N, ld, Cu[f], &QdXLu[f + 1], &QdXLu[f],
+			         tmpN1u, pvtu, worku, lwork);
+		phaseu = calc_Gtt_last(1, N, ld, &QdXLu[0], gu, tmpNN1u, pvtu);
+	} else { // first sweep is down, initialize QdX0
+		calc_QdX_first(0, N, ld, Cu[0], &QdX0u[0],
+		               tmpN1u, pvtu, worku, lwork);
+		for (int f = 1; f < F; f++)
+			calc_QdX(0, N, ld, Cu[f], &QdX0u[f - 1], &QdX0u[f],
+			         tmpN1u, pvtu, worku, lwork);
+		phaseu = calc_Gtt_last(0, N, ld, &QdX0u[F - 1], gu, tmpNN1u, pvtu);
+	}
 	}
 	#pragma omp section
 	{
@@ -230,12 +239,21 @@ static int dqmc(struct sim_data *sim)
 	for (int f = 0; f < F; f++)
 		mul_seq(N, f*n_matmul, (f + 1)*n_matmul, 1.0,
 		        Bd, ld, Cd[f], ld, tmpNN1d);
-	calc_QdX_first(1, N, ld, Cd[F - 1], &QdXLd[F - 1],
-	               tmpN1d, pvtd, workd, lwork);
-	for (int f = F - 2; f >= 0; f--)
-		calc_QdX(1, N, ld, Cd[f], &QdXLd[f + 1], &QdXLd[f],
-		         tmpN1d, pvtd, workd, lwork);
-	phased = calc_Gtt_last(1, N, ld, &QdXLd[0], gd, tmpNN1d, pvtd);
+	if (sim->s.sweep % 2 == 0) { // first sweep is up, initialize QdXL
+		calc_QdX_first(1, N, ld, Cd[F - 1], &QdXLd[F - 1],
+		               tmpN1d, pvtd, workd, lwork);
+		for (int f = F - 2; f >= 0; f--)
+			calc_QdX(1, N, ld, Cd[f], &QdXLd[f + 1], &QdXLd[f],
+			         tmpN1d, pvtd, workd, lwork);
+		phased = calc_Gtt_last(1, N, ld, &QdXLd[0], gd, tmpNN1d, pvtd);
+	} else { // first sweep is down, initialize QdX0
+		calc_QdX_first(0, N, ld, Cd[0], &QdX0d[0],
+		               tmpN1d, pvtd, workd, lwork);
+		for (int f = 1; f < F; f++)
+			calc_QdX(0, N, ld, Cd[f], &QdX0d[f - 1], &QdX0d[f],
+			         tmpN1d, pvtd, workd, lwork);
+		phased = calc_Gtt_last(0, N, ld, &QdX0d[F - 1], gd, tmpNN1d, pvtd);
+	}
 	}
 	}
 	phase = phaseu*phased;
