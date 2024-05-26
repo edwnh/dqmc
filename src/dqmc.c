@@ -524,6 +524,26 @@ static int dqmc(struct sim_data *sim)
 	return 0;
 }
 
+static void print_cpu_model(FILE *log)
+{
+	FILE *cpuinfo = fopen("/proc/cpuinfo", "r");
+	if (!cpuinfo) {
+		fprintf(log, "couldn't open /proc/cpuinfo\n");
+		return;
+	}
+
+	char *line = NULL;
+	size_t len = 0;
+	while (getline(&line, &len, cpuinfo) != -1) {
+		if (strncmp(line, "model name", 10) == 0) {
+			fprintf(log, "cpu %s", line);
+			break;
+		}
+	}
+	free(line);
+	fclose(cpuinfo);
+}
+
 int dqmc_wrapper(const char *sim_file, const char *log_file,
 		const tick_t save_interval, const tick_t max_time, const int bench)
 {
@@ -592,6 +612,7 @@ cleanup:
 	my_free(sim);
 
 	const tick_t wall_time = time_wall() - wall_start;
+	print_cpu_model(log);
 	fprintf(log, "wall time: %.3f\n", wall_time * SEC_PER_TICK);
 	profile_print(log, wall_time);
 
