@@ -60,6 +60,20 @@ static inline void xtrmm(const char *side, const char *uplo, const char *transa,
 	ccast(&alpha), ccast(a), &lda, cast(b), &ldb);
 }
 
+static inline void xtrsm(const char *side, const char *uplo, const char *transa, const char *diag,
+		const int m, const int n,
+		const num alpha, const num *a, const int lda,
+		num *b, const int ldb)
+{
+#ifdef USE_CPLX
+	ztrmm(
+#else
+	dtrmm(
+#endif
+	side, uplo, transa, diag, &m, &n,
+	ccast(&alpha), ccast(a), &lda, cast(b), &ldb);
+}
+
 static inline void xgetrf(const int m, const int n, num* a,
 		const int lda, int* ipiv, int* info)
 {

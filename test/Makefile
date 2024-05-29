@@ -21,7 +21,7 @@ test_greens: greens.o mem.o test_greens.o
 	@echo linking $@
 	@${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}
 
-vpath %.c ../src ../test
+vpath %.c ../src
 
 %.o: %.c
 	@echo compiling $<
