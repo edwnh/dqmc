@@ -302,9 +302,13 @@ num calc_Gtt_last(
 			tmpNN[i + j*ld] = G[i + j*ld] + R[i + j*ld]; // 2
 	xgetrf(N, N, tmpNN, ld, pvt, &info);
 	xgetrs("N", N, N, tmpNN, ld, pvt, G, ld, &info); // 3
-	if (trans)
+	num phase = calc_phase_LU(N, ld, tmpNN, pvt)*QdX->phase_iL;
+	if (trans) {
 		ximatcopy('C', N, N, 1.0, G, ld, ld);
-	return calc_phase_LU(N, ld, tmpNN, pvt)*QdX->phase_iL;
+		return conj(phase);
+	} else {
+		return phase;
+	}
 }
 
 // G = (1 + L0 R0 R1.T L1.T)^-1
@@ -339,7 +343,7 @@ num calc_Gtt(
 	const num phase_LU = calc_phase_LU(N, ld, G, pvt);
 	xgetrs("N", N, N, G, ld, pvt, tmpNN, ld, &info);
 	xgemm("C", "N", N, N, N, 1.0, iL1, ld, tmpNN, ld, 0.0, G, ld); //5
-	return phase_LU*QdX0->phase_iL*QdX1->phase_iL;
+	return phase_LU*QdX0->phase_iL*conj(QdX1->phase_iL);
 }
 
 // G00 = (1 + R1.T L1.T L0 R0)^-1
