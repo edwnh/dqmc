@@ -2,6 +2,7 @@
 
 #include <mkl.h>
 #include <tgmath.h>
+#include "mem.h"
 
 #ifdef USE_CPLX
 	#include <complex.h>
@@ -13,6 +14,19 @@
 	#define cast(p) (p)
 	#define ccast(p) (p)
 #endif
+
+#define MEM_ALIGN_NUM (MEM_ALIGN/sizeof(num))
+
+static inline size_t best_ld(const size_t N)
+{
+	// leading dimension should correspond to a multiple of 64 bytes
+	const size_t ld_aligned = ((N + MEM_ALIGN_NUM - 1)/MEM_ALIGN_NUM)*MEM_ALIGN_NUM;
+	const size_t ld_bytes = ld_aligned*sizeof(num);
+	// but not be a large power of two
+	if (ld_bytes >= 512 && !(ld_bytes & (ld_bytes - 1)))
+		return ld_aligned + MEM_ALIGN_NUM;
+	return ld_aligned;
+}
 
 
 static inline void xgemm(const char *transa, const char *transb,
@@ -196,6 +210,45 @@ const num alpha, const num *A, const size_t lda, num *B, const size_t ldb)
 	mkl_domatcopy('C', trans, rows, cols, alpha, A, lda, B, ldb);
 #endif
 }
+
+// B = A diag(d)
+static inline void mul_mat_diag(const int N, const int ld, const num *const A, const num *const d, num *const B)
+{
+	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
+	(void)__builtin_assume_aligned(A, MEM_ALIGN);
+	(void)__builtin_assume_aligned(d, MEM_ALIGN);
+	(void)__builtin_assume_aligned(B, MEM_ALIGN);
+
+	for (int j = 0; j < N; j++)
+		for (int i = 0; i < N; i++)
+			B[i + ld*j] = A[i + ld*j] * d[j];
+}
+
+
+// B = diag(d) A
+static inline void mul_diag_mat(const int N, const int ld, const num *const d, const num *const A, num *const B)
+{
+	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
+	(void)__builtin_assume_aligned(d, MEM_ALIGN);
+	(void)__builtin_assume_aligned(A, MEM_ALIGN);
+	(void)__builtin_assume_aligned(B, MEM_ALIGN);
+
+	for (int j = 0; j < N; j++)
+		for (int i = 0; i < N; i++)
+			B[i + ld*j] = d[i] * A[i + ld*j];
+}
+
+#define matdiff(m, n, A, ldA, B, ldB) do { \
+	double max = 0.0, avg = 0.0; \
+	for (int j = 0; j < (n); j++) \
+	for (int i = 0; i < (m); i++) { \
+		const double diff = fabs((A)[i + (ldA)*j] - (B)[i + (ldB)*j]); \
+		if (diff > max) max = diff; \
+		avg += diff; \
+	} \
+	avg /= N*N; \
+	printf(#A " - " #B ":\tmax %.3e\tavg %.3e\n", max, avg); \
+} while (0)
 
 #undef ccast
 #undef cast

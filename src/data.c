@@ -33,7 +33,7 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 #define my_read(_type, name, ...) do { \
 	status = H5LTread_dataset##_type(file_id, (name), __VA_ARGS__); \
 	return_if(status < 0, -1, "H5LTread_dataset() failed for %s: %d\n", (name), status); \
-} while (0);
+} while (0)
 
 	my_read(_int, "/params/N",      &sim->p.N);
 	my_read(_int, "/params/L",      &sim->p.L);
@@ -52,59 +52,59 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	const int num_b = sim->p.num_b, num_bs = sim->p.num_bs, num_bb = sim->p.num_bb;
 
 #define ALLOC_TABLE(XX, _UNUSED1, _UNUSED2) \
-	XX(sim->p.map_i         , sim->mp, N        * sizeof(int)) \
-	XX(sim->p.map_ij        , sim->mp, N*N      * sizeof(int)) \
-	XX(sim->p.bonds         , sim->mp, num_b*2  * sizeof(int)) \
-	XX(sim->p.map_bs        , sim->mp, num_b*N  * sizeof(int)) \
-	XX(sim->p.map_bb        , sim->mp, num_b*num_b * sizeof(int)) \
-	XX(sim->p.peierlsu      , sim->mp, N*N      * sizeof(num)) \
-	XX(sim->p.peierlsd      , sim->mp, N*N      * sizeof(num)) \
-	XX(sim->p.degen_i       , sim->mp, num_i    * sizeof(int)) \
-	XX(sim->p.degen_ij      , sim->mp, num_ij   * sizeof(int)) \
-	XX(sim->p.degen_bs      , sim->mp, num_bs   * sizeof(int)) \
-	XX(sim->p.degen_bb      , sim->mp, num_bb   * sizeof(int)) \
-	XX(sim->p.exp_lambda    , sim->mp, N*2      * sizeof(double)) \
-	XX(sim->p.exp_Ku        , sim->mp, N*N      * sizeof(num)) \
-	XX(sim->p.exp_Kd        , sim->mp, N*N      * sizeof(num)) \
-	XX(sim->p.inv_exp_Ku    , sim->mp, N*N      * sizeof(num)) \
-	XX(sim->p.inv_exp_Kd    , sim->mp, N*N      * sizeof(num)) \
-	XX(sim->p.exp_halfKu    , sim->mp, N*N      * sizeof(num)) \
-	XX(sim->p.exp_halfKd    , sim->mp, N*N      * sizeof(num)) \
-	XX(sim->p.inv_exp_halfKu, sim->mp, N*N      * sizeof(num)) \
-	XX(sim->p.inv_exp_halfKd, sim->mp, N*N      * sizeof(num)) \
-	XX(sim->p.del           , sim->mp, N*2      * sizeof(double)) \
-	XX(sim->s.hs            , sim->mp, N*L      * sizeof(int)) \
-	XX(sim->m_eq.density    , sim->mp, num_i    * sizeof(num)) \
-	XX(sim->m_eq.double_occ , sim->mp, num_i    * sizeof(num)) \
-	XX(sim->m_eq.g00        , sim->mp, num_ij   * sizeof(num)) \
-	XX(sim->m_eq.nn         , sim->mp, num_ij   * sizeof(num)) \
-	XX(sim->m_eq.xx         , sim->mp, num_ij   * sizeof(num)) \
-	XX(sim->m_eq.zz         , sim->mp, num_ij   * sizeof(num)) \
-	XX(sim->m_eq.pair_sw    , sim->mp, num_ij   * sizeof(num)) \
-	XX(sim->m_eq.kk         , sim->mp, (sim->p.meas_energy_corr != 0)*num_bb * sizeof(num)) \
-	XX(sim->m_eq.kv         , sim->mp, (sim->p.meas_energy_corr != 0)*num_bs * sizeof(num)) \
-	XX(sim->m_eq.kn         , sim->mp, (sim->p.meas_energy_corr != 0)*num_bs * sizeof(num)) \
-	XX(sim->m_eq.vv         , sim->mp, (sim->p.meas_energy_corr != 0)*num_ij * sizeof(num)) \
-	XX(sim->m_eq.vn         , sim->mp, (sim->p.meas_energy_corr != 0)*num_ij * sizeof(num)) \
-	XX(sim->m_ue.gt0        , sim->mp, (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
-	XX(sim->m_ue.nn         , sim->mp, (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
-	XX(sim->m_ue.xx         , sim->mp, (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
-	XX(sim->m_ue.zz         , sim->mp, (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
-	XX(sim->m_ue.pair_sw    , sim->mp, (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
-	XX(sim->m_ue.pair_bb    , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
-	XX(sim->m_ue.jj         , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
-	XX(sim->m_ue.jsjs       , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
-	XX(sim->m_ue.kk         , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
-	XX(sim->m_ue.ksks       , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
-	XX(sim->m_ue.kv         , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_energy_corr != 0)*num_bs*L * sizeof(num)) \
-	XX(sim->m_ue.kn         , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_energy_corr != 0)*num_bs*L * sizeof(num)) \
-	XX(sim->m_ue.vv         , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_energy_corr != 0)*num_ij*L * sizeof(num)) \
-	XX(sim->m_ue.vn         , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_energy_corr != 0)*num_ij*L * sizeof(num)) \
-	XX(sim->m_ue.nem_nnnn   , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_nematic_corr != 0)*num_bb*L * sizeof(num)) \
-	XX(sim->m_ue.nem_ssss   , sim->mp, (sim->p.period_uneqlt != 0)*(sim->p.meas_nematic_corr != 0)*num_bb*L * sizeof(num))
+	XX(sim->p.map_i         , N        * sizeof(int)) \
+	XX(sim->p.map_ij        , N*N      * sizeof(int)) \
+	XX(sim->p.bonds         , num_b*2  * sizeof(int)) \
+	XX(sim->p.map_bs        , num_b*N  * sizeof(int)) \
+	XX(sim->p.map_bb        , num_b*num_b * sizeof(int)) \
+	XX(sim->p.peierlsu      , N*N      * sizeof(num)) \
+	XX(sim->p.peierlsd      , N*N      * sizeof(num)) \
+	XX(sim->p.degen_i       , num_i    * sizeof(int)) \
+	XX(sim->p.degen_ij      , num_ij   * sizeof(int)) \
+	XX(sim->p.degen_bs      , num_bs   * sizeof(int)) \
+	XX(sim->p.degen_bb      , num_bb   * sizeof(int)) \
+	XX(sim->p.exp_lambda    , N*2      * sizeof(double)) \
+	XX(sim->p.exp_Ku        , N*N      * sizeof(num)) \
+	XX(sim->p.exp_Kd        , N*N      * sizeof(num)) \
+	XX(sim->p.inv_exp_Ku    , N*N      * sizeof(num)) \
+	XX(sim->p.inv_exp_Kd    , N*N      * sizeof(num)) \
+	XX(sim->p.exp_halfKu    , N*N      * sizeof(num)) \
+	XX(sim->p.exp_halfKd    , N*N      * sizeof(num)) \
+	XX(sim->p.inv_exp_halfKu, N*N      * sizeof(num)) \
+	XX(sim->p.inv_exp_halfKd, N*N      * sizeof(num)) \
+	XX(sim->p.del           , N*2      * sizeof(double)) \
+	XX(sim->s.hs            , N*L      * sizeof(int)) \
+	XX(sim->m_eq.density    , num_i    * sizeof(num)) \
+	XX(sim->m_eq.double_occ , num_i    * sizeof(num)) \
+	XX(sim->m_eq.g00        , num_ij   * sizeof(num)) \
+	XX(sim->m_eq.nn         , num_ij   * sizeof(num)) \
+	XX(sim->m_eq.xx         , num_ij   * sizeof(num)) \
+	XX(sim->m_eq.zz         , num_ij   * sizeof(num)) \
+	XX(sim->m_eq.pair_sw    , num_ij   * sizeof(num)) \
+	XX(sim->m_eq.kk         , (sim->p.meas_energy_corr != 0)*num_bb * sizeof(num)) \
+	XX(sim->m_eq.kv         , (sim->p.meas_energy_corr != 0)*num_bs * sizeof(num)) \
+	XX(sim->m_eq.kn         , (sim->p.meas_energy_corr != 0)*num_bs * sizeof(num)) \
+	XX(sim->m_eq.vv         , (sim->p.meas_energy_corr != 0)*num_ij * sizeof(num)) \
+	XX(sim->m_eq.vn         , (sim->p.meas_energy_corr != 0)*num_ij * sizeof(num)) \
+	XX(sim->m_ue.gt0        , (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.nn         , (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.xx         , (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.zz         , (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.pair_sw    , (sim->p.period_uneqlt != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.pair_bb    , (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
+	XX(sim->m_ue.jj         , (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
+	XX(sim->m_ue.jsjs       , (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
+	XX(sim->m_ue.kk         , (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
+	XX(sim->m_ue.ksks       , (sim->p.period_uneqlt != 0)*(sim->p.meas_bond_corr != 0)*num_bb*L * sizeof(num)) \
+	XX(sim->m_ue.kv         , (sim->p.period_uneqlt != 0)*(sim->p.meas_energy_corr != 0)*num_bs*L * sizeof(num)) \
+	XX(sim->m_ue.kn         , (sim->p.period_uneqlt != 0)*(sim->p.meas_energy_corr != 0)*num_bs*L * sizeof(num)) \
+	XX(sim->m_ue.vv         , (sim->p.period_uneqlt != 0)*(sim->p.meas_energy_corr != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.vn         , (sim->p.period_uneqlt != 0)*(sim->p.meas_energy_corr != 0)*num_ij*L * sizeof(num)) \
+	XX(sim->m_ue.nem_nnnn   , (sim->p.period_uneqlt != 0)*(sim->p.meas_nematic_corr != 0)*num_bb*L * sizeof(num)) \
+	XX(sim->m_ue.nem_ssss   , (sim->p.period_uneqlt != 0)*(sim->p.meas_nematic_corr != 0)*num_bb*L * sizeof(num))
 
-	sim->mp = pool_new(POOL_GET_SIZE(ALLOC_TABLE));
-	POOL_DO_ALLOC(ALLOC_TABLE);
+	sim->pool = my_calloc(POOL_GET_SIZE(ALLOC_TABLE));
+	POOL_DO_ALLOC(sim->pool, ALLOC_TABLE);
 #undef ALLOC_TABLE
 
 	my_read(_int,    "/params/map_i",          sim->p.map_i);
@@ -168,7 +168,7 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 		if (sim->p.meas_bond_corr) {
 			my_read( , "/meas_uneqlt/pair_bb", num_h5t, sim->m_ue.pair_bb);
 			my_read( , "/meas_uneqlt/jj",      num_h5t, sim->m_ue.jj);
-			my_read( , "/meas_uneqlt/jsjs",    num_h5t, sim->m_ue.jsjs)
+			my_read( , "/meas_uneqlt/jsjs",    num_h5t, sim->m_ue.jsjs);
 			my_read( , "/meas_uneqlt/kk",      num_h5t, sim->m_ue.kk);
 			my_read( , "/meas_uneqlt/ksks",    num_h5t, sim->m_ue.ksks);
 		}
@@ -206,7 +206,7 @@ int sim_data_save(const struct sim_data *sim)
 	return_if(status < 0, -1, "H5Dwrite() failed for %s: %d\n", name, status); \
 	status = H5Dclose(dset_id); \
 	return_if(status < 0, -1, "H5Dclose() failed for %s: %d\n", name, status); \
-} while (0);
+} while (0)
 
 	my_write("/state/rng",            H5T_NATIVE_UINT64,  sim->s.rng);
 	my_write("/state/sweep",          H5T_NATIVE_INT,    &sim->s.sweep);
@@ -263,6 +263,6 @@ int sim_data_save(const struct sim_data *sim)
 
 void sim_data_free(struct sim_data *sim)
 {
-	pool_free(sim->mp);
-	sim->mp = NULL;
+	my_free(sim->pool);
+	sim->pool = NULL;
 }

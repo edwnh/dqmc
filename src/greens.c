@@ -1,6 +1,5 @@
 #include "greens.h"
 #include "linalg.h"
-#include "mem.h"
 
 void mul_seq(const int N,
 		const int min, const int maxp1,
@@ -39,6 +38,16 @@ void mul_seq(const int N,
 	}
 }
 
+// G = L G R
+void wrap(const int N, const int ld,
+		num *const G,
+		const num *const L, const num *const R,
+		num *const tmpNN)
+{
+	xgemm("N", "N", N, N, N, 1.0, G, ld, R, ld, 0.0, tmpNN, ld);
+	xgemm("N", "N", N, N, N, 1.0, L, ld, tmpNN, ld, 0.0, G, ld);
+}
+
 int get_lwork(const int N, const int ld)
 {
 	num lwork;
@@ -63,7 +72,7 @@ int get_lwork(const int N, const int ld)
 	return max_lwork;
 }
 
-void calc_QdX_first(
+static void calc_QdX_first(
 		const int trans, // if 1, calculate QdX of B^T (conjugate transpose for complex)
 		const int N, const int ld,
 		const num *const B, // input
@@ -148,12 +157,15 @@ void calc_QdX(
 		const int trans, // if 1, calculate QdX of B^T (conjugate transpose for complex)
 		const int N, const int ld,
 		const num *const B, // input
-		const struct QdX *const QdX_prev,  // input, previous QdX
+		const struct QdX *const QdX_prev,  // input, previous QdX or NULL if none
 		struct QdX *const QdX,  // output
 		num *const tmpN, // work arrays
 		int *const pvt,
 		num *const work, const int lwork)
 {
+	if (QdX_prev == NULL)
+		return calc_QdX_first(trans, N, ld, B, QdX, tmpN, pvt, work, lwork);
+
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	(void)__builtin_assume_aligned(B, MEM_ALIGN);
 	(void)__builtin_assume_aligned(tmpN, MEM_ALIGN);
@@ -280,7 +292,7 @@ static inline num calc_phase_LU(const int N, const int ld, const num *A, const i
 // 1. G = iL
 // 2. tmpNN = G + R
 // 3. G = tmpNN^-1 G
-num calc_Gtt_last(
+static num calc_Gtt_last(
 		const int trans, // if 0 calculate, calculate G = (1 + L R)^-1. if 1, calculate G = (1 + R.T L.T)^-1
 		const int N, const int ld,
 		const struct QdX *const QdX, // input
@@ -326,6 +338,11 @@ num calc_Gtt(
 		num *const tmpNN, // work arrays
 		int *const pvt)
 {
+	if (QdX1 == NULL)
+		return calc_Gtt_last(0, N, ld, QdX0, G, tmpNN, pvt);
+	else if (QdX0 == NULL)
+		return calc_Gtt_last(1, N, ld, QdX1, G, tmpNN, pvt);
+
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	(void)__builtin_assume_aligned(G, MEM_ALIGN);
 	(void)__builtin_assume_aligned(tmpNN, MEM_ALIGN);

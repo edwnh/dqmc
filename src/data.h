@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 #include "linalg.h"
-#include "mem.h"
 
 struct params {
 	int N, L;
@@ -65,7 +64,7 @@ struct meas_uneqlt {
 
 struct sim_data {
 	const char *file;
-	struct mem_pool *mp; // memory pool for everything below
+	void *pool; // memory pool for everything below
 
 	struct params p;
 	struct state s;

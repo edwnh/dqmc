@@ -1,6 +1,7 @@
 #include "sig.h"
 #include <signal.h>
 #include <stdio.h>
+#include "dqmc.h"
 #include "time_.h"
 
 static volatile sig_atomic_t progress_flag = 0;
@@ -9,7 +10,6 @@ static void progress(int signum) { progress_flag = signum; }
 static volatile sig_atomic_t stop_flag = 0;
 static void stop(int signum) { stop_flag = signum; }
 
-static FILE *log = NULL;
 static tick_t wall_start = 0;
 static tick_t save_interval = 0;
 static tick_t t_next_save = 0;
@@ -17,7 +17,7 @@ static tick_t max_time = 0;
 static int first = 0;
 static tick_t t_first = 0;
 
-void sig_init(FILE *_log, const tick_t _wall_start, const tick_t _save_interval, const tick_t _max_time)
+void sig_init(const tick_t _wall_start, const tick_t _save_interval, const tick_t _max_time)
 {
 	static int called = 0; // could be called multiple times
 	if (called == 0) {
@@ -27,7 +27,6 @@ void sig_init(FILE *_log, const tick_t _wall_start, const tick_t _save_interval,
 		sigaction(SIGTERM, &(const struct sigaction){.sa_handler = stop}, NULL);
 	}
 
-	log = _log;
 	wall_start = _wall_start;
 	save_interval = _save_interval;
 	t_next_save = wall_start + save_interval;
@@ -54,13 +53,13 @@ int sig_check_state(const int sweep, const int n_sweep_warm, const int n_sweep)
 	}
 
 	if (stop_flag < 0)
-		fprintf(log, "reached time limit, checkpointing\n");
+		fprintf(log_f, "reached time limit, checkpointing\n");
 	else if (stop_flag > 0)
-		fprintf(log, "signal %d received, saving data\n", stop_flag);
+		fprintf(log_f, "signal %d received, saving data\n", stop_flag);
 	else if (progress_flag < 0)
-		fprintf(log, "periodic checkpoint, saving data\n");
+		fprintf(log_f, "periodic checkpoint, saving data\n");
 	else if (progress_flag > 0)
-		fprintf(log, "signal %d received, saving data\n", progress_flag);
+		fprintf(log_f, "signal %d received, saving data\n", progress_flag);
 
 	if (stop_flag != 0 || progress_flag != 0) {
 		const int warmed_up = (sweep >= n_sweep_warm);
@@ -69,18 +68,18 @@ int sig_check_state(const int sweep, const int n_sweep_warm, const int n_sweep)
 		const int sweep_done = sweep - first;
 		const int sweep_left = n_sweep - sweep;
 		const double t_left = (t_done / sweep_done) * sweep_left;
-		fprintf(log, "%d/%d sweeps completed (%s)\n",
+		fprintf(log_f, "%d/%d sweeps completed (%s)\n",
 			sweep,
 			n_sweep,
 			warmed_up ? "measuring" : "warming up");
-		fprintf(log, "\telapsed: %.3f%c\n",
+		fprintf(log_f, "\telapsed: %.3f%c\n",
 			t_elapsed < 3600 ? t_elapsed : t_elapsed/3600,
 			t_elapsed < 3600 ? 's' : 'h');
-		fprintf(log, "\tremaining%s: %.3f%c\n",
+		fprintf(log_f, "\tremaining%s: %.3f%c\n",
 			(first < n_sweep_warm) ? " (ignoring measurement cost)" : "",
 			t_left < 3600 ? t_left : t_left/3600,
 			t_left < 3600 ? 's' : 'h');
-		fflush(log);
+		fflush(log_f);
 	}
 
 	if (sweep == n_sweep_warm) {

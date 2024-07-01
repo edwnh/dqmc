@@ -17,39 +17,27 @@ void mul_seq(const int N,
 		num *const A, const int ldA,
 		num *const tmpNN);
 
-int get_lwork(const int N, const int ld);
+void wrap(const int N, const int ld,
+		num *const G,
+		const num *const L, const num *const R,
+		num *const tmpNN);
 
-void calc_QdX_first(
-		const int trans, // if 1, calculate QdX of B^T (conjugate transpose for complex)
-		const int N, const int ld,
-		const num *const B, // input
-		struct QdX *const QdX, // output
-		num *const tmpN, // work arrays
-		int *const pvt,
-		num *const work, const int lwork);
+int get_lwork(const int N, const int ld);
 
 void calc_QdX(
 		const int trans, // if 1, calculate QdX of B^T (conjugate transpose for complex)
 		const int N, const int ld,
 		const num *const B, // input
-		const struct QdX *const QdX_prev,  // input, previous QdX
+		const struct QdX *const QdX_prev,  // input, previous QdX or NULL if none
 		struct QdX *const QdX,  // output
 		num *const tmpN, // work arrays
 		int *const pvt,
 		num *const work, const int lwork);
 
-num calc_Gtt_last(
-		const int trans, // if 0 calculate, calculate G = (1 + L R)^-1. if 1, calculate G = (1 + R.T L.T)^-1
-		const int N, const int ld,
-		const struct QdX *const QdX, // input
-		num *const G, // output
-		num *const tmpNN, // work arrays
-		int *const pvt);
-
 num calc_Gtt(
 		const int N, const int ld,
-		const struct QdX *const QdX0, // input
-		const struct QdX *const QdX1, // input
+		const struct QdX *const QdX0, // input or NULL if none
+		const struct QdX *const QdX1, // input or NULL if none
 		num *const G, // output
 		num *const tmpNN, // work arrays
 		int *const pvt);

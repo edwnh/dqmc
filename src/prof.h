@@ -13,6 +13,7 @@
 	X(recalc) \
 	X(wrap) \
 	X(half_wrap) \
+	X(half_wrap_ue) \
 	X(calc_ue) \
 	X(meas_eq) \
 	X(meas_uneq)
@@ -37,7 +38,7 @@ extern int profile_count[n_profile];
 		profile_count[__profile_##a]++; \
 	} while (0)
 
-void profile_print(FILE *log, tick_t wall_time);
+void profile_print(tick_t wall_time);
 
 void profile_clear(void);
 
@@ -45,7 +46,7 @@ void profile_clear(void);
 
 #define profile_begin(a) ((void)0)
 #define profile_end(a) ((void)0)
-#define profile_print(a, b) ((void)0)
+#define profile_print(a) ((void)0)
 #define profile_clear() ((void)0)
 
 #endif
