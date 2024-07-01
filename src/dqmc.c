@@ -286,7 +286,7 @@ static int dqmc(struct sim_data *sim)
 				}
 				profile_end(recalc);
 			} else {
-				if (sweep_up) {// wrap for up sweep
+				if (sweep_up) {
 					profile_begin(wrap);
 					wrap(N, ld, gu, Bu[l], iBu[l], tmpNN1u);
 					profile_end(wrap);
@@ -469,9 +469,9 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 	sig_init(wall_start, save_interval, max_time);
 
 	// open and read simulation file
-	struct sim_data *sim = my_calloc(sizeof(struct sim_data));
+	struct sim_data sim = {0};
 	fprintf(log_f, "opening %s\n", sim_file);
-	status = sim_data_read_alloc(sim, sim_file);
+	status = sim_data_read_alloc(&sim, sim_file);
 	if (status < 0) {
 		fprintf(stderr, "read_file() failed: %d\n", status);
 		status = -1;
@@ -479,26 +479,26 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 	}
 
 	// check existing progress
-	fprintf(log_f, "%d/%d sweeps completed\n", sim->s.sweep, sim->p.n_sweep);
-	if (sim->s.sweep >= sim->p.n_sweep) {
+	fprintf(log_f, "%d/%d sweeps completed\n", sim.s.sweep, sim.p.n_sweep);
+	if (sim.s.sweep >= sim.p.n_sweep) {
 		fprintf(log_f, "already finished\n");
 		goto cleanup;
 	}
 
 	// run dqmc
 	fprintf(log_f, "starting dqmc\n");
-	status = dqmc(sim);
+	status = dqmc(&sim);
 	if (status < 0) {
 		fprintf(stderr, "dqmc() failed to allocate memory\n");
 		status = -1;
 		goto cleanup;
 	}
-	fprintf(log_f, "%d/%d sweeps completed\n", sim->s.sweep, sim->p.n_sweep);
+	fprintf(log_f, "%d/%d sweeps completed\n", sim.s.sweep, sim.p.n_sweep);
 
 	// save to simulation file (if not in benchmarking mode)
 	if (!bench) {
 		fprintf(log_f, "saving data\n");
-		status = sim_data_save(sim);
+		status = sim_data_save(&sim);
 		if (status < 0) {
 			fprintf(stderr, "save_file() failed: %d\n", status);
 			status = -1;
@@ -508,11 +508,10 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 		fprintf(log_f, "benchmark mode enabled; not saving data\n");
 	}
 
-	status = (sim->s.sweep == sim->p.n_sweep) ? 0 : 1;
+	status = (sim.s.sweep == sim.p.n_sweep) ? 0 : 1;
 
 cleanup:
-	sim_data_free(sim);
-	my_free(sim);
+	sim_data_free(&sim);
 
 	const tick_t wall_time = time_wall() - wall_start;
 	print_cpu_model();
