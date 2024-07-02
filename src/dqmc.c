@@ -376,9 +376,9 @@ static int dqmc(struct sim_data *sim)
 			xomatcopy('N', N, N, 1.0, Gu0t[0], ld, Gutt[0], ld);
 			xomatcopy('N', N, N, 1.0, Gu0t[0], ld, Gut0[0], ld);
 			for (int l = 1; l < L; l++) {
-				wrap(N, ld, Gu0t[l], inv_exp_halfKu, exp_halfKu, tmpNN1d);
-				wrap(N, ld, Gutt[l], inv_exp_halfKu, exp_halfKu, tmpNN1d);
-				wrap(N, ld, Gut0[l], inv_exp_halfKu, exp_halfKu, tmpNN1d);
+				wrap(N, ld, Gu0t[l], inv_exp_halfKu, exp_halfKu, tmpNN1u);
+				wrap(N, ld, Gutt[l], inv_exp_halfKu, exp_halfKu, tmpNN1u);
+				wrap(N, ld, Gut0[l], inv_exp_halfKu, exp_halfKu, tmpNN1u);
 			}
 			profile_end(half_wrap_ue);
 			}
@@ -391,11 +391,11 @@ static int dqmc(struct sim_data *sim)
 			if (sweep_up) { // then QdX0 is fresh, QdXL is old
 				for (int f = F - 1; f >= 0; f--)
 					calc_QdX(1, N, ld, Cd[f], (f == F - 1) ? NULL : &QdXLd[f + 1], &QdXLd[f],
-							tmpN1d, pvtd, workd, lwork);
+					         tmpN1d, pvtd, workd, lwork);
 			} else {
 				for (int f = 0; f < F; f++)
 					calc_QdX(0, N, ld, Cd[f], (f == 0) ? NULL : &QdX0d[f - 1], &QdX0d[f],
-							tmpN1d, pvtd, workd, lwork);
+					         tmpN1d, pvtd, workd, lwork);
 			}
 			calc_ue_g(N, ld, L, F, n_matmul, Bd, iBd, QdX0d, QdXLd, Gd0t, Gdtt, Gdt0, tmpNN1d, pvtd);
 			profile_end(calc_ue);
