@@ -28,7 +28,7 @@ static void bench_trmm(int N, int ld, num *A, num *B, num *C)
 		for (int i = 0; i < N*ld; i++) C[i] = B[i];
 		xtrmm("R", "L", "N", "U", N, N, 1.0, A, ld, C, ld);
 	}
-	const double ops = N*N*N;
+	const double ops = 1.0*N*N*N;
 	printf("%.3f us\t%.3f GFlops\n", US_PER_TICK*((double)elapsed)/trials, ops*trials/(elapsed));
 }
 
@@ -41,7 +41,7 @@ static void bench_trsm(int N, int ld, num *A, num *B, num *C)
 		for (int i = 0; i < N*ld; i++) C[i] = B[i];
 		xtrsm("R", "L", "N", "U", N, N, 1.0, A, ld, C, ld);
 	}
-	const double ops = N*N*N;
+	const double ops = 1.0*N*N*N;
 	printf("%.3f us\t%.3f GFlops\n", US_PER_TICK*((double)elapsed)/trials, ops*trials/(elapsed));
 }
 
@@ -80,7 +80,7 @@ static void bench_geqrf(int N, int ld, num *A, num *B, num *C, num *D)
 		for (int i = 0; i < N*ld; i++) C[i] = A[i];
 		xgeqrf(N, N, C, ld, B, D, N*N, &(int){0});
 	}
-	const double ops = (4.0/3)*N*N*N + 2*N*N + (14.0/3)*N;
+	const double ops = (4.0/3)*N*N*N + 2.0*N*N + (14.0/3)*N;
 	printf("%.3f us\t%.3f GFlops\n", US_PER_TICK*((double)elapsed)/trials, ops*trials/(elapsed));
 }
 
@@ -93,9 +93,9 @@ static void bench_geqp3(int N, int ld, num *A, num *B, num *C, num *D, int *pvt)
 	for (; (elapsed = time_wall() - time_start) < MIN_TIME*TICK_PER_SEC; trials++) {
 		for (int i = 0; i < N*ld; i++) C[i] = A[i];
 		for (int i = 0; i < N; i++) pvt[i] = 0;
-		xgeqp3(N, N, C, ld, pvt, B, D, N*N, NULL, &(int){0});
+		xgeqp3(N, N, C, ld, pvt, B, D, N*N, (double *)(B + N), &(int){0});
 	}
-	const double ops = (4.0/3)*N*N*N + 2*N*N + (14.0/3)*N;
+	const double ops = (4.0/3)*N*N*N + 2.0*N*N + (14.0/3)*N;
 	printf("%.3f us\t%.3f GFlops\n", US_PER_TICK*((double)elapsed)/trials, ops*trials/(elapsed));
 }
 
@@ -107,19 +107,23 @@ int main(int argc, char *argv[])
 	}
 
 	const int N = atoi(argv[1]);
-	const int ld = mem_best_ld(N);
+	const int ld = best_ld(N);
 
-	struct mem_pool *mp = pool_new(4 * MEM_ALIGN_UP(N*ld * sizeof(num)) + MEM_ALIGN_UP(N * sizeof(int)));
-	num *const restrict A = pool_alloc(mp, N*ld * sizeof(num));
-	num *const restrict B = pool_alloc(mp, N*ld * sizeof(num));
-	num *const restrict C = pool_alloc(mp, N*ld * sizeof(num));
-	num *const restrict D = pool_alloc(mp, N*ld * sizeof(num));
-	int *const restrict pvt = pool_alloc(mp, N * sizeof(int));
+	#define ALLOC_TABLE(X, FOR, ENDFOR) \
+		X(num *const restrict A, N*ld * sizeof(num)) \
+		X(num *const restrict B, N*ld * sizeof(num)) \
+		X(num *const restrict C, N*ld * sizeof(num)) \
+		X(num *const restrict D, N*ld * sizeof(num)) \
+		X(int *const restrict pvt, N * sizeof(int))
+
+	void *pool = my_calloc(POOL_GET_SIZE(ALLOC_TABLE));
+	POOL_DO_ALLOC(pool, ALLOC_TABLE);
+	#undef ALLOC_TABLE
 
 	uint64_t rng[17] = {0};
 	for (int i = 0; i < 16; i++) rng[i] = 1234567*i*i + 654321;
 	for (int i = 0; i < N*ld; i++) {
-		A[i] = 2.0*rand_doub(rng) - 0.0;
+		A[i] = 2.0*rand_doub(rng) - 1.0;
 		B[i] = 2.0*rand_doub(rng) - 1.0;
 	}
 
@@ -131,5 +135,5 @@ int main(int argc, char *argv[])
 	printf("geqrf:\t"); bench_geqrf(N, ld, A, B, C, D);
 	printf("geqp3:\t"); bench_geqp3(N, ld, A, B, C, D, pvt);
 
-	pool_free(mp);
+	my_free(pool);
 }

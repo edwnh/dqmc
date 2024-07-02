@@ -5,18 +5,6 @@
 
 #include <stdio.h>
 
-#define matdiff(m, n, A, ldA, B, ldB) do { \
-	double max = 0.0, avg = 0.0; \
-	for (int j = 0; j < (n); j++) \
-	for (int i = 0; i < (m); i++) { \
-		const double diff = fabs((A)[i + (ldA)*j] - (B)[i + (ldB)*j]); \
-		if (diff > max) max = diff; \
-		avg += diff; \
-	} \
-	avg /= N*N; \
-	printf(#A " - " #B ":\tmax %.3e\tavg %.3e\n", max, avg); \
-} while (0);
-
 // old code
 void mul_seq_old(const int N, const int L,
 		const int min, const int maxp1,
@@ -291,7 +279,7 @@ int main(void)
 {
 	const int F = 40;
 	const int N = 72;
-	const int ld = mem_best_ld(N);
+	const int ld = best_ld(N);
 	printf("%d\n", ld);
 
 	const int lwork = N*N;//get_lwork(N, N);
@@ -299,39 +287,39 @@ int main(void)
 	printf("lwork = %d\n", lwork);
 
 	#define ALLOC_TABLE(XX, FOR, ENDFOR) \
-		XX(num *const Cu, mp, ld*N*F * sizeof(num)) \
-		XX(struct QdX *QdXLu, mp, F * sizeof(struct QdX)) \
-		XX(struct QdX *QdX0u, mp, F * sizeof(struct QdX)) \
+		XX(num *const Cu, ld*N*F * sizeof(num)) \
+		XX(struct QdX *QdXLu, F * sizeof(struct QdX)) \
+		XX(struct QdX *QdX0u, F * sizeof(struct QdX)) \
 		FOR(f, F) \
-			XX(QdXLu[f].Q, mp, ld*N * sizeof(num)) \
-			XX(QdXLu[f].d, mp, N * sizeof(num)) \
-			XX(QdXLu[f].X, mp, ld*N * sizeof(num)) \
-			XX(QdXLu[f].iL, mp, ld*N * sizeof(num)) \
-			XX(QdXLu[f].R, mp, ld*N * sizeof(num)) \
-			XX(QdX0u[f].Q, mp, ld*N * sizeof(num)) \
-			XX(QdX0u[f].d, mp, N * sizeof(num)) \
-			XX(QdX0u[f].X, mp, ld*N * sizeof(num)) \
-			XX(QdX0u[f].iL, mp, ld*N * sizeof(num)) \
-			XX(QdX0u[f].R, mp, ld*N * sizeof(num)) \
+			XX(QdXLu[f].Q, ld*N * sizeof(num)) \
+			XX(QdXLu[f].d, N * sizeof(num)) \
+			XX(QdXLu[f].X, ld*N * sizeof(num)) \
+			XX(QdXLu[f].iL, ld*N * sizeof(num)) \
+			XX(QdXLu[f].R, ld*N * sizeof(num)) \
+			XX(QdX0u[f].Q, ld*N * sizeof(num)) \
+			XX(QdX0u[f].d, N * sizeof(num)) \
+			XX(QdX0u[f].X, ld*N * sizeof(num)) \
+			XX(QdX0u[f].iL, ld*N * sizeof(num)) \
+			XX(QdX0u[f].R, ld*N * sizeof(num)) \
 		ENDFOR \
-		XX(num *const restrict GuA, mp, ld*N * sizeof(num)) \
-		XX(num *const restrict GuB, mp, ld*N * sizeof(num)) \
-		XX(num *const restrict Gu0t, mp, ld*N * sizeof(num)) \
-		XX(num *const restrict Gutt, mp, ld*N * sizeof(num)) \
-		XX(num *const restrict Gut0, mp, ld*N * sizeof(num)) \
-		XX(num *const restrict tmpNN0u, mp, ld*N * sizeof(num)) \
-		XX(num *const restrict tmpNN1u, mp, ld*N * sizeof(num)) \
-		XX(num *const restrict tmpN0u, mp, N * sizeof(num)) \
-		XX(num *const restrict tmpN1u, mp, N * sizeof(num)) \
-		XX(num *const restrict tmpN2u, mp, N * sizeof(num)) \
-		XX(num *const restrict worku, mp, lwork * sizeof(num)) \
-		XX(int *const restrict pvtu, mp, N * sizeof(int)) \
-		XX(num *const Gredu, mp, N*F*N*F * sizeof(num)) \
-		XX(num *const tauu, mp, N*F * sizeof(num)) \
-		XX(num *const Qu, mp, 4*N*N * sizeof(num))
+		XX(num *const restrict GuA, ld*N * sizeof(num)) \
+		XX(num *const restrict GuB, ld*N * sizeof(num)) \
+		XX(num *const restrict Gu0t, ld*N * sizeof(num)) \
+		XX(num *const restrict Gutt, ld*N * sizeof(num)) \
+		XX(num *const restrict Gut0, ld*N * sizeof(num)) \
+		XX(num *const restrict tmpNN0u, ld*N * sizeof(num)) \
+		XX(num *const restrict tmpNN1u, ld*N * sizeof(num)) \
+		XX(num *const restrict tmpN0u, N * sizeof(num)) \
+		XX(num *const restrict tmpN1u, N * sizeof(num)) \
+		XX(num *const restrict tmpN2u, N * sizeof(num)) \
+		XX(num *const restrict worku, lwork * sizeof(num)) \
+		XX(int *const restrict pvtu, N * sizeof(int)) \
+		XX(num *const Gredu, N*F*N*F * sizeof(num)) \
+		XX(num *const tauu, N*F * sizeof(num)) \
+		XX(num *const Qu, 4*N*N * sizeof(num))
 
-	struct mem_pool *mp = pool_new(POOL_GET_SIZE(ALLOC_TABLE));
-	POOL_DO_ALLOC(ALLOC_TABLE);
+	void *pool = my_calloc(POOL_GET_SIZE(ALLOC_TABLE));
+	POOL_DO_ALLOC(pool, ALLOC_TABLE);
 
 	num phaseuA, phaseuB;
 
@@ -339,30 +327,44 @@ int main(void)
 	for (int i = 0; i < 16; i++) rng[i] = 1234567*i*i + 654321;
 	for (int f = 0; f < F; f++)
 		for (int j = 0; j < N; j++)
-			for (int i = 0; i < N; i++)
-				Cu[i + j*ld + f*ld*N] =
-					2.0*rand_doub(rng) - 1.0;
-					// CMPLX(2.0*rand_doub(rng) - 1.0, 2.0*rand_doub(rng) - 1.0);
+			for (int i = 0; i < N; i++) {
+				#ifndef USE_CPLX
+				Cu[i + j*ld + f*ld*N] = 2.0*rand_doub(rng) - 1.0;
+				#else
+				Cu[i + j*ld + f*ld*N] = CMPLX(2.0*rand_doub(rng) - 1.0, 2.0*rand_doub(rng) - 1.0);
+				#endif
+			}
 printf("rng: %f\t%f\n", creal(Cu[0]), creal(Cu[5 + 6*ld + 1*ld*N]));
+	// test calc_QdX_first
+	// for (int j = 0; j < N; j++)
+	// 	for (int i = 0; i < N; i++)
+	// 		Qu[i + j*ld] = (i == QdX0u[0].p[j]);
+	// xtrmm("R", "L", "N", "U", N, N, 1.0, QdX0u[0].Q, ld, Qu, ld);
+	// for (int j = 0; j < N; j++)
+	// 	for (int i = 0; i < N; i++)
+	// 		Qu[i + j*ld] *= QdX0u[0].d[j];
+	// xtrmm("R", "U", "N", "U", N, N, 1.0, QdX0u[0].X, ld, Qu, ld);
+	// matdiff(N, N, Cu, ld, Qu, ld);
 
-	calc_QdX_first(0, N, ld, Cu + 0*ld*N, &QdX0u[0], tmpN1u, pvtu, worku, lwork);
-	for (int f = 1; f < F; f++)
-		calc_QdX(0, N, ld, Cu + f*ld*N, &QdX0u[f - 1], &QdX0u[f], tmpN1u, pvtu, worku, lwork);
+	// int info;
+	// xgemm("N", "N", N, N, N, 1.0, QdX0u[0].iL, ld, Cu, ld, 0.0, Qu, ld);
+	// matdiff(N, N, Qu, ld, QdX0u[0].R, ld);
+
+	for (int f = 0; f < F; f++)
+		calc_QdX(0, N, ld, Cu + f*ld*N, (f == 0) ? NULL : &QdX0u[f - 1], &QdX0u[f], tmpN1u, pvtu, worku, lwork);
 for (int i = 0; i < N; i++) printf("d[%d] = %e\n", i, creal(QdX0u[F-1].d[i]));
-	phaseuA = calc_Gtt_last(0, N, ld, &QdX0u[F - 1], GuA, tmpNN1u, pvtu);
+	phaseuA = calc_Gtt(N, ld, &QdX0u[F - 1], NULL, GuA, tmpNN1u, pvtu);
 
-printf("GuA: %f\t%f\t%f\n", creal(phaseuA), creal(GuA[0]), creal(GuA[2 + 3*ld]));
+printf("GuA: %f\t%f\t%f\n", cimag(phaseuA), creal(GuA[0]), creal(GuA[2 + 3*ld]));
 
 	phaseuB = calc_eq_g(0, N, ld, F, 1, Cu, GuB, tmpNN0u, tmpNN1u, tmpN0u, tmpN1u, tmpN2u, pvtu, worku, lwork);
-printf("old: %f\t%f\t%f\n", creal(phaseuB), creal(GuB[0]), creal(GuB[2 + 3*ld]));
+printf("old: %f\t%f\t%f\n", cimag(phaseuB), creal(GuB[0]), creal(GuB[2 + 3*ld]));
 
+	for (int f = F - 1; f >= 0; f--)
+		calc_QdX(1, N, ld, Cu + f*ld*N, (f == F - 1) ? NULL : &QdXLu[f + 1], &QdXLu[f], tmpN1u, pvtu, worku, lwork);
 
-	calc_QdX_first(1, N, ld, Cu + (F - 1)*ld*N, &QdXLu[F - 1], tmpN1u, pvtu, worku, lwork);
-	for (int f = F - 2; f >= 0; f--)
-		calc_QdX(1, N, ld, Cu + f*ld*N, &QdXLu[f + 1], &QdXLu[f], tmpN1u, pvtu, worku, lwork);
-
-	phaseuB = calc_Gtt_last(1, N, ld, &QdXLu[0], GuB, tmpNN1u, pvtu);
-printf("GuB: %f\t%f\t%f\n", creal(phaseuB), creal(GuB[0]), creal(GuB[2 + 3*ld]));
+	phaseuB = calc_Gtt(N, ld, NULL, &QdXLu[0], GuB, tmpNN1u, pvtu);
+printf("GuB: %f\t%f\t%f\n", cimag(phaseuB), creal(GuB[0]), creal(GuB[2 + 3*ld]));
 
 	matdiff(N, N, GuA, ld, GuB, ld);
 
@@ -385,6 +387,6 @@ printf("GuB: %f\t%f\t%f\n", creal(phaseuB), creal(GuB[0]), creal(GuB[2 + 3*ld]))
 		matdiff(N, N, Gut0, ld, Gredu + f*N + 0*N*N*F, N*F);
 	}
 
-	pool_free(mp);
+	my_free(pool);
 	return 0;
 }
