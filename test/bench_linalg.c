@@ -109,16 +109,16 @@ int main(int argc, char *argv[])
 	const int N = atoi(argv[1]);
 	const int ld = best_ld(N);
 
-	#define ALLOC_TABLE(X, FOR, ENDFOR) \
-		X(num *const restrict A, N*ld * sizeof(num)) \
-		X(num *const restrict B, N*ld * sizeof(num)) \
-		X(num *const restrict C, N*ld * sizeof(num)) \
-		X(num *const restrict D, N*ld * sizeof(num)) \
-		X(int *const restrict pvt, N * sizeof(int))
-
-	void *pool = my_calloc(POOL_GET_SIZE(ALLOC_TABLE));
-	POOL_DO_ALLOC(pool, ALLOC_TABLE);
-	#undef ALLOC_TABLE
+	num *A, *B, *C, *D;
+	int *pvt;
+	struct alloc_entry table[] = {
+		{(void **)&A, N*ld * sizeof(num)},
+		{(void **)&B, N*ld * sizeof(num)},
+		{(void **)&C, N*ld * sizeof(num)},
+		{(void **)&D, N*ld * sizeof(num)},
+		{(void **)&pvt, N * sizeof(int)},
+	};
+	void *pool = my_calloc_table(table, sizeof(table)/sizeof(table[0]));
 
 	uint64_t rng[17] = {0};
 	for (int i = 0; i < 16; i++) rng[i] = 1234567*i*i + 654321;

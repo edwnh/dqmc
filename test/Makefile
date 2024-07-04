@@ -13,11 +13,11 @@ LDFLAGS +=  -Wl,--start-group ${MKLROOT}/lib/libmkl_intel_lp64.a ${MKLROOT}/lib/
 
 all: test_greens bench_linalg
 
-bench_linalg: bench_linalg.o
+bench_linalg: bench_linalg.o mem.o
 	@echo linking $@
 	@${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}
 
-test_greens: greens.o test_greens.o
+test_greens: greens.o test_greens.o mem.o
 	@echo linking $@
 	@${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}
 

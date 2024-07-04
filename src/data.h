@@ -62,6 +62,22 @@ struct meas_uneqlt {
 	num *nem_nnnn, *nem_ssss;
 };
 
+struct workspace {
+	num *inv_exp_K, *exp_K;
+	num *exp_V;
+	num *iB, *B, *C;
+	num *Q_L, *d_L, *X_L;
+	num *iL_L, *R_L, *phase_iL_L;
+	num *Q_0, *d_0, *X_0;
+	num *iL_0, *R_0, *phase_iL_0;
+	num *g;
+	num *exp_halfK, *inv_exp_halfK;
+	num *tmpNN1, *tmpNN2, *tmpN1, *tmpN2;
+	int *pvt;
+	num *work;
+	num *G0t, *Gtt, *Gt0;
+};
+
 struct sim_data {
 	const char *file;
 	void *pool; // memory pool for everything below
@@ -70,6 +86,8 @@ struct sim_data {
 	struct state s;
 	struct meas_eqlt m_eq;
 	struct meas_uneqlt m_ue;
+
+	struct workspace up, dn;
 };
 
 int sim_data_read_alloc(struct sim_data *sim, const char *file);

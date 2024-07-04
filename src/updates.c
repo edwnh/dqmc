@@ -26,8 +26,8 @@ void update_delayed(const int N, const int ld, const int n_delay, const double *
 	for (int j = 0; j < N; j++) dd[j] = gd[j + ld*j];
 	for (int ii = 0; ii < N; ii++) {
 		const int i = site_order[ii];
-		const double delu = del[i + ld*hs[i]];
-		const double deld = del[i + ld*!hs[i]];
+		const double delu = del[i + N*hs[i]];
+		const double deld = del[i + N*!hs[i]];
 		if (delu == 0.0 && deld == 0.0) continue;
 		const num ru = 1.0 + (1.0 - du[i]) * delu;
 		const num rd = 1.0 + (1.0 - dd[i]) * deld;

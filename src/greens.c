@@ -1,11 +1,11 @@
 #include "greens.h"
 #include "linalg.h"
 
-void mul_seq(const int N,
+void mul_seq(const int N, const int ld,
 		const int min, const int maxp1,
-		const num alpha, num *const *const B, const int ldB,
-		num *const A, const int ldA,
-		num *const tmpNN) // assume tmpNN has ldB leading dim
+		const num alpha, const num *const B,
+		num *const A,
+		num *const tmpNN) // assume tmpNN has ld leading dim
 {
 	const int n_mul = maxp1 - min;
 	if (n_mul <= 0)
@@ -13,28 +13,28 @@ void mul_seq(const int N,
 	if (n_mul == 1) {
 		for (int j = 0; j < N; j++)
 		for (int i = 0; i < N; i++)
-			A[i + ldA*j] = alpha*B[min][i + ldB*j];
+			A[i + ld*j] = alpha*B[i + ld*j + min*ld*N];
 		return;
 	}
 
 	int l = min;
 	if (n_mul % 2 == 0) {
-		xgemm("N", "N", N, N, N, alpha, B[l + 1],
-		      ldB, B[l], ldB, 0.0, A, ldA);
+		xgemm("N", "N", N, N, N, alpha, B + (l + 1)*ld*N,
+		      ld, B + l*ld*N, ld, 0.0, A, ld);
 		l += 2;
 	} else {
-		xgemm("N", "N", N, N, N, alpha, B[l + 1],
-		      ldB, B[l], ldB, 0.0, tmpNN, ldB);
-		xgemm("N", "N", N, N, N, 1.0, B[l + 2],
-		      ldB, tmpNN, ldB, 0.0, A, ldA);
+		xgemm("N", "N", N, N, N, alpha, B + (l + 1)*ld*N,
+		      ld, B + l*ld*N, ld, 0.0, tmpNN, ld);
+		xgemm("N", "N", N, N, N, 1.0, B + (l + 2)*ld*N,
+		      ld, tmpNN, ld, 0.0, A, ld);
 		l += 3;
 	}
 
 	for (; l != maxp1; l += 2) {
-		xgemm("N", "N", N, N, N, 1.0, B[l],
-		      ldB, A, ldA, 0.0, tmpNN, ldB);
-		xgemm("N", "N", N, N, N, 1.0, B[l + 1],
-		      ldB, tmpNN, ldB, 0.0, A, ldA);
+		xgemm("N", "N", N, N, N, 1.0, B + l*ld*N,
+		      ld, A, ld, 0.0, tmpNN, ld);
+		xgemm("N", "N", N, N, N, 1.0, B + (l + 1)*ld*N,
+		      ld, tmpNN, ld, 0.0, A, ld);
 	}
 }
 
@@ -76,7 +76,8 @@ static void calc_QdX_first(
 		const int trans, // if 1, calculate QdX of B^T (conjugate transpose for complex)
 		const int N, const int ld,
 		const num *const B, // input
-		struct QdX *const QdX, // output
+		struct QdX QdX,  // output
+		struct LR LR, // output
 		num *const tmpN, // work arrays
 		int *const pvt,
 		num *const work, const int lwork)
@@ -85,11 +86,11 @@ static void calc_QdX_first(
 	(void)__builtin_assume_aligned(B, MEM_ALIGN);
 	(void)__builtin_assume_aligned(tmpN, MEM_ALIGN);
 	(void)__builtin_assume_aligned(work, MEM_ALIGN);
-	num *const Q = __builtin_assume_aligned(QdX->Q, MEM_ALIGN);
-	num *const d = __builtin_assume_aligned(QdX->d, MEM_ALIGN);
-	num *const X = __builtin_assume_aligned(QdX->X, MEM_ALIGN);
-	num *const iL = __builtin_assume_aligned(QdX->iL, MEM_ALIGN);
-	num *const R = __builtin_assume_aligned(QdX->R, MEM_ALIGN);
+	num *const Q = __builtin_assume_aligned(QdX.Q, MEM_ALIGN);
+	num *const d = __builtin_assume_aligned(QdX.d, MEM_ALIGN);
+	num *const X = __builtin_assume_aligned(QdX.X, MEM_ALIGN);
+	num *const iL = __builtin_assume_aligned(LR.iL, MEM_ALIGN);
+	num *const R = __builtin_assume_aligned(LR.R, MEM_ALIGN);
 
 	int info = 0;
 	for (int i = 0; i < N; i++) pvt[i] = 0;
@@ -150,36 +151,35 @@ static void calc_QdX_first(
 				R[i + j*ld] = d[i] * X[i + j*ld];
 		}
 	}
-	QdX->phase_iL = phase;
+	*LR.phase_iL = phase;
 }
 
 void calc_QdX(
 		const int trans, // if 1, calculate QdX of B^T (conjugate transpose for complex)
 		const int N, const int ld,
 		const num *const B, // input
-		const struct QdX *const QdX_prev,  // input, previous QdX or NULL if none
-		struct QdX *const QdX,  // output
+		const struct QdX QdX_prev,  // input, previous QdX or NULL if none
+		struct QdX QdX,  // output
+		struct LR LR, // output
 		num *const tmpN, // work arrays
 		int *const pvt,
 		num *const work, const int lwork)
 {
-	if (QdX_prev == NULL)
-		return calc_QdX_first(trans, N, ld, B, QdX, tmpN, pvt, work, lwork);
+	if (QdX_prev.Q == NULL)
+		return calc_QdX_first(trans, N, ld, B, QdX, LR, tmpN, pvt, work, lwork);
 
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	(void)__builtin_assume_aligned(B, MEM_ALIGN);
 	(void)__builtin_assume_aligned(tmpN, MEM_ALIGN);
 	(void)__builtin_assume_aligned(work, MEM_ALIGN);
-	const num *const prevQ = __builtin_assume_aligned(QdX_prev->Q, MEM_ALIGN);
-	const num *const prevd = __builtin_assume_aligned(QdX_prev->d, MEM_ALIGN);
-	const num *const prevX = __builtin_assume_aligned(QdX_prev->X, MEM_ALIGN);
-	const num *const previL = __builtin_assume_aligned(QdX_prev->iL, MEM_ALIGN);
-	const num *const prevR = __builtin_assume_aligned(QdX_prev->R, MEM_ALIGN);
-	num *const Q = __builtin_assume_aligned(QdX->Q, MEM_ALIGN);
-	num *const d = __builtin_assume_aligned(QdX->d, MEM_ALIGN);
-	num *const X = __builtin_assume_aligned(QdX->X, MEM_ALIGN);
-	num *const iL = __builtin_assume_aligned(QdX->iL, MEM_ALIGN);
-	num *const R = __builtin_assume_aligned(QdX->R, MEM_ALIGN);
+	const num *const prevQ = __builtin_assume_aligned(QdX_prev.Q, MEM_ALIGN);
+	const num *const prevd = __builtin_assume_aligned(QdX_prev.d, MEM_ALIGN);
+	const num *const prevX = __builtin_assume_aligned(QdX_prev.X, MEM_ALIGN);
+	num *const Q = __builtin_assume_aligned(QdX.Q, MEM_ALIGN);
+	num *const d = __builtin_assume_aligned(QdX.d, MEM_ALIGN);
+	num *const X = __builtin_assume_aligned(QdX.X, MEM_ALIGN);
+	num *const iL = __builtin_assume_aligned(LR.iL, MEM_ALIGN);
+	num *const R = __builtin_assume_aligned(LR.R, MEM_ALIGN);
 
 	int info = 0;
 
@@ -265,7 +265,7 @@ void calc_QdX(
 				R[i + j*ld] = d[i] * X[i + j*ld];
 		}
 	}
-	QdX->phase_iL = phase;
+	*LR.phase_iL = phase;
 }
 
 static inline num calc_phase_LU(const int N, const int ld, const num *A, const int *pvt)
@@ -295,7 +295,7 @@ static inline num calc_phase_LU(const int N, const int ld, const num *A, const i
 static num calc_Gtt_last(
 		const int trans, // if 0 calculate, calculate G = (1 + L R)^-1. if 1, calculate G = (1 + R.T L.T)^-1
 		const int N, const int ld,
-		const struct QdX *const QdX, // input
+		const struct LR LR, // input
 		num *const G, // output
 		num *const tmpNN, // work arrays
 		int *const pvt)
@@ -303,8 +303,8 @@ static num calc_Gtt_last(
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	(void)__builtin_assume_aligned(G, MEM_ALIGN);
 	(void)__builtin_assume_aligned(tmpNN, MEM_ALIGN);
-	const num *const iL = __builtin_assume_aligned(QdX->iL, MEM_ALIGN);
-	const num *const R = __builtin_assume_aligned(QdX->R, MEM_ALIGN);
+	const num *const iL = __builtin_assume_aligned(LR.iL, MEM_ALIGN);
+	const num *const R = __builtin_assume_aligned(LR.R, MEM_ALIGN);
 
 	int info = 0;
 
@@ -314,7 +314,7 @@ static num calc_Gtt_last(
 			tmpNN[i + j*ld] = G[i + j*ld] + R[i + j*ld]; // 2
 	xgetrf(N, N, tmpNN, ld, pvt, &info);
 	xgetrs("N", N, N, tmpNN, ld, pvt, G, ld, &info); // 3
-	num phase = calc_phase_LU(N, ld, tmpNN, pvt)*QdX->phase_iL;
+	num phase = calc_phase_LU(N, ld, tmpNN, pvt)*(*LR.phase_iL);
 	if (trans) {
 		ximatcopy('C', N, N, 1.0, G, ld, ld);
 		return conj(phase);
@@ -332,24 +332,24 @@ static num calc_Gtt_last(
 // 5. G = iL1.T tmpNN
 num calc_Gtt(
 		const int N, const int ld,
-		const struct QdX *const QdX0, // input
-		const struct QdX *const QdX1, // input
+		const struct LR LR0, // input or NULL if none
+		const struct LR LR1, // input or NULL if none
 		num *const G, // output
 		num *const tmpNN, // work arrays
 		int *const pvt)
 {
-	if (QdX1 == NULL)
-		return calc_Gtt_last(0, N, ld, QdX0, G, tmpNN, pvt);
-	else if (QdX0 == NULL)
-		return calc_Gtt_last(1, N, ld, QdX1, G, tmpNN, pvt);
+	if (LR1.iL == NULL)
+		return calc_Gtt_last(0, N, ld, LR0, G, tmpNN, pvt);
+	else if (LR0.iL == NULL)
+		return calc_Gtt_last(1, N, ld, LR1, G, tmpNN, pvt);
 
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	(void)__builtin_assume_aligned(G, MEM_ALIGN);
 	(void)__builtin_assume_aligned(tmpNN, MEM_ALIGN);
-	const num *const iL0 = __builtin_assume_aligned(QdX0->iL, MEM_ALIGN);
-	const num *const R0 = __builtin_assume_aligned(QdX0->R, MEM_ALIGN);
-	const num *const iL1 = __builtin_assume_aligned(QdX1->iL, MEM_ALIGN);
-	const num *const R1 = __builtin_assume_aligned(QdX1->R, MEM_ALIGN);
+	const num *const iL0 = __builtin_assume_aligned(LR0.iL, MEM_ALIGN);
+	const num *const R0 = __builtin_assume_aligned(LR0.R, MEM_ALIGN);
+	const num *const iL1 = __builtin_assume_aligned(LR1.iL, MEM_ALIGN);
+	const num *const R1 = __builtin_assume_aligned(LR1.R, MEM_ALIGN);
 
 	int info = 0;
 
@@ -360,7 +360,7 @@ num calc_Gtt(
 	const num phase_LU = calc_phase_LU(N, ld, G, pvt);
 	xgetrs("N", N, N, G, ld, pvt, tmpNN, ld, &info);
 	xgemm("C", "N", N, N, N, 1.0, iL1, ld, tmpNN, ld, 0.0, G, ld); //5
-	return phase_LU*QdX0->phase_iL*conj(QdX1->phase_iL);
+	return phase_LU*(*LR0.phase_iL)*conj(*LR1.phase_iL);
 }
 
 // G00 = (1 + R1.T L1.T L0 R0)^-1
@@ -381,8 +381,8 @@ num calc_Gtt(
 // 9. Gt0 = iL1.T tmpNN
 void calc_G0t_Gtt_Gt0(
 		const int N, const int ld,
-		const struct QdX *const QdX0, // input
-		const struct QdX *const QdX1, // input
+		const struct LR LR0, // input
+		const struct LR LR1, // input
 		num *const G0t, // output
 		num *const Gtt, // output
 		num *const Gt0, // output
@@ -394,10 +394,10 @@ void calc_G0t_Gtt_Gt0(
 	(void)__builtin_assume_aligned(G0t, MEM_ALIGN);
 	(void)__builtin_assume_aligned(Gt0, MEM_ALIGN);
 	(void)__builtin_assume_aligned(tmpNN, MEM_ALIGN);
-	const num *const iL0 = __builtin_assume_aligned(QdX0->iL, MEM_ALIGN);
-	const num *const R0 = __builtin_assume_aligned(QdX0->R, MEM_ALIGN);
-	const num *const iL1 = __builtin_assume_aligned(QdX1->iL, MEM_ALIGN);
-	const num *const R1 = __builtin_assume_aligned(QdX1->R, MEM_ALIGN);
+	const num *const iL0 = __builtin_assume_aligned(LR0.iL, MEM_ALIGN);
+	const num *const R0 = __builtin_assume_aligned(LR0.R, MEM_ALIGN);
+	const num *const iL1 = __builtin_assume_aligned(LR1.iL, MEM_ALIGN);
+	const num *const R1 = __builtin_assume_aligned(LR1.R, MEM_ALIGN);
 
 	int info = 0;
 
@@ -414,11 +414,11 @@ void calc_G0t_Gtt_Gt0(
 }
 
 static void expand_g(const int N, const int ld, const int L, const int E, const int n_matmul,
-		num *const *const B,
-		num *const *const iB,
-		num *const *const G0t,
-		num *const *const Gtt,
-		num *const *const Gt0,
+		const num *const B,
+		const num *const iB,
+		num *const G0t,
+		num *const Gtt,
+		num *const Gt0,
 		num *const tmpNN)
 {
 	// number of steps to move in each direction
@@ -442,8 +442,8 @@ static void expand_g(const int N, const int ld, const int L, const int E, const 
 			const int next = (m - 1 + L) % L;
 			const num alpha = (m == 0) ? -1.0 : 1.0;
 			xgemm("N", "N", N, N, N, alpha,
-			      G0t[m], ld, B[next], ld, 0.0,
-			      G0t[next], ld);
+			      G0t + m*ld*N, ld, B + next*ld*N, ld, 0.0,
+			      G0t + next*ld*N, ld);
 			m = next;
 		}
 		for (int m = l; m != rstop;) {
@@ -453,10 +453,10 @@ static void expand_g(const int N, const int ld, const int L, const int E, const 
 			if (m == 0)
 				for (int j = 0; j < N; j++)
 				for (int i = 0; i < N; i++)
-					G0t[next][i + ld*j] = iB[m][i + ld*j];
+					G0t[i + ld*j + next*ld*N] = iB[i + ld*j + m*ld*N];
 			xgemm("N", "N", N, N, N, alpha,
-			      G0t[m], ld, iB[m], ld, beta,
-			      G0t[next], ld);
+			      G0t + m*ld*N, ld, iB + m*ld*N, ld, beta,
+			      G0t + next*ld*N, ld);
 			m = next;
 		}
 	}
@@ -470,21 +470,21 @@ static void expand_g(const int N, const int ld, const int L, const int E, const 
 		for (int m = k; m != ustop;) {
 			const int next = (m - 1 + L) % L;
 			xgemm("N", "N", N, N, N, 1.0,
-			      Gtt[m], ld, B[next], ld, 0.0,
+			      Gtt + m*ld*N, ld, B + next*ld*N, ld, 0.0,
 			      tmpNN, ld);
 			xgemm("N", "N", N, N, N, 1.0,
-			      iB[next], ld, tmpNN, ld, 0.0,
-			      Gtt[next], ld);
+			      iB + next*ld*N, ld, tmpNN, ld, 0.0,
+			      Gtt + next*ld*N, ld);
 			m = next;
 		}
 		for (int m = k; m != dstop;) {
 			const int next = (m + 1) % L;
 			xgemm("N", "N", N, N, N, 1.0,
-			      Gtt[m], ld, iB[m], ld, 0.0,
+			      Gtt + m*ld*N, ld, iB + m*ld*N, ld, 0.0,
 			      tmpNN, ld);
 			xgemm("N", "N", N, N, N, 1.0,
-			      B[m], ld, tmpNN, ld, 0.0,
-			      Gtt[next], ld);
+			      B + m*ld*N, ld, tmpNN, ld, 0.0,
+			      Gtt + next*ld*N, ld);
 			m = next;
 		}
 	}
@@ -501,34 +501,36 @@ static void expand_g(const int N, const int ld, const int L, const int E, const 
 			if (m == 0)
 				for (int j = 0; j < N; j++)
 				for (int i = 0; i < N; i++)
-					Gt0[next][i + ld*j] = iB[next][i + ld*j];
+					Gt0[i + ld*j + next*ld*N] = iB[i + ld*j + next*ld*N];
 			xgemm("N", "N", N, N, N, alpha,
-			      iB[next], ld, Gt0[m], ld, beta,
-			      Gt0[next], ld);
+			      iB + next*ld*N, ld, Gt0 + m*ld*N, ld, beta,
+			      Gt0 + next*ld*N, ld);
 			m = next;
 		}
 		for (int m = k; m != dstop;) {
 			const int next = (m + 1) % L;
 			const num alpha = (next == 0) ? -1.0 : 1.0;
 			xgemm("N", "N", N, N, N, alpha,
-			      B[m], ld, Gt0[m], ld, 0.0,
-			      Gt0[next], ld);
+			      B + m*ld*N, ld, Gt0 + m*ld*N, ld, 0.0,
+			      Gt0 + next*ld*N, ld);
 			if (next == 0) // should never happen
 				for (int i = 0; i < N; i++)
-					Gt0[next][i + ld*i] += 1.0;
+					Gt0[i + ld*i + next*ld*N] += 1.0;
 			m = next;
 		}
 	}
 }
 
 void calc_ue_g(const int N, const int ld, const int L, const int F, const int n_matmul,
-		num *const *const B,
-		num *const *const iB,
-		const struct QdX *const QdX0, // input
-		const struct QdX *const QdXL, // input
-		num *const *const G0t, // output
-		num *const *const Gtt, // output
-		num *const *const Gt0, // output
+		const num *const B, // input
+		const num *const iB, // input
+		num *const iL_0, // input
+		num *const R_0, // input
+		num *const iL_L, // input
+		num *const R_L, // input
+		num *const G0t, // output
+		num *const Gtt, // output
+		num *const Gt0, // output
 		num *const tmpNN, // work arrays
 		int *const pvt)
 {
@@ -536,7 +538,10 @@ void calc_ue_g(const int N, const int ld, const int L, const int F, const int n_
 	// only need to do every other f
 	for (int f = 2; f < F; f += 2) {
 		const int l = f*n_matmul;
-		calc_G0t_Gtt_Gt0(N, ld, &QdX0[f - 1], &QdXL[f], G0t[l], Gtt[l], Gt0[l], tmpNN, pvt);
+		calc_G0t_Gtt_Gt0(N, ld,
+			(const struct LR){iL_0 + (f - 1)*ld*N, R_0 + (f - 1)*ld*N, NULL},
+			(const struct LR){iL_L + f*ld*N,       R_L + f*ld*N,       NULL},
+			G0t + l*ld*N, Gtt + l*ld*N, Gt0 + l*ld*N, tmpNN, pvt);
 	}
 	expand_g(N, ld, L, 1 + (F - 1)/2, 2*n_matmul, B, iB, G0t, Gtt, Gt0, tmpNN);
 }
