@@ -3,20 +3,20 @@ import h5py
 import numpy as np
 
 
-def load_file(path, *args):
-    with h5py.File(path, "r") as f:
+def load_file(filename, *args):
+    with h5py.File(filename, "r") as f:
         return tuple(f[x][...] for x in args)
 
 
-def load_firstfile(path, *args):
-    return load_file(min(glob(path + "*.h5")), *args)
+def load_firstfile(prefix, *args):
+    return load_file(min(glob(prefix + "*.h5")), *args)
 
 
-def load(path, *args):
-    files = sorted(glob(path + "*.h5"))
+def load(prefix, *args):
+    files = sorted(glob(prefix + "*.h5"))
     nbins = len(files)
     if nbins == 0:
-        print(f"no files matching: {path}*.h5")
+        print(f"no files matching: {prefix}*.h5")
         return
     last = load_file(files.pop(), *args)
     data = tuple(np.zeros((nbins,) + a.shape, dtype=a.dtype) for a in last)
@@ -26,6 +26,13 @@ def load(path, *args):
         for a, a_i in zip(data, load_file(f, *args)):
             a[i, ...] = a_i
     return data
+
+
+def load_complete(path, *args):
+    n_sweep_max, = load_firstfile(path, "params/n_sweep")
+    data = load(path, "state/sweep", *args)
+    mask = (data[0] == n_sweep_max)
+    return tuple(a[mask] for a in data[1:])
 
 
 def jackknife(*args, f=lambda s, sx: (sx.T/s.T).T.real):
