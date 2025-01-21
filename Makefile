@@ -16,16 +16,15 @@ SRCS = \
 	src/sig.c \
 	src/updates.c
 
-OBJS = $(SRCS:%.c=$(BUILD_DIR)/%.o)
-DEPS = $(OBJS:%.o=%.d)
+OBJS_REAL = $(SRCS:%.c=$(BUILD_DIR)/real/%.o)
+OBJS_CPLX = $(SRCS:%.c=$(BUILD_DIR)/cplx/%.o)
 
 CFLAGS += -I$(MKLROOT)/include -I$(HDF_PREFIX)/include
 
 CFLAGS += -DMKL_DIRECT_CALL_SEQ
 CFLAGS += -DGIT_ID=\"$(shell git describe --always)\"
 CFLAGS += -DPROFILE_ENABLE
-# CFLAGS += -DUSE_CPLX  # uncomment to use complex numbers
-# CFLAGS += -qopenmp # to enable 2x threading, use -qopenmp
+# CFLAGS += -qopenmp # uncomment to enable 2x threading
 
 CFLAGS += -std=gnu17 -O3 -mauto-arch=CORE-AVX2,CORE-AVX512,COMMON-AVX512 -fargument-noalias
 CFLAGS += -Wall -Wextra -Wno-unused-variable -Wno-unused-parameter
@@ -56,18 +55,27 @@ LDFLAGS += -Wl,--start-group \
 
 .PHONY: all clean
 
-all: $(TARGET)
+all: $(TARGET).real $(TARGET).cplx
 
-$(BUILD_DIR)/%.o : %.c
+$(TARGET).real: $(OBJS_REAL)
+	@echo LD $@
+	@$(CC) $^ -o $@ $(LDFLAGS)
+
+$(TARGET).cplx: $(OBJS_CPLX)
+	@echo LD $@
+	@$(CC) $^ -o $@ $(LDFLAGS)
+
+$(BUILD_DIR)/real/%.o : %.c
 	@echo CC $@
 	@mkdir -p $(@D)
 	@$(CC) $(CFLAGS) $< -c -o $@
 
-$(TARGET): $(OBJS)
-	@echo LD $@
-	@$(CC) $^ -o $@ $(LDFLAGS)
+$(BUILD_DIR)/cplx/%.o : %.c
+	@echo CC $@
+	@mkdir -p $(@D)
+	@$(CC) -DUSE_CPLX $(CFLAGS) $< -c -o $@
 
 clean:
 	$(RM) -r $(BUILD_DIR)
 
--include $(DEPS)
+-include $(OBJS_REAL:%.o=%.d) $(OBJS_CPLX:%.o=%.d)
