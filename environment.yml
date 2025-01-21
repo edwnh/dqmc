@@ -1,0 +1,9 @@
+name: dqmc
+channels:
+  - conda-forge
+dependencies:
+  - dpcpp_linux-64
+  - mkl-static
+  - mkl-devel
+  - h5py
+  - scipy

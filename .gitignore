@@ -1,0 +1,3 @@
+build/
+HDF5*/
+__pycache__/

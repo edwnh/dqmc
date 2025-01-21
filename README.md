@@ -1,137 +1,104 @@
 # Determinantal quantum Monte Carlo for the Hubbard model
 
-## Prerequisites
+## Environment and dependencies
 
-- Linux is the only supported OS at this moment.
-- `make`
+Linux is the only supported OS at this moment. macOS and Windows support will be implemented soon.
+
+### Build dependencies
 - Intel compiler `icx`
 - Intel MKL headers and libraries
 - HDF5 headers and libraries
 
-### For python scripts in `util/`
-- Python 3
+### Runtime dependencies
+- None. The MKL and HDF5 libraries are statically linked by default.
+
+### Python packages (for scripts in `util/`)
 - `numpy`
 - `scipy`
 - `h5py`
 
-On a local computer: you can get these via Intel oneAPI and miniconda/anaconda.
-On a cluster: these are likely installed already as modules.
+On a local computer: install conda (anaconda, miniconda, or micromamba) and set up a new environment using `environment.yml`. You can probably follow the instructions below for the GitHub Codespace.
 
-## Compilation
+On a cluster: you may have HDF5, Intel compilers and MKL, and Python packages available in your cluster's modules. Modify the variables `MKLROOT` and `HDF_PREFIX` in `Makefile` accordingly. You might also need to switch to dynamic linking. Alternatively, compile a binary locally or in a codespace and upload the binary to the cluster.
 
-Go to build/
+## Example using GitHub Codespaces
 
-Optionally, replace `-xHost` in Makefile or Makefile.icx with appropriate instruction set flag for optimization.
+The easiest way to try the code is to create a GitHub Codespaces with this repository. In the terminal of a codespace,
 
-Mandatory: pick whether to compile with `-DUSE_CPLX`. Real DQMC uses 8 byte`double`, and can only be used with hdf5 files generated with `nflux=0` option, while Complex DQMC uses 16 byte `complex double`, and can only be used with hdf5 files generated with `nflux!=0` option. 
-
-Run `make`.
+1.  First, initialize conda.
+    ```bash
+    conda init
+    ```
+    Close (Ctrl+D) and reopen the terminal (Ctrl+`).
+2.  Create a new conda environment according to environment.yml.
+    ```bash
+    conda env create -f environment.yml
+    ```
+    Wait for all the packages to download and install. This might take a few minutes. Then activate the new environment named `dqmc`.
+    ```bash
+    conda activate dqmc
+    ```
+3.  Download and extract the latest release of HDF5.
+    ```bash
+    wget https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.5/hdf5-1.14.5-ubuntu-2404_gcc.tar.gz
+    tar xf hdf5-1.14.5-ubuntu-2404_gcc.tar.gz
+    tar xf hdf5/HDF5-1.14.5-Linux.tar.gz
+    rm -r hdf5 hdf5-1.14.5-ubuntu-2404_gcc.tar.gz
+    ```
+4.  Now the environment is ready for compiling and running the code.
+    ```bash
+    make
+    ```
+    The binary is located at build/dqmc.
 
 ## Usage
 
-To (batch-)generate simulation files, run
-`python3 gen_1band_hub.py <parameter arguments>`
-
-To push some .h5 files to a stack, run
-`python3 push.py <stackfile_name> <some .h5 files>`
-
-Run dqmc in single file mode:
-`./dqmc_1 [options] file.h5`
-
-Run dqmc in stack mode:
-`./dqmc_stack [options] stackfile`
-
-## Usage details
-
-### Outline
-
-1. Generate simulation files using `gen_1band_hub.py` or a similar script. Parameters can be passed through the command line. A list of parameters and their default values can be found in the function definitions of `create_1` and `create_batch` in `util/gen_1band_hub.py`.
-2. Perform the Monte Carlo sweeps using `dqmc_1` (single file mode) or `dqmc_stack` (stack mode).
-    1. Single file mode usage: `./build/dqmc_1 [-b] [-l log_file.log] [-t max_time] sim_file.h5`.
+1. First, pick whether to compile with `-DUSE_CPLX`. Real DQMC uses 8 byte`double`, and can only be used with hdf5 files generated with `nflux=0` option, while Complex DQMC uses 16 byte `complex double`, and can only be used with hdf5 files generated with `nflux!=0` option.
+2. Generate simulation files using `gen_1band_hub.py` or a similar script. Parameters can be passed through the command line. A list of parameters and their default values can be found in the function definitions of `create_1` and `create_batch` in `util/gen_1band_hub.py`.
+3. Perform the Monte Carlo sweeps using the `dqmc` binary
+    1. Single file mode usage: `./build/dqmc_1 [-b] [-l log_file.log] [-s interval] [-t max_time] sim_file.h5`.
         * `-b`: Benchmark mode, data is not saved.
         * `-l log_file.log`: Write output to log_file.log instead of stdout.
+        * `-s interval`: Saves a checkpoint every interval seconds.
         * `-t max_time`: Run for a maximum of max_time seconds. Saves a checkpoint if simulation does not complete.
-    2. Stack mode usage:
-        1. Append simulation filenames to a stack file: `python util/push.py stack_file file_0.h5 file_1.h5 file_2.h5 ...`.
-        2. Run multiple instances of dqmc_stack. For instance, `mpirun -n 4 ./build/dqmc_stack -t 100 stack_file`. The `-t` flag is as in `dqmc_1`. Each instance will read a simulation filename from the last line of the stack file. It then erases that line and starts the simulation. If the simulation does not complete, the filename will be appended back onto the stack file. If the simulation does complete, `dqmc_stack` will try to read another filename from the last line of the stack file. `dqmc_stack` finishes once the stack file is empty or the time limit set by `-t` is reached, in which case all ongoing simulations will be checkpointed and their names appended back onto the stack file.
-        3. Logs will be saved to, for instance, `file_0.h5.log`.
-3. Analyze the data using the scripts in `util/`. Typically this is done inside Jupyter notebooks.
+4. Analyze the data using the scripts in `util/`. Typically this is done inside Jupyter notebooks.
 
-### Examples
-
-#### Single file mode
+### Example
 
 ```
-ewh@7980xe ~/dqmc (master)> python util/gen_1band_hub.py U=8 mu=0 n_sweep_warm=100 n_sweep_meas=500 prefix=abcd Nfiles=1
-created simulation files: abcd_0.h5
-parameter file: abcd.h5.params
-ewh@7980xe ~/dqmc (master)> build/dqmc_1 abcd_0.h5 
-commit id 4a55817
-compiled on Sep  8 2022 17:03:38
-opening abcd_0.h5
-0/600 sweeps completed
+(dqmc) @edwnh ➜ /workspaces/dqmc (master) $ python util/gen_1band_hub.py
+created simulation files: sim_0.h5
+parameter file: sim.h5.params
+(dqmc) @edwnh ➜ /workspaces/dqmc (master) $ build/dqmc sim_0.h5
+commit id 03f858a
+compiled on Jan 21 2025 05:35:45
+opening sim_0.h5
+0/2200 sweeps completed
 starting dqmc
-600/600 sweeps completed
+2200/2200 sweeps completed
 saving data
-wall time: 2.937
+cpu model name  : AMD EPYC 7763 64-Core Processor
+wall time: 21.158
 thread_1/1_______|_% of all_|___total (s)_|___us per call_|___# calls
-          recalc |   47.154 |       1.385 |       230.784 |      6000
-         updates |   15.001 |       0.441 |        18.355 |     24000
-            wrap |   13.493 |       0.396 |         9.434 |     42000
-           calcb |   12.510 |       0.367 |         7.653 |     48000
-           multb |    7.456 |       0.219 |        36.493 |      6000
-       half_wrap |    1.799 |       0.053 |        10.568 |      5000
-         meas_eq |    1.485 |       0.044 |        17.447 |      2500
+            wrap |   30.276 |       6.406 |        38.824 |    165000
+          recalc |   29.423 |       6.225 |       282.970 |     22000
+         updates |   19.414 |       4.108 |        46.679 |     88000
+           multb |   14.079 |       2.979 |       135.401 |     22000
+       half_wrap |    3.677 |       0.778 |        38.905 |     20000
+           calcb |    1.992 |       0.421 |         2.394 |    176000
+         meas_eq |    0.970 |       0.205 |        20.531 |     10000
 ---------------------------------------------------------------------
-ewh@7980xe ~/dqmc (master)> python util/summary.py abcd_0.h5 
-abcd_0.h5
-n_sample=2500, sweep=600/600
+(dqmc) @edwnh ➜ /workspaces/dqmc (master) $ python util/summary.py sim_0.h5
+sim_0.h5
+n_sample=10000, sweep=2200/2200
 <sign>=1.0
 <n>=[1.]
-<m_z^2>=[0.88583784]
+<m_z^2>=[0.82869916]
 ```
 
-#### Stack mode: 10 Markov chains, 4 instances of dqmc_stack
+## Details
 
-```
-ewh@7980xe ~/dqmc (master)> python util/gen_1band_hub.py U=8 mu=0 n_sweep_warm=100 n_sweep_meas=500 prefix=abcd Nfiles=10
-created simulation files: abcd_0.h5 ... abcd_9.h5
-parameter file: abcd.h5.params
-ewh@7980xe ~/dqmc (master)> python util/push.py stack_file ./abcd_*.h5
-ewh@7980xe ~/dqmc (master)> mpirun -n 4 build/dqmc_stack stack_file
-          7980xe   6467: starting: /home/ewh/dqmc/abcd_9.h5
-          7980xe   6465: starting: /home/ewh/dqmc/abcd_8.h5
-          7980xe   6466: starting: /home/ewh/dqmc/abcd_7.h5
-          7980xe   6467: completed: /home/ewh/dqmc/abcd_9.h5
-          7980xe   6467: starting: /home/ewh/dqmc/abcd_6.h5
-          7980xe   6468: starting: /home/ewh/dqmc/abcd_5.h5
-          7980xe   6465: completed: /home/ewh/dqmc/abcd_8.h5
-          7980xe   6465: starting: /home/ewh/dqmc/abcd_4.h5
-          7980xe   6466: completed: /home/ewh/dqmc/abcd_7.h5
-          7980xe   6466: starting: /home/ewh/dqmc/abcd_3.h5
-          7980xe   6467: completed: /home/ewh/dqmc/abcd_6.h5
-          7980xe   6467: starting: /home/ewh/dqmc/abcd_2.h5
-          7980xe   6468: completed: /home/ewh/dqmc/abcd_5.h5
-          7980xe   6468: starting: /home/ewh/dqmc/abcd_1.h5
-          7980xe   6465: completed: /home/ewh/dqmc/abcd_4.h5
-          7980xe   6465: starting: /home/ewh/dqmc/abcd_0.h5
-          7980xe   6466: completed: /home/ewh/dqmc/abcd_3.h5
-          7980xe   6466: pop_stack() returned 1; idling
-          7980xe   6467: completed: /home/ewh/dqmc/abcd_2.h5
-          7980xe   6467: pop_stack() returned 1; idling
-          7980xe   6468: completed: /home/ewh/dqmc/abcd_1.h5
-          7980xe   6468: pop_stack() returned 1; idling
-          7980xe   6465: completed: /home/ewh/dqmc/abcd_0.h5
-          7980xe   6465: pop_stack() returned 1; idling
-ewh@7980xe ~/dqmc (master)> python util/print_n.py ./
-./
-complete: 10/10
-<sign>=[1. 0.]
-<n>=[1.00000000e+00 1.53378912e-12]
-```
-### More details
-
-#### Simulation files
+### Simulation files
 
 One Markov chain = one HDF5 file. A file contains the following groups:
 * metadata: Miscellaneous information and parameters not used during the simulation, but possibly useful in data analysis. Examples: name of the model, Hamiltonian parameters, temperature.
@@ -140,7 +107,7 @@ One Markov chain = one HDF5 file. A file contains the following groups:
 * meas_eqlt: equal-time measurements
 * meas_uneqlt: unequal-time measurements i.e. <O(tau) P>. This group exists only if unequal-time measurements are enabled.
 
-#### Simulation file generation
+### Simulation file generation
 
 List of parameters
 * `Nfiles`: Number of simulation files to generate. Each file is identical except for the RNG seed. Default: `Nfiles=1`.
@@ -165,7 +132,7 @@ List of parameters
 * `meas_nematic_corr`: Whether to measure spin and charge nematic correlations. Default: `meas_nematic_corr=0`.
 * `trans_sym`: Whether to apply translational symmetry to compress measurement data. Default: `trans_sym=1`.
 
-#### Code description
+### Code description
 
 * `build`: build directory
     * `Makefile`: makefile
@@ -194,4 +161,3 @@ List of parameters
     * `push.py`: push simulation filenames onto a stack file
     * `summary.py`: print out average sign, density, and local moment for a single simulation file
     * `util.py`: utility functions for data analysis
-
