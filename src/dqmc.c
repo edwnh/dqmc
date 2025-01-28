@@ -1,6 +1,11 @@
 #include "dqmc.h"
 #include <tgmath.h>
 #include <stdio.h>
+
+#ifdef __APPLE__
+#include <sys/sysctl.h>
+#endif
+
 #include "data.h"
 #include "greens.h"
 #include "linalg.h"
@@ -227,6 +232,16 @@ static void dqmc(struct sim_data *sim)
 
 static void print_cpu_model(void)
 {
+#ifdef __APPLE__
+	char str[256];
+	size_t size = sizeof(str);
+
+	if (sysctlbyname("machdep.cpu.brand_string", str, &size, NULL, 0) == 0) {
+		fprintf(log_f, "cpu: %s\n", str);
+	} else {
+		fprintf(log_f, "couldn't get CPU information\n");
+	}
+#else
 	FILE *cpuinfo = fopen("/proc/cpuinfo", "r");
 	if (!cpuinfo) {
 		fprintf(log_f, "couldn't open /proc/cpuinfo\n");
@@ -243,6 +258,7 @@ static void print_cpu_model(void)
 	}
 	free(line);
 	fclose(cpuinfo);
+#endif
 }
 
 int dqmc_wrapper(const char *sim_file, const char *log_file,

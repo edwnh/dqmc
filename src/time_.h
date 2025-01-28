@@ -11,7 +11,11 @@ typedef int64_t tick_t;
 
 static inline tick_t time_wall(void)
 {
+#ifdef __APPLE__
+	return clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+#else
 	struct timespec t;
 	clock_gettime(CLOCK_MONOTONIC, &t);
 	return t.tv_sec * TICK_PER_SEC + t.tv_nsec;
+#endif
 }

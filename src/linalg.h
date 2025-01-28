@@ -1,6 +1,40 @@
 #pragma once
 
+#if __APPLE__
+
+#include <Accelerate/Accelerate.h>
+#define MKL_Complex16 double complex
+#define zgemm zgemm_
+#define dgemm dgemm_
+#define zgemv zgemv_
+#define dgemv dgemv_
+#define ztrmm ztrmm_
+#define dtrmm dtrmm_
+#define ztrsm ztrsm_
+#define dtrsm dtrsm_
+#define zgetrf zgetrf_
+#define dgetrf dgetrf_
+#define zgetri zgetri_
+#define dgetri dgetri_
+#define zgetrs zgetrs_
+#define dgetrs dgetrs_
+#define zgeqp3 zgeqp3_
+#define dgeqp3 dgeqp3_
+#define zgeqrf zgeqrf_
+#define dgeqrf dgeqrf_
+#define zunmqr zunmqr_
+#define dormqr dormqr_
+#define zungqr zungqr_
+#define dorgqr dorgqr_
+#define ztrtri ztrtri_
+#define dtrtri dtrtri_
+
+#else
+
 #include <mkl.h>
+
+#endif
+
 #include <tgmath.h>
 #include "mem.h"
 
@@ -131,7 +165,8 @@ static inline void xgeqp3(const int m, const int n, num* a, const int lda, int* 
 	cast(work), &lwork, rwork, info);
 #else
 	dgeqp3(&m, &n, cast(a), &lda, jpvt, cast(tau),
-	cast(work), &lwork, info); // rwork not used
+	cast(work), &lwork, info);
+	(void)rwork; // unused
 #endif
 }
 
@@ -185,29 +220,55 @@ static inline void xtrtri(const char* uplo, const char* diag, const int n,
 static inline void ximatcopy(const char trans, const size_t rows, const size_t cols,
 const num alpha, num *AB, const size_t lda, const size_t ldb)
 {
+#ifdef __APPLE__
+// assumes rows == cols, lda == ldb, alpha = 1.0
+	if (trans == 'C') {
+		for (size_t j = 0; j < cols; j++) {
+			for (size_t i = 0; i < j; i++) {
+				num temp = conj(AB[i + j*lda]);
+				AB[i + j*lda] = conj(AB[j + i*lda]);
+				AB[j + i*lda] = temp;
+			}
+			AB[j + j*lda] = conj(AB[j + j*lda]);
+		}
+	}
+	(void)alpha;
+	(void)rows;
+	(void)ldb;
+#else
+
 #ifdef USE_CPLX
 	mkl_zimatcopy('C', trans, rows, cols, *cast(&alpha), cast(AB), lda, ldb);
 #else
 	mkl_dimatcopy('C', trans, rows, cols, alpha, AB, lda, ldb);
+#endif
+
 #endif
 }
 
 static inline void xomatcopy(const char trans, const size_t rows, const size_t cols,
 const num alpha, const num *A, const size_t lda, num *B, const size_t ldb)
 {
-	// if (trans == 'N') {
-	// 	for (size_t j = 0; j < cols; j++)
-	// 		for (size_t i = 0; i < rows; i++)
-	// 			B[i + j*ldb] = alpha*conj(A[i + j*lda]);
-	// } else {
-	// 	for (size_t j = 0; j < cols; j++)
-	// 		for (size_t i = 0; i < rows; i++)
-	// 			B[i + j*ldb] = alpha*conj(A[j + i*lda]);
-	// }
+#ifdef __APPLE__
+
+	if (trans == 'N') {
+		for (size_t j = 0; j < cols; j++)
+			for (size_t i = 0; i < rows; i++)
+				B[i + j*ldb] = alpha*A[i + j*lda];
+	} else {
+		for (size_t j = 0; j < cols; j++)
+			for (size_t i = 0; i < rows; i++)
+				B[i + j*ldb] = alpha*conj(A[j + i*lda]);
+	}
+
+#else
+
 #ifdef USE_CPLX
 	mkl_zomatcopy('C', trans, rows, cols, *cast(&alpha), ccast(A), lda, cast(B), ldb);
 #else
 	mkl_domatcopy('C', trans, rows, cols, alpha, A, lda, B, ldb);
+#endif
+
 #endif
 }
 
