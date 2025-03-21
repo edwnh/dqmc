@@ -2,19 +2,25 @@ import sys
 import util
 from glob import glob
 
-
 def info(path):
-    n_sample, sign, density = \
-        util.load(path, "meas_eqlt/n_sample", "meas_eqlt/sign",
-                        "meas_eqlt/density")
-    if n_sample.max() == 0:
+    period_eqlt, L, n_sweep_meas = util.load_firstfile(path,
+        "params/period_eqlt", "params/L", "params/n_sweep_meas")
+    full_n_sample = n_sweep_meas*(L//period_eqlt)
+
+    n_sample, sign, density = util.load(path,
+        "meas_eqlt/n_sample", "meas_eqlt/sign", "meas_eqlt/density")
+
+    frac = n_sample.sum()/(full_n_sample * len(n_sample))
+    print(f"samples: {n_sample.sum()}/{full_n_sample * len(n_sample)}={frac*100:.2f}%")
+    print(f"complete bins: {(n_sample == full_n_sample).sum()}/{len(n_sample)}")
+
+    if frac == 0:
         print("no data")
         return
-    mask = (n_sample == n_sample.max())
-    sign, density = sign[mask], density[mask]
-    print(f"complete: {mask.sum()}/{len(n_sample)}")
-    print(f"<sign>={util.jackknife(n_sample[mask], sign)}")
-    print(f"<n>={util.jackknife(sign, density.sum(1))}")
+    mask = (n_sample > 0)
+    n_sample, sign, density = n_sample[mask], sign[mask], density[mask]
+    print(f"<sign>={util.jackknife_noniid(n_sample, n_sample, sign)}")
+    print(f"<n>={util.jackknife_noniid(n_sample, sign, density.sum(1))}")
 
 
 def main(argv):
