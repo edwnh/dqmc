@@ -10,8 +10,8 @@ def info(path):
     n_sample, sign, density = util.load(path,
         "meas_eqlt/n_sample", "meas_eqlt/sign", "meas_eqlt/density")
 
-    frac = n_sample.sum()/(full_n_sample * len(n_sample))
-    print(f"samples: {n_sample.sum()}/{full_n_sample * len(n_sample)}={frac*100:.2f}%")
+    frac = n_sample.mean()/full_n_sample
+    print(f"samples: {n_sample.mean()}/{full_n_sample}={frac*100:.2f}%")
     print(f"complete bins: {(n_sample == full_n_sample).sum()}/{len(n_sample)}")
 
     if frac == 0:
