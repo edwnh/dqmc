@@ -110,6 +110,6 @@ $(BUILD_DIR)/cplx/%.o : %.c
 	@$(CC) -DUSE_CPLX $(CFLAGS) $< -c -o $@
 
 clean:
-		$(RM) -r $(BUILD_DIR)
+	$(RM) -r $(BUILD_DIR)
 
 -include $(OBJS:%.o=%.d) $(OBJS_REAL:%.o=%.d) $(OBJS_CPLX:%.o=%.d)

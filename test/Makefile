@@ -25,7 +25,7 @@ else ifeq ($(UNAME), Darwin)
 	LDFLAGS += -framework Accelerate
 endif
 
-CFLAGS += -I../src
+CFLAGS += -I../src -I../src/rc
 
 CFLAGS += -DGIT_ID=\"$(shell git describe --always)\"
 CFLAGS += -DPROFILE_ENABLE
@@ -44,6 +44,7 @@ test_greens: greens.o test_greens.o mem.o
 	@${CC} -o $@ $^ ${LDFLAGS}
 
 vpath %.c ../src
+vpath %.c ../src/rc
 
 %.o: %.c
 	@echo compiling $<

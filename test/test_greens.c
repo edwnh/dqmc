@@ -282,15 +282,15 @@ int main(void)
 	const int ld = best_ld(N);
 	printf("%d\n", ld);
 
-	const int lwork = N*N;//get_lwork(N, N);
+	const int lwork = N*N;//RC(get_lwork)(N, N);
 
 	printf("lwork = %d\n", lwork);
 
 	num *const Cu = my_calloc(ld*N*F * sizeof(num));
-	struct QdX *const QdXLu = my_calloc(F * sizeof(struct QdX));
-	struct QdX *const QdX0u = my_calloc(F * sizeof(struct QdX));
-	struct LR *const LRLu = my_calloc(F * sizeof(struct LR));
-	struct LR *const LR0u = my_calloc(F * sizeof(struct LR));
+	struct RC(QdX) *const QdXLu = my_calloc(F * sizeof(struct RC(QdX)));
+	struct RC(QdX) *const QdX0u = my_calloc(F * sizeof(struct RC(QdX)));
+	struct RC(LR) *const LRLu = my_calloc(F * sizeof(struct RC(LR)));
+	struct RC(LR) *const LR0u = my_calloc(F * sizeof(struct RC(LR)));
 	for (int f = 0; f < F; f++) {
 		QdXLu[f].Q = my_calloc(ld*N * sizeof(num));
 		QdXLu[f].d = my_calloc(N * sizeof(num));
@@ -321,8 +321,8 @@ int main(void)
 	num *const restrict tauu = my_calloc(N*F * sizeof(num));
 	num *const restrict Qu = my_calloc(4*N*N * sizeof(num));
 
-	struct QdX QdX_NULL = {NULL, NULL, NULL};
-	struct LR LR_NULL = {NULL, NULL, NULL};
+	struct RC(QdX) QdX_NULL = {NULL, NULL, NULL};
+	struct RC(LR) LR_NULL = {NULL, NULL, NULL};
 
 	num phaseuA, phaseuB;
 
@@ -340,9 +340,9 @@ int main(void)
 printf("rng: %f\t%f\n", creal(Cu[0]), creal(Cu[5 + 6*ld + 1*ld*N]));
 
 	for (int f = 0; f < F; f++)
-		calc_QdX(0, N, ld, Cu + f*ld*N, (f == 0) ? QdX_NULL : QdX0u[f - 1], QdX0u[f], LR0u[f], tmpN1u, pvtu, worku, lwork);
+		RC(calc_QdX)(0, N, ld, Cu + f*ld*N, (f == 0) ? QdX_NULL : QdX0u[f - 1], QdX0u[f], LR0u[f], tmpN1u, pvtu, worku, lwork);
 for (int i = 0; i < N; i++) printf("d[%d] = %e\n", i, creal(QdX0u[F-1].d[i]));
-	phaseuA = calc_Gtt(N, ld, LR0u[F - 1], LR_NULL, GuA, tmpNN1u, pvtu);
+	phaseuA = RC(calc_Gtt)(N, ld, LR0u[F - 1], LR_NULL, GuA, tmpNN1u, pvtu);
 
 printf("GuA: %f\t%f\t%f\n", cimag(phaseuA), creal(GuA[0]), creal(GuA[2 + 3*ld]));
 
@@ -350,9 +350,9 @@ printf("GuA: %f\t%f\t%f\n", cimag(phaseuA), creal(GuA[0]), creal(GuA[2 + 3*ld]))
 printf("old: %f\t%f\t%f\n", cimag(phaseuB), creal(GuB[0]), creal(GuB[2 + 3*ld]));
 
 	for (int f = F - 1; f >= 0; f--)
-		calc_QdX(1, N, ld, Cu + f*ld*N, (f == F - 1) ? QdX_NULL : QdXLu[f + 1], QdXLu[f], LRLu[f], tmpN1u, pvtu, worku, lwork);
+		RC(calc_QdX)(1, N, ld, Cu + f*ld*N, (f == F - 1) ? QdX_NULL : QdXLu[f + 1], QdXLu[f], LRLu[f], tmpN1u, pvtu, worku, lwork);
 
-	phaseuB = calc_Gtt(N, ld, LR_NULL, LRLu[0], GuB, tmpNN1u, pvtu);
+	phaseuB = RC(calc_Gtt)(N, ld, LR_NULL, LRLu[0], GuB, tmpNN1u, pvtu);
 printf("GuB: %f\t%f\t%f\n", cimag(phaseuB), creal(GuB[0]), creal(GuB[2 + 3*ld]));
 
 	matdiff(N, N, GuA, ld, GuB, ld);
@@ -365,11 +365,11 @@ printf("GuB: %f\t%f\t%f\n", cimag(phaseuB), creal(GuB[0]), creal(GuB[2 + 3*ld]))
 		printf("f=%d\n", f);
 		phaseuA = calc_eq_g(f, N, ld, F, 1, Cu, GuA, tmpNN0u, tmpNN1u, tmpN0u, tmpN1u, tmpN2u, pvtu, worku, lwork);
 
-		phaseuB = calc_Gtt(N, ld, LR0u[f - 1], LRLu[f], GuB, tmpNN0u, pvtu);
+		phaseuB = RC(calc_Gtt)(N, ld, LR0u[f - 1], LRLu[f], GuB, tmpNN0u, pvtu);
 		printf("phase %f %f\n", creal(phaseuA), creal(phaseuB));
 		matdiff(N, N, GuA, ld, GuB, ld);
 
-		calc_G0t_Gtt_Gt0(N, ld, LR0u[f - 1], LRLu[f], Gu0t, Gutt, Gut0, tmpNN0u, pvtu);
+		RC(calc_G0t_Gtt_Gt0)(N, ld, LR0u[f - 1], LRLu[f], Gu0t, Gutt, Gut0, tmpNN0u, pvtu);
 		matdiff(N, N, GuA, ld, Gutt, ld);
 		matdiff(N, N, Gutt, ld, Gredu + f*N + f*N*N*F, N*F);
 		matdiff(N, N, Gu0t, ld, Gredu + 0*N + f*N*N*F, N*F);

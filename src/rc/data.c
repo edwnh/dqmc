@@ -337,7 +337,8 @@ int RC(sim_data_save)(const struct RC(sim_data) *sim)
 
 void RC(sim_data_free)(struct RC(sim_data) *sim)
 {
-	my_free(sim->pool);
-	sim->pool = NULL;
-	my_free(sim);
+	if (sim != NULL) {
+		my_free(sim->pool);
+		my_free(sim);
+	}
 }

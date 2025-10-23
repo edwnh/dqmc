@@ -1,10 +1,9 @@
 #include "wrapper.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #ifdef __APPLE__
 	#include <sys/sysctl.h>
-#else
-	#include <stdlib.h>
 #endif
 #include <hdf5.h>
 #include <hdf5_hl.h>
@@ -23,9 +22,6 @@
 #undef RC
 
 FILE *log_f;
-
-#define return_if(cond, val, ...) \
-	do {if (cond) {fprintf(stderr, __VA_ARGS__); return (val);}} while (0)
 
 static int is_cplx_file(const char *file)
 {
@@ -56,7 +52,7 @@ static void print_cpu_model(void)
 	if (sysctlbyname("machdep.cpu.brand_string", str, &size, NULL, 0) == 0) {
 		fprintf(log_f, "cpu: %s\n", str);
 	} else {
-		fprintf(log_f, "couldn't get CPU information\n");
+		fprintf(log_f, "couldn't get cpu information\n");
 	}
 #else
 	FILE *cpuinfo = fopen("/proc/cpuinfo", "r");
@@ -93,8 +89,7 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 		return -1;
 	}
 
-	fprintf(log_f, "commit id %s\n", GIT_ID);
-	fprintf(log_f, "compiled on %s %s\n", __DATE__, __TIME__);
+	fprintf(log_f, "commit id %s compiled on %s %s\n", GIT_ID, __DATE__, __TIME__);
 	print_cpu_model();
 
 	// initialize signal handling
@@ -108,13 +103,15 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 	struct sim_data_cplx *sim_cplx = NULL;
 
 	const int is_cplx = is_cplx_file(sim_file);
-	if (is_cplx) {
+	if (is_cplx == 1) {
 		sim_cplx = sim_data_read_alloc_cplx(sim_file);
 	} else {
+		if (is_cplx < 0)
+			fprintf(stderr, "is_cplx_file() failed. maybe old file? assuming real numbers.\n");
 		sim_real = sim_data_read_alloc_real(sim_file);
 	}
 	if ((sim_real == NULL) && (sim_cplx == NULL)) {
-		fprintf(stderr, "read_file() failed: %d\n", status);
+		fprintf(stderr, "sim_data_read_alloc() failed: %d\n", status);
 		status = -1;
 		goto cleanup;
 	}

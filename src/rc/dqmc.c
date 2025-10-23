@@ -20,6 +20,7 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 		fprintf(log_f, "already finished\n");
 		return 0;
 	}
+	fprintf(log_f, "starting dqmc\n");
 
 	const int N = sim->p.N;
 	// N*N matrices use padded ld*N storage for better alignment, slightly better performance.
@@ -103,7 +104,7 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 		else if (sig == 2) { // progress flag
 			const int status = RC(sim_data_save)(sim);
 			if (status < 0)
-				fprintf(stderr, "save_file() failed: %d\n", status);
+				fprintf(stderr, "sim_data_save() failed: %d\n", status);
 		}
 
 		const int warmed_up = (sim->s.sweep >= sim->p.n_sweep_warm);
