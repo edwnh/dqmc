@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include "linalg.h"
 
-struct params {
+struct RC(params) {
 	int N, L;
 	int *map_i, *map_ij;
 	int *bonds, *map_bs, *map_bb;
@@ -31,7 +31,7 @@ struct state {
 	int *hs;
 };
 
-struct meas_eqlt {
+struct RC(meas_eqlt) {
 	int n_sample;
 	num sign;
 
@@ -46,7 +46,7 @@ struct meas_eqlt {
 	num *kk, *kv, *kn, *vv, *vn;
 };
 
-struct meas_uneqlt {
+struct RC(meas_uneqlt) {
 	int n_sample;
 	num sign;
 
@@ -62,7 +62,7 @@ struct meas_uneqlt {
 	num *nem_nnnn, *nem_ssss;
 };
 
-struct workspace {
+struct RC(workspace) {
 	num *inv_exp_K, *exp_K;
 	num *exp_V;
 	num *iB, *B, *C;
@@ -78,20 +78,14 @@ struct workspace {
 	num *G0t, *Gtt, *Gt0;
 };
 
-struct sim_data {
+struct RC(sim_data) {
 	const char *file;
 	void *pool; // memory pool for everything below
 
-	struct params p;
+	struct RC(params) p;
 	struct state s;
-	struct meas_eqlt m_eq;
-	struct meas_uneqlt m_ue;
+	struct RC(meas_eqlt) m_eq;
+	struct RC(meas_uneqlt) m_ue;
 
-	struct workspace up, dn;
+	struct RC(workspace) up, dn;
 };
-
-int sim_data_read_alloc(struct sim_data *sim, const char *file);
-
-int sim_data_save(const struct sim_data *sim);
-
-void sim_data_free(struct sim_data *sim);

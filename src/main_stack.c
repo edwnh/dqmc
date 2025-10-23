@@ -15,8 +15,8 @@
 		(void)n;
 	}
 #endif
-#include "dqmc.h"
 #include "mem.h"
+#include "wrapper.h"
 
 #define USE_HARD_LINK
 

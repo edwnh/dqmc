@@ -1,8 +1,8 @@
 #include "sig.h"
 #include <signal.h>
 #include <stdio.h>
-#include "dqmc.h"
 #include "time_.h"
+#include "wrapper.h"
 
 static volatile sig_atomic_t progress_flag = 0;
 static void progress(int signum) { progress_flag = signum; }

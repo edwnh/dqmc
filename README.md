@@ -2,30 +2,34 @@
 
 ## Environment and dependencies
 
-Linux is the only supported OS at this moment. macOS and Windows support will be implemented soon.
+Linux and macOS are the only supported OS currently.
 
-### Build dependencies
+### Build dependencies (Linux)
 - Intel compiler `icx`
 - Intel MKL headers and libraries
 - HDF5 headers and libraries
 
+### Build dependencies (macOS)
+- `clang` compiler from Xcode Command Line Tools
+- HDF5 headers and libraries
+
 ### Runtime dependencies
-- None. The MKL and HDF5 libraries are statically linked by default.
+- None. Libraries are statically linked by default.
 
 ### Python packages (for scripts in `util/`)
 - `numpy`
 - `scipy`
 - `h5py`
 
-On a local computer: install conda (anaconda, miniconda, or micromamba) and set up a new environment using `environment.yml`. You can probably follow the instructions below for the GitHub Codespace.
+On a local computer: install conda/mamba (recommend miniforge or micromamba) and set up a new environment using `environment.yml`. You can probably follow the instructions below for the GitHub Codespace.
 
-On a cluster: you may have HDF5, Intel compilers and MKL, and Python packages available in your cluster's modules. Modify the variables `MKLROOT` and `HDF_PREFIX` in `Makefile` accordingly. You might also need to switch to dynamic linking. Alternatively, compile a binary locally or in a codespace and upload the binary to the cluster.
+On a cluster: you may have HDF5, Intel compilers and MKL, and Python packages available in your cluster's modules. Modify the variables `MKLROOT` and `HDF_PREFIX` in `Makefile` accordingly. You might also need to switch to dynamic linking. Alternatively, it might still be easier to follow the  compile a binary locally or in a codespace and upload the binary to the cluster.
 
-## Example using GitHub Codespaces
+## Linux compilation instructions
 
-The easiest way to try the code is to create a GitHub Codespaces with this repository. In the terminal of a codespace,
+The easiest way to try the code is to create a GitHub Codespaces with this repository.
 
-1.  First, initialize conda.
+1.  First, install conda/mamba (recommend miniforge or micromamba). Initialize conda.
     ```bash
     conda init
     ```
@@ -49,19 +53,18 @@ The easiest way to try the code is to create a GitHub Codespaces with this repos
     ```bash
     make
     ```
-    The binary is located at build/dqmc.
+    The binary executable is located at `build/dqmc`.
 
 ## Usage
 
-1. First, pick whether to compile with `-DUSE_CPLX`. Real DQMC uses 8 byte`double`, and can only be used with hdf5 files generated with `nflux=0` option, while Complex DQMC uses 16 byte `complex double`, and can only be used with hdf5 files generated with `nflux!=0` option.
-2. Generate simulation files using `gen_1band_hub.py` or a similar script. Parameters can be passed through the command line. A list of parameters and their default values can be found in the function definitions of `create_1` and `create_batch` in `util/gen_1band_hub.py`.
-3. Perform the Monte Carlo sweeps using the `dqmc` binary
-    1. Single file mode usage: `./build/dqmc_1 [-b] [-l log_file.log] [-s interval] [-t max_time] sim_file.h5`.
+1. Generate simulation files using `gen_1band_hub.py` or a similar script. Parameters can be passed through the command line. A list of parameters and their default values can be found in the function definitions of `create_1` and `create_batch` in `util/gen_1band_hub.py`.
+2. Perform the Monte Carlo sweeps using the `build/dqmc` binary
+    1. Single file mode usage: `./build/dqmc [-b] [-l log_file.log] [-s interval] [-t max_time] sim_file.h5`.
         * `-b`: Benchmark mode, data is not saved.
         * `-l log_file.log`: Write output to log_file.log instead of stdout.
         * `-s interval`: Saves a checkpoint every interval seconds.
         * `-t max_time`: Run for a maximum of max_time seconds. Saves a checkpoint if simulation does not complete.
-4. Analyze the data using the scripts in `util/`. Typically this is done inside Jupyter notebooks.
+4. Analyze the data using the scripts in `util/`. Typically, this is done inside Jupyter notebooks.
 
 ### Example
 
@@ -100,12 +103,14 @@ n_sample=10000, sweep=2200/2200
 
 ### Simulation files
 
-One Markov chain = one HDF5 file. A file contains the following groups:
+One Markov chain = one HDF5 file = one bin. Each HDF5 file contains the following groups:
 * metadata: Miscellaneous information and parameters not used during the simulation, but possibly useful in data analysis. Examples: name of the model, Hamiltonian parameters, temperature.
 * params: Simulation parameters and pre-calculated matrices used in the simulation. Examples: kinetic energy matrix and its exponential, number of warmup and measurement sweeps. The data in this group may be stored in a separate HDF5 file, with extension .h5.params. This saves storage space since a batch of simulation files typically has identical params.
 * state: Simulation state: sweep number, RNG state, auxiliary field configuration
 * meas_eqlt: equal-time measurements
 * meas_uneqlt: unequal-time measurements i.e. <O(tau) P>. This group exists only if unequal-time measurements are enabled.
+
+`util/gen_1band_hub.py` is the best reference to see the contents of each group.
 
 ### Simulation file generation
 
@@ -125,8 +130,8 @@ List of parameters
 * `n_matmul`: Half the maximum number of direct matrix multiplications before applying a QR decomposition for stability. Default: `n_matmul=8`.
 * `n_sweep_warm`: Number of warmup sweeps. Default: `n_sweep_warm=200`.
 * `n_sweep_meas`: Number of measurement sweeps. Default: `n_sweep_meas=800`.
-* `period_eqlt`: Period of equal-time measurements. 1 means equal-time measurements are performed `L` times per sweep. Default: `period_eqlt=8`.
-* `period_uneqlt`: Period of unequal-time measurements. 1 means unequal-time measurements are performed once per sweep. 0 means disabled. Default: `period_uneqlt=0`.
+* `period_eqlt`: Period of equal-time measurements. 1 means equal-time measurements are performed `L` times per spacetime sweep. Default: `period_eqlt=8`.
+* `period_uneqlt`: Period of unequal-time measurements. 1 means unequal-time measurements are performed once per spacetime sweep. 0 means disabled. Default: `period_uneqlt=0`.
 * `meas_bond_corr`: Whether to measure bond-bond correlations (current, kinetic energy, bond singlets). Default: `meas_bond_corr=1`.
 * `meas_energy_corr`: Whether to measure energy-energy correlations. Default: `meas_energy_corr=0`.
 * `meas_nematic_corr`: Whether to measure spin and charge nematic correlations. Default: `meas_nematic_corr=0`.

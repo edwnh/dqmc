@@ -82,7 +82,7 @@ def create_1(file_sim=None, file_params=None, overwrite=False, init_rng=None,
         file_sim = "sim.h5"
     if file_params is None:
         file_params = file_sim
-    
+
     one_file = (os.path.abspath(file_sim) == os.path.abspath(file_params))
 
     for l in range(L):
@@ -245,6 +245,7 @@ def create_1(file_sim=None, file_params=None, overwrite=False, init_rng=None,
         # parameters used by dqmc code
         f.create_group("params")
         # model parameters
+        f["params"]["is_cplx"] = np.array(int(dtype_num == np.complex128), dtype=np.int32)
         f["params"]["N"] = np.array(N, dtype=np.int32)
         f["params"]["L"] = np.array(L, dtype=np.int32)
         f["params"]["map_i"] = map_i

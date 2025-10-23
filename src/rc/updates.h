@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include "linalg.h"
 
-void update_delayed(const int N, const int ld, const int n_delay, const double *const del,
+void RC(update_delayed)(const int N, const int ld, const int n_delay, const double *const del,
 		const int *const site_order,
 		uint64_t *const rng, int *const hs,
 		num *const Gu, num *const Gd, num *const phase,

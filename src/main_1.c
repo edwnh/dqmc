@@ -10,8 +10,8 @@
 		(void)n;
 	}
 #endif
-#include "dqmc.h"
 #include "time_.h"
+#include "wrapper.h"
 
 static void usage(const char *name)
 {

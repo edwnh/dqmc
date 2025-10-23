@@ -5,13 +5,14 @@
 #include "linalg.h"
 #include "mem.h"
 #include "greens.h"
+#include "structs.h"
 
 #define return_if(cond, val, ...) \
 	do {if (cond) {fprintf(stderr, __VA_ARGS__); return (val);}} while (0)
 
 static hid_t num_h5t;
 
-static int do_alloc(struct sim_data *sim)
+static int do_alloc(struct RC(sim_data) *sim)
 {
 	// these must be initialized in sim before any allocations
 	const int N = sim->p.N, L = sim->p.L, F = sim->p.F;
@@ -19,7 +20,7 @@ static int do_alloc(struct sim_data *sim)
 	const int num_b = sim->p.num_b, num_bs = sim->p.num_bs, num_bb = sim->p.num_bb;
 
 	const int ld = best_ld(N);
-	const int lwork = get_lwork(N, ld);
+	const int lwork = RC(get_lwork)(N, ld);
 
 	const struct alloc_entry tab[] = {
 		{(void **)&sim->p.map_i,          N        * sizeof(int)},
@@ -139,10 +140,12 @@ static int do_alloc(struct sim_data *sim)
 	return 0;
 }
 
-int sim_data_read_alloc(struct sim_data *sim, const char *file)
+struct RC(sim_data) *RC(sim_data_read_alloc)(const char *file)
 {
+	struct RC(sim_data) *sim = my_calloc(sizeof(*sim));
+
 	const hid_t file_id = H5Fopen(file, H5F_ACC_RDONLY, H5P_DEFAULT);
-	return_if(file_id < 0, -1, "H5Fopen() failed: %ld\n", file_id);
+	return_if(file_id < 0, NULL, "H5Fopen() failed: %ld\n", file_id);
 
 	sim->file = file;
 
@@ -151,9 +154,9 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 #ifdef USE_CPLX
 	num_h5t = H5Tcreate(H5T_COMPOUND, sizeof(num));
 	status = H5Tinsert(num_h5t, "r", 0, H5T_NATIVE_DOUBLE);
-	return_if(status < 0, -1, "H5Tinsert() failed: %d\n", status);
+	return_if(status < 0, NULL, "H5Tinsert() failed: %d\n", status);
 	status = H5Tinsert(num_h5t, "i", 8, H5T_NATIVE_DOUBLE);
-	return_if(status < 0, -1, "H5Tinsert() failed: %d\n", status);
+	return_if(status < 0, NULL, "H5Tinsert() failed: %d\n", status);
 #else
 	num_h5t = H5T_NATIVE_DOUBLE;
 #endif
@@ -161,7 +164,7 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 
 #define my_read(_type, name, ...) do { \
 	status = H5LTread_dataset##_type(file_id, (name), __VA_ARGS__); \
-	return_if(status < 0, -1, "H5LTread_dataset() failed for %s: %d\n", (name), status); \
+	return_if(status < 0, NULL, "H5LTread_dataset() failed for %s: %d\n", (name), status); \
 } while (0)
 
 	my_read(_int, "/params/N",      &sim->p.N);
@@ -258,11 +261,11 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 #undef my_read
 
 	status = H5Fclose(file_id);
-	return_if(status < 0, -1, "H5Fclose() failed: %d\n", status);
-	return 0;
+	return_if(status < 0, NULL, "H5Fclose() failed: %d\n", status);
+	return sim;
 }
 
-int sim_data_save(const struct sim_data *sim)
+int RC(sim_data_save)(const struct RC(sim_data) *sim)
 {
 	const hid_t file_id = H5Fopen(sim->file, H5F_ACC_RDWR, H5P_DEFAULT);
 	return_if(file_id < 0, -1, "H5Fopen() failed: %ld\n", file_id);
@@ -332,8 +335,9 @@ int sim_data_save(const struct sim_data *sim)
 	return 0;
 }
 
-void sim_data_free(struct sim_data *sim)
+void RC(sim_data_free)(struct RC(sim_data) *sim)
 {
 	my_free(sim->pool);
 	sim->pool = NULL;
+	my_free(sim);
 }

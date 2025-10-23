@@ -1,33 +1,31 @@
-#include "dqmc.h"
 #include <tgmath.h>
-#include <stdio.h>
-
-#ifdef __APPLE__
-#include <sys/sysctl.h>
-#endif
-
 #include "data.h"
 #include "greens.h"
 #include "linalg.h"
 #include "meas.h"
-#include "mem.h"
 #include "prof.h"
 #include "rand.h"
 #include "sig.h"
-#include "time_.h"
 #include "updates.h"
-
-FILE *log_f;
+#include "wrapper.h"
 
 #define N_DOF 2
 
-static void dqmc(struct sim_data *sim)
+// returns -1 for failure, 0 for completion, 1 for partial completion
+int RC(dqmc)(struct RC(sim_data) *sim)
 {
+	// check existing progress
+	fprintf(log_f, "%d/%d sweeps completed\n", sim->s.sweep, sim->p.n_sweep);
+	if (sim->s.sweep >= sim->p.n_sweep) {
+		fprintf(log_f, "already finished\n");
+		return 0;
+	}
+
 	const int N = sim->p.N;
 	// N*N matrices use padded ld*N storage for better alignment, slightly better performance.
 	const int ld = best_ld(N);
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
-	int lwork = get_lwork(N, ld); // lapack work array size
+	int lwork = RC(get_lwork)(N, ld); // lapack work array size
 
 	const int L = sim->p.L;
 	const int F = sim->p.F;
@@ -38,20 +36,20 @@ static void dqmc(struct sim_data *sim)
 	const double *const del = sim->p.del;
 	const double *const exp_lambda = sim->p.exp_lambda;
 
-	struct workspace *w[N_DOF] = {&sim->up, &sim->dn};
+	struct RC(workspace) *w[N_DOF] = {&sim->up, &sim->dn};
 
 	int site_order[N]; // N should be small enough to put on stack
 
-	const struct QdX QdX_NULL = {NULL, NULL, NULL};
-	const struct LR LR_NULL = {NULL, NULL, NULL};
+	const struct RC(QdX) QdX_NULL = {NULL, NULL, NULL};
+	const struct RC(LR) LR_NULL = {NULL, NULL, NULL};
 	#define QdX0(f) (((f) < 0 || (f) >= F) ? QdX_NULL : \
-		(struct QdX){w[s]->Q_0 + (f)*ld*N, w[s]->d_0 + (f)*ld, w[s]->X_0 + (f)*ld*N})
+		(struct RC(QdX)){w[s]->Q_0 + (f)*ld*N, w[s]->d_0 + (f)*ld, w[s]->X_0 + (f)*ld*N})
 	#define QdXL(f) (((f) < 0 || (f) >= F) ? QdX_NULL : \
-		(struct QdX){w[s]->Q_L + (f)*ld*N, w[s]->d_L + (f)*ld, w[s]->X_L + (f)*ld*N})
+		(struct RC(QdX)){w[s]->Q_L + (f)*ld*N, w[s]->d_L + (f)*ld, w[s]->X_L + (f)*ld*N})
 	#define LR0(f) (((f) < 0 || (f) >= F) ? LR_NULL : \
-		(struct LR){w[s]->iL_0 + (f)*ld*N, w[s]->R_0 + (f)*ld*N, w[s]->phase_iL_0 + (f)})
+		(struct RC(LR)){w[s]->iL_0 + (f)*ld*N, w[s]->R_0 + (f)*ld*N, w[s]->phase_iL_0 + (f)})
 	#define LRL(f) (((f) < 0 || (f) >= F) ? LR_NULL : \
-		(struct LR){w[s]->iL_L + (f)*ld*N, w[s]->R_L + (f)*ld*N, w[s]->phase_iL_L + (f)})
+		(struct RC(LR)){w[s]->iL_L + (f)*ld*N, w[s]->R_L + (f)*ld*N, w[s]->phase_iL_L + (f)})
 
 	// copy into matrices with leading dimension ld
 	xomatcopy('N', N, N, 1.0, sim->p.exp_Ku,         N, w[0]->exp_K,         ld);
@@ -81,18 +79,18 @@ static void dqmc(struct sim_data *sim)
 	#pragma omp parallel for schedule(static, 1)
 	for (int s = 0; s < N_DOF; s++) {
 		for (int f = 0; f < F; f++)
-			mul_seq(N, ld, f*n_matmul, (f + 1)*n_matmul, 1.0,
+			RC(mul_seq)(N, ld, f*n_matmul, (f + 1)*n_matmul, 1.0,
 					w[s]->B, w[s]->C + f*ld*N, w[s]->tmpNN1);
 		if (sim->s.sweep % 2 == 0) { // first sweep is up, initialize QdXL
 			for (int f = F - 1; f >= 0; f--)
-				calc_QdX(1, N, ld, w[s]->C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
+				RC(calc_QdX)(1, N, ld, w[s]->C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
 						w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
-			phases[s] = calc_Gtt(N, ld, LR_NULL, LRL(0), w[s]->g, w[s]->tmpNN1, w[s]->pvt);
+			phases[s] = RC(calc_Gtt)(N, ld, LR_NULL, LRL(0), w[s]->g, w[s]->tmpNN1, w[s]->pvt);
 		} else { // first sweep is down, initialize QdX0
 			for (int f = 0; f < F; f++)
-				calc_QdX(0, N, ld, w[s]->C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
+				RC(calc_QdX)(0, N, ld, w[s]->C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
 						w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
-			phases[s] = calc_Gtt(N, ld, LR0(F - 1), LR_NULL, w[s]->g, w[s]->tmpNN1, w[s]->pvt);
+			phases[s] = RC(calc_Gtt)(N, ld, LR0(F - 1), LR_NULL, w[s]->g, w[s]->tmpNN1, w[s]->pvt);
 		}
 	}
 	phase = phases[0]*phases[1];
@@ -103,7 +101,7 @@ static void dqmc(struct sim_data *sim)
 		if (sig == 1) // stop flag
 			break;
 		else if (sig == 2) { // progress flag
-			const int status = sim_data_save(sim);
+			const int status = RC(sim_data_save)(sim);
 			if (status < 0)
 				fprintf(stderr, "save_file() failed: %d\n", status);
 		}
@@ -124,14 +122,14 @@ static void dqmc(struct sim_data *sim)
 				#pragma omp parallel for schedule(static, 1)
 				for (int s = 0; s < N_DOF; s++) {
 					profile_begin(wrap);
-					wrap(N, ld, w[s]->g, w[s]->iB + l*ld*N, w[s]->B + l*ld*N, w[s]->tmpNN1);
+					RC(wrap)(N, ld, w[s]->g, w[s]->iB + l*ld*N, w[s]->B + l*ld*N, w[s]->tmpNN1);
 					profile_end(wrap);
 				}
 			}
 
 			profile_begin(updates);
 			shuffle(rng, N, site_order);
-			update_delayed(N, ld, n_delay, del, site_order,
+			RC(update_delayed)(N, ld, n_delay, del, site_order,
 			               rng, hs + N*l, w[0]->g, w[1]->g, &phase,
 			               w[0]->tmpNN1, w[0]->tmpNN2, w[0]->tmpN1,
 			               w[1]->tmpNN1, w[1]->tmpNN2, w[1]->tmpN1);
@@ -151,24 +149,24 @@ static void dqmc(struct sim_data *sim)
 				profile_end(calcb);
 				if (recalc) {
 					profile_begin(multb);
-					mul_seq(N, ld, f*n_matmul, (f + 1)*n_matmul,
+					RC(mul_seq)(N, ld, f*n_matmul, (f + 1)*n_matmul,
 							1.0, w[s]->B, w[s]->C + f*ld*N, w[s]->tmpNN1);
 					profile_end(multb);
 					profile_begin(recalc);
 					if (sweep_up) {
-						calc_QdX(0, N, ld, w[s]->C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
+						RC(calc_QdX)(0, N, ld, w[s]->C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
 								w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
-						phases[s] = calc_Gtt(N, ld, LR0(f), LRL(f + 1), w[s]->g, w[s]->tmpNN1, w[s]->pvt);
+						phases[s] = RC(calc_Gtt)(N, ld, LR0(f), LRL(f + 1), w[s]->g, w[s]->tmpNN1, w[s]->pvt);
 					} else {
-						calc_QdX(1, N, ld, w[s]->C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
+						RC(calc_QdX)(1, N, ld, w[s]->C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
 								w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
-						phases[s] = calc_Gtt(N, ld, LR0(f - 1), LRL(f), w[s]->g, w[s]->tmpNN1, w[s]->pvt);
+						phases[s] = RC(calc_Gtt)(N, ld, LR0(f - 1), LRL(f), w[s]->g, w[s]->tmpNN1, w[s]->pvt);
 					}
 					profile_end(recalc);
 				} else {
 					if (sweep_up) {
 						profile_begin(wrap);
-						wrap(N, ld, w[s]->g, w[s]->B + l*ld*N, w[s]->iB + l*ld*N, w[s]->tmpNN1);
+						RC(wrap)(N, ld, w[s]->g, w[s]->B + l*ld*N, w[s]->iB + l*ld*N, w[s]->tmpNN1);
 						profile_end(wrap);
 					}
 				}
@@ -185,7 +183,7 @@ static void dqmc(struct sim_data *sim)
 					profile_end(half_wrap);
 				}
 				profile_begin(meas_eq);
-				measure_eqlt(&sim->p, phase, ld, w[0]->tmpNN2, w[1]->tmpNN2, &sim->m_eq);
+				RC(measure_eqlt)(&sim->p, phase, ld, w[0]->tmpNN2, w[1]->tmpNN2, &sim->m_eq);
 				profile_end(meas_eq);
 			}
 		}
@@ -199,136 +197,36 @@ static void dqmc(struct sim_data *sim)
 				xomatcopy('N', N, N, 1.0, w[s]->g, ld, w[s]->Gt0, ld);
 				if (sweep_up) { // then QdX0 is fresh, QdXL is old
 					for (int f = F - 1; f >= 0; f--)
-						calc_QdX(1, N, ld, w[s]->C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
+						RC(calc_QdX)(1, N, ld, w[s]->C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
 						         w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
 				} else {
 					for (int f = 0; f < F; f++)
-						calc_QdX(0, N, ld, w[s]->C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
+						RC(calc_QdX)(0, N, ld, w[s]->C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
 						         w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
 				}
-				calc_ue_g(N, ld, L, F, n_matmul, w[s]->B, w[s]->iB,
+				RC(calc_ue_g)(N, ld, L, F, n_matmul, w[s]->B, w[s]->iB,
 				          w[s]->iL_0, w[s]->R_0, w[s]->iL_L, w[s]->R_L,
 				          w[s]->G0t, w[s]->Gtt, w[s]->Gt0, w[s]->tmpNN1, w[s]->pvt);
 				profile_end(calc_ue);
 				profile_begin(half_wrap_ue);
-				wrap(N, ld, w[s]->G0t, w[s]->inv_exp_halfK, w[s]->exp_halfK, w[s]->tmpNN1);
+				RC(wrap)(N, ld, w[s]->G0t, w[s]->inv_exp_halfK, w[s]->exp_halfK, w[s]->tmpNN1);
 				xomatcopy('N', N, N, 1.0, w[s]->G0t, ld, w[s]->Gtt, ld);
 				xomatcopy('N', N, N, 1.0, w[s]->G0t, ld, w[s]->Gt0, ld);
 				for (int l = 1; l < L; l++) {
-					wrap(N, ld, w[s]->G0t + l*ld*N, w[s]->inv_exp_halfK, w[s]->exp_halfK, w[s]->tmpNN1);
-					wrap(N, ld, w[s]->Gtt + l*ld*N, w[s]->inv_exp_halfK, w[s]->exp_halfK, w[s]->tmpNN1);
-					wrap(N, ld, w[s]->Gt0 + l*ld*N, w[s]->inv_exp_halfK, w[s]->exp_halfK, w[s]->tmpNN1);
+					RC(wrap)(N, ld, w[s]->G0t + l*ld*N, w[s]->inv_exp_halfK, w[s]->exp_halfK, w[s]->tmpNN1);
+					RC(wrap)(N, ld, w[s]->Gtt + l*ld*N, w[s]->inv_exp_halfK, w[s]->exp_halfK, w[s]->tmpNN1);
+					RC(wrap)(N, ld, w[s]->Gt0 + l*ld*N, w[s]->inv_exp_halfK, w[s]->exp_halfK, w[s]->tmpNN1);
 				}
 				profile_end(half_wrap_ue);
 			}
 			profile_begin(meas_uneq);
-			measure_uneqlt(&sim->p, phase, ld,
+			RC(measure_uneqlt)(&sim->p, phase, ld,
 			               w[0]->G0t, w[0]->Gtt, w[0]->Gt0, w[1]->G0t, w[1]->Gtt, w[1]->Gt0,
 			               &sim->m_ue);
 			profile_end(meas_uneq);
 		}
 	}
-}
 
-static void print_cpu_model(void)
-{
-#ifdef __APPLE__
-	char str[256];
-	size_t size = sizeof(str);
-
-	if (sysctlbyname("machdep.cpu.brand_string", str, &size, NULL, 0) == 0) {
-		fprintf(log_f, "cpu: %s\n", str);
-	} else {
-		fprintf(log_f, "couldn't get CPU information\n");
-	}
-#else
-	FILE *cpuinfo = fopen("/proc/cpuinfo", "r");
-	if (!cpuinfo) {
-		fprintf(log_f, "couldn't open /proc/cpuinfo\n");
-		return;
-	}
-
-	char *line = NULL;
-	size_t len = 0;
-	while (getline(&line, &len, cpuinfo) != -1) {
-		if (strncmp(line, "model name", 10) == 0) {
-			fprintf(log_f, "cpu %s", line);
-			break;
-		}
-	}
-	free(line);
-	fclose(cpuinfo);
-#endif
-}
-
-int dqmc_wrapper(const char *sim_file, const char *log_file,
-		const tick_t save_interval, const tick_t max_time, const int bench)
-{
-	const tick_t wall_start = time_wall();
-	profile_clear();
-
-	int status = 0;
-
-	// open log file
-	log_f = (log_file != NULL) ? fopen(log_file, "a") : stdout;
-	if (log_f == NULL) {
-		fprintf(stderr, "fopen() failed to open: %s\n", log_file);
-		return -1;
-	}
-
-	fprintf(log_f, "commit id %s\n", GIT_ID);
-	fprintf(log_f, "compiled on %s %s\n", __DATE__, __TIME__);
-
-	// initialize signal handling
-	sig_init(wall_start, save_interval, max_time);
-
-	// open and read simulation file
-	struct sim_data sim = {0};
-	fprintf(log_f, "opening %s\n", sim_file);
-	status = sim_data_read_alloc(&sim, sim_file);
-	if (status < 0) {
-		fprintf(stderr, "read_file() failed: %d\n", status);
-		status = -1;
-		goto cleanup;
-	}
-
-	// check existing progress
-	fprintf(log_f, "%d/%d sweeps completed\n", sim.s.sweep, sim.p.n_sweep);
-	if (sim.s.sweep >= sim.p.n_sweep) {
-		fprintf(log_f, "already finished\n");
-		goto cleanup;
-	}
-
-	// run dqmc
-	fprintf(log_f, "starting dqmc\n");
-	dqmc(&sim);
-	fprintf(log_f, "%d/%d sweeps completed\n", sim.s.sweep, sim.p.n_sweep);
-
-	// save to simulation file (if not in benchmarking mode)
-	if (!bench) {
-		fprintf(log_f, "saving data\n");
-		status = sim_data_save(&sim);
-		if (status < 0) {
-			fprintf(stderr, "save_file() failed: %d\n", status);
-			status = -1;
-			goto cleanup;
-		}
-	} else {
-		fprintf(log_f, "benchmark mode enabled; not saving data\n");
-	}
-
-	status = (sim.s.sweep == sim.p.n_sweep) ? 0 : 1;
-
-cleanup:
-	sim_data_free(&sim);
-
-	const tick_t wall_time = time_wall() - wall_start;
-	print_cpu_model();
-	fprintf(log_f, "wall time: %.3f\n", wall_time * SEC_PER_TICK);
-	profile_print(wall_time);
-
-	if (log_f != stdout)
-		fclose(log_f);
-
-	return status;
+	fprintf(log_f, "%d/%d sweeps completed\n", sim->s.sweep, sim->p.n_sweep);
+	return (sim->s.sweep == sim->p.n_sweep) ? 0 : 1;
 }

@@ -1,7 +1,7 @@
 #include "meas.h"
-#include "data.h"
 #include "linalg.h"
 #include "mem.h"
+#include "structs.h"
 
 // number of types of bonds kept for 4-particle nematic correlators.
 // 2 by default since these are slow measurerments
@@ -25,11 +25,11 @@
 #define pdj1j0 1
 #endif
 
-void measure_eqlt(const struct params *const p, const num phase,
+void RC(measure_eqlt)(const struct RC(params) *const p, const num phase,
 		const int ld,
 		const num *const gu,
 		const num *const gd,
-		struct meas_eqlt *const m)
+		struct RC(meas_eqlt) *const m)
 {
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	(void)__builtin_assume_aligned(gu, MEM_ALIGN);
@@ -180,7 +180,7 @@ void measure_eqlt(const struct params *const p, const num phase,
 	}
 }
 
-void measure_uneqlt(const struct params *const p, const num phase,
+void RC(measure_uneqlt)(const struct RC(params) *const p, const num phase,
 		const int ld,
 		const num *const Gu0t,
 		const num *const Gutt,
@@ -188,7 +188,7 @@ void measure_uneqlt(const struct params *const p, const num phase,
 		const num *const Gd0t,
 		const num *const Gdtt,
 		const num *const Gdt0,
-		struct meas_uneqlt *const m)
+		struct RC(meas_uneqlt) *const m)
 {
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	// commented since this actually slows down the function a little...

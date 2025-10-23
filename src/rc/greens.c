@@ -1,7 +1,7 @@
 #include "greens.h"
 #include "linalg.h"
 
-void mul_seq(const int N, const int ld,
+void RC(mul_seq)(const int N, const int ld,
 		const int min, const int maxp1,
 		const num alpha, const num *const B,
 		num *const A,
@@ -39,7 +39,7 @@ void mul_seq(const int N, const int ld,
 }
 
 // G = L G R
-void wrap(const int N, const int ld,
+void RC(wrap)(const int N, const int ld,
 		num *const G,
 		const num *const L, const num *const R,
 		num *const tmpNN)
@@ -48,7 +48,7 @@ void wrap(const int N, const int ld,
 	xgemm("N", "N", N, N, N, 1.0, L, ld, tmpNN, ld, 0.0, G, ld);
 }
 
-int get_lwork(const int N, const int ld)
+int RC(get_lwork)(const int N, const int ld)
 {
 	num lwork;
 	int info = 0;
@@ -76,8 +76,8 @@ static void calc_QdX_first(
 		const int trans, // if 1, calculate QdX of B^T (conjugate transpose for complex)
 		const int N, const int ld,
 		const num *const B, // input
-		struct QdX QdX,  // output
-		struct LR LR, // output
+		struct RC(QdX) QdX,  // output
+		struct RC(LR) LR, // output
 		num *const tmpN, // work arrays
 		int *const pvt,
 		num *const work, const int lwork)
@@ -154,13 +154,13 @@ static void calc_QdX_first(
 	*LR.phase_iL = phase;
 }
 
-void calc_QdX(
+void RC(calc_QdX)(
 		const int trans, // if 1, calculate QdX of B^T (conjugate transpose for complex)
 		const int N, const int ld,
 		const num *const B, // input
-		const struct QdX QdX_prev,  // input, previous QdX or NULL if none
-		struct QdX QdX,  // output
-		struct LR LR, // output
+		const struct RC(QdX) QdX_prev,  // input, previous QdX or NULL if none
+		struct RC(QdX) QdX,  // output
+		struct RC(LR) LR, // output
 		num *const tmpN, // work arrays
 		int *const pvt,
 		num *const work, const int lwork)
@@ -276,14 +276,14 @@ static inline num calc_phase_LU(const int N, const int ld, const num *A, const i
 		const num c = A[i + i*ld];
 		phase *= c/cabs(c);
 		if (pvt[i] != i+1)
-			phase *= -1.0;
+			phase = -phase;
 	}
 	return phase;
 #else
-	int sign = 1.0;
+	int sign = 1;
 	for (int i = 0; i < N; i++)
 		if ((pvt[i] != i+1) ^ (A[i + i*ld] < 0))
-			sign *= -1;
+			sign = -sign;
 	return (num)sign;
 #endif
 }
@@ -295,7 +295,7 @@ static inline num calc_phase_LU(const int N, const int ld, const num *A, const i
 static num calc_Gtt_last(
 		const int trans, // if 0 calculate, calculate G = (1 + L R)^-1. if 1, calculate G = (1 + R.T L.T)^-1
 		const int N, const int ld,
-		const struct LR LR, // input
+		const struct RC(LR) LR, // input
 		num *const G, // output
 		num *const tmpNN, // work arrays
 		int *const pvt)
@@ -330,10 +330,10 @@ static num calc_Gtt_last(
 // 3. tmpNN = iL0
 // 4. tmpNN = G^-1 tmpNN
 // 5. G = iL1.T tmpNN
-num calc_Gtt(
+num RC(calc_Gtt)(
 		const int N, const int ld,
-		const struct LR LR0, // input or NULL if none
-		const struct LR LR1, // input or NULL if none
+		const struct RC(LR) LR0, // input or NULL if none
+		const struct RC(LR) LR1, // input or NULL if none
 		num *const G, // output
 		num *const tmpNN, // work arrays
 		int *const pvt)
@@ -379,10 +379,10 @@ num calc_Gtt(
 // 7. tmpNN = R0
 // 8. tmpNN = Gt0^-1 tmpNN
 // 9. Gt0 = iL1.T tmpNN
-void calc_G0t_Gtt_Gt0(
+void RC(calc_G0t_Gtt_Gt0)(
 		const int N, const int ld,
-		const struct LR LR0, // input
-		const struct LR LR1, // input
+		const struct RC(LR) LR0, // input
+		const struct RC(LR) LR1, // input
 		num *const G0t, // output
 		num *const Gtt, // output
 		num *const Gt0, // output
@@ -521,7 +521,7 @@ static void expand_g(const int N, const int ld, const int L, const int E, const 
 	}
 }
 
-void calc_ue_g(const int N, const int ld, const int L, const int F, const int n_matmul,
+void RC(calc_ue_g)(const int N, const int ld, const int L, const int F, const int n_matmul,
 		const num *const B, // input
 		const num *const iB, // input
 		num *const iL_0, // input
@@ -538,9 +538,9 @@ void calc_ue_g(const int N, const int ld, const int L, const int F, const int n_
 	// only need to do every other f
 	for (int f = 2; f < F; f += 2) {
 		const int l = f*n_matmul;
-		calc_G0t_Gtt_Gt0(N, ld,
-			(const struct LR){iL_0 + (f - 1)*ld*N, R_0 + (f - 1)*ld*N, NULL},
-			(const struct LR){iL_L + f*ld*N,       R_L + f*ld*N,       NULL},
+		RC(calc_G0t_Gtt_Gt0)(N, ld,
+			(const struct RC(LR)){iL_0 + (f - 1)*ld*N, R_0 + (f - 1)*ld*N, NULL},
+			(const struct RC(LR)){iL_L + f*ld*N,       R_L + f*ld*N,       NULL},
 			G0t + l*ld*N, Gtt + l*ld*N, Gt0 + l*ld*N, tmpNN, pvt);
 	}
 	expand_g(N, ld, L, 1 + (F - 1)/2, 2*n_matmul, B, iB, G0t, Gtt, Gt0, tmpNN);

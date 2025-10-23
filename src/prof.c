@@ -11,8 +11,8 @@
 		return 1;
 	}
 #endif
-#include "dqmc.h"
 #include "time_.h"
+#include "wrapper.h"
 
 tick_t profile_time[n_profile] = {0};
 int profile_count[n_profile] = {0};

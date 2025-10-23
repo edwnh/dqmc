@@ -4,7 +4,7 @@
 #include "mem.h"
 #include "rand.h"
 
-void update_delayed(const int N, const int ld, const int n_delay, const double *const del,
+void RC(update_delayed)(const int N, const int ld, const int n_delay, const double *const del,
 		const int *const site_order,
 		uint64_t *const rng, int *const hs,
 		num *const gu, num *const gd, num *const phase,
@@ -93,6 +93,7 @@ void update_delayed(const int N, const int ld, const int n_delay, const double *
 	}
 }
 
+// below is unmaintained
 /*
 void update_shermor(const int N, const double *const del,
 		const int *const site_order,

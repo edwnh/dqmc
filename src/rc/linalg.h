@@ -43,10 +43,14 @@
 	typedef double complex num;
 	#define cast(p) (MKL_Complex16 *)(p)
 	#define ccast(p) (const MKL_Complex16 *)(p)
+
+	#define RC(x) x##_cplx
 #else
 	typedef double num;
 	#define cast(p) (p)
 	#define ccast(p) (p)
+
+	#define RC(x) x##_real
 #endif
 
 #define MEM_ALIGN_NUM (MEM_ALIGN/sizeof(num))
@@ -61,7 +65,6 @@ static inline size_t best_ld(const size_t N)
 		return ld_aligned + MEM_ALIGN_NUM;
 	return ld_aligned;
 }
-
 
 static inline void xgemm(const char *transa, const char *transb,
 		const int m, const int n, const int k,

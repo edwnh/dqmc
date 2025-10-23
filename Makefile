@@ -6,27 +6,32 @@ UNAME := $(shell uname)
 ifeq ($(UNAME), Linux)
 	CC = icx
 	MKLROOT ?= $(CONDA_PREFIX)
-	HDF_PREFIX = HDF5-1.14.5-Linux/HDF_Group/HDF5/1.14.5
+	HDF_PREFIX ?= HDF5-1.14.5-Linux/HDF_Group/HDF5/1.14.5
 else ifeq ($(UNAME), Darwin)
 	CC = clang
-	HDF_PREFIX = HDF5-1.14.5-Darwin/HDF_Group/HDF5/1.14.5
+	HDF_PREFIX ?= HDF5-1.14.5-Darwin/HDF_Group/HDF5/1.14.5
 endif
 
 SRCS = \
-	src/data.c \
-	src/dqmc.c \
-	src/greens.c \
 	src/main_1.c \
-	src/meas.c \
 	src/mem.c \
 	src/prof.c \
 	src/sig.c \
-	src/updates.c
+	src/wrapper.c
 
-OBJS_REAL = $(SRCS:%.c=$(BUILD_DIR)/real/%.o)
-OBJS_CPLX = $(SRCS:%.c=$(BUILD_DIR)/cplx/%.o)
+# compiled twice, once for real and once for complex
+SRCS_RC = \
+	src/rc/data.c \
+	src/rc/dqmc.c \
+	src/rc/greens.c \
+	src/rc/meas.c \
+	src/rc/updates.c
 
-CFLAGS += -I$(HDF_PREFIX)/include
+OBJS = $(SRCS:%.c=$(BUILD_DIR)/%.o)
+OBJS_REAL = $(SRCS_RC:%.c=$(BUILD_DIR)/real/%.o)
+OBJS_CPLX = $(SRCS_RC:%.c=$(BUILD_DIR)/cplx/%.o)
+
+CFLAGS += -Isrc -I$(HDF_PREFIX)/include
 
 CFLAGS += -DGIT_ID=\"$(shell git describe --always)\"
 CFLAGS += -DPROFILE_ENABLE
@@ -83,15 +88,16 @@ endif
 
 .PHONY: all clean
 
-all: $(TARGET).real $(TARGET).cplx
+all: $(TARGET)
 
-$(TARGET).real: $(OBJS_REAL)
+$(TARGET): $(OBJS) $(OBJS_REAL) $(OBJS_CPLX)
 	@echo LD $@
 	@$(CC) $^ -o $@ $(LDFLAGS)
 
-$(TARGET).cplx: $(OBJS_CPLX)
-	@echo LD $@
-	@$(CC) $^ -o $@ $(LDFLAGS)
+$(BUILD_DIR)/%.o : %.c
+	@echo CC $@
+	@mkdir -p $(@D)
+	@$(CC) $(CFLAGS) $< -c -o $@
 
 $(BUILD_DIR)/real/%.o : %.c
 	@echo CC $@
@@ -104,6 +110,6 @@ $(BUILD_DIR)/cplx/%.o : %.c
 	@$(CC) -DUSE_CPLX $(CFLAGS) $< -c -o $@
 
 clean:
-	$(RM) -r $(BUILD_DIR)
+		$(RM) -r $(BUILD_DIR)
 
--include $(OBJS_REAL:%.o=%.d) $(OBJS_CPLX:%.o=%.d)
+-include $(OBJS:%.o=%.d) $(OBJS_REAL:%.o=%.d) $(OBJS_CPLX:%.o=%.d)
