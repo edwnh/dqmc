@@ -1,7 +1,7 @@
 #include "meas.h"
-#include "linalg.h"
 #include "mem.h"
-#include "structs.h"
+#include "numeric.h"
+#include "sim_types.h"
 
 // number of types of bonds kept for 4-particle nematic correlators.
 // 2 by default since these are slow measurerments

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "linalg.h"
-#include "structs.h"
+#include "numeric.h"
+#include "sim_types.h"
 
 void RC(measure_eqlt)(const struct RC(params) *const p, const num phase,
 		const int ld,

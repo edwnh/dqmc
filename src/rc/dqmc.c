@@ -3,6 +3,7 @@
 #include "greens.h"
 #include "linalg.h"
 #include "meas.h"
+#include "numeric.h"
 #include "prof.h"
 #include "rand.h"
 #include "sig.h"

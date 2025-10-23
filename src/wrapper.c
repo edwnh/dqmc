@@ -124,7 +124,7 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 		fprintf(log_f, "saving data\n");
 		status = is_cplx ? sim_data_save_cplx(sim_cplx) : sim_data_save_real(sim_real);
 		if (status < 0) {
-			fprintf(stderr, "save_file() failed: %d\n", status);
+			fprintf(stderr, "sim_data_save() failed: %d\n", status);
 			status = -1;
 			goto cleanup;
 		}

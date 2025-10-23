@@ -4,8 +4,9 @@
 #include <hdf5_hl.h>
 #include "linalg.h"
 #include "mem.h"
+#include "numeric.h"
 #include "greens.h"
-#include "structs.h"
+#include "sim_types.h"
 
 #define return_if(cond, val, ...) \
 	do {if (cond) {fprintf(stderr, __VA_ARGS__); return (val);}} while (0)

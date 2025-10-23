@@ -10,24 +10,16 @@
 #define dgemv dgemv_
 #define ztrmm ztrmm_
 #define dtrmm dtrmm_
-#define ztrsm ztrsm_
-#define dtrsm dtrsm_
 #define zgetrf zgetrf_
 #define dgetrf dgetrf_
-#define zgetri zgetri_
-#define dgetri dgetri_
 #define zgetrs zgetrs_
 #define dgetrs dgetrs_
 #define zgeqp3 zgeqp3_
 #define dgeqp3 dgeqp3_
 #define zgeqrf zgeqrf_
 #define dgeqrf dgeqrf_
-#define zunmqr zunmqr_
-#define dormqr dormqr_
 #define zungqr zungqr_
 #define dorgqr dorgqr_
-#define ztrtri ztrtri_
-#define dtrtri dtrtri_
 
 #else
 
@@ -37,20 +29,14 @@
 
 #include <tgmath.h>
 #include "mem.h"
+#include "numeric.h"
 
 #ifdef USE_CPLX
-	#include <complex.h>
-	typedef double complex num;
 	#define cast(p) (MKL_Complex16 *)(p)
 	#define ccast(p) (const MKL_Complex16 *)(p)
-
-	#define RC(x) x##_cplx
 #else
-	typedef double num;
 	#define cast(p) (p)
 	#define ccast(p) (p)
-
-	#define RC(x) x##_real
 #endif
 
 #define MEM_ALIGN_NUM (MEM_ALIGN/sizeof(num))
@@ -111,20 +97,6 @@ static inline void xtrmm(const char *side, const char *uplo, const char *transa,
 	ccast(&alpha), ccast(a), &lda, cast(b), &ldb);
 }
 
-static inline void xtrsm(const char *side, const char *uplo, const char *transa, const char *diag,
-		const int m, const int n,
-		const num alpha, const num *a, const int lda,
-		num *b, const int ldb)
-{
-#ifdef USE_CPLX
-	ztrmm(
-#else
-	dtrmm(
-#endif
-	side, uplo, transa, diag, &m, &n,
-	ccast(&alpha), ccast(a), &lda, cast(b), &ldb);
-}
-
 static inline void xgetrf(const int m, const int n, num* a,
 		const int lda, int* ipiv, int* info)
 {
@@ -134,18 +106,6 @@ static inline void xgetrf(const int m, const int n, num* a,
 	dgetrf(
 #endif
 	&m, &n, cast(a), &lda, ipiv, info);
-}
-
-
-static inline void xgetri(const int n, num* a, const int lda, const int* ipiv,
-		num* work, const int lwork, int* info)
-{
-#ifdef USE_CPLX
-	zgetri(
-#else
-	dgetri(
-#endif
-	&n, cast(a), &lda, ipiv, cast(work), &lwork, info);
 }
 
 static inline void xgetrs(const char* trans, const int n, const int nrhs,
@@ -184,20 +144,6 @@ static inline void xgeqrf(const int m, const int n, num* a, const int lda, num* 
 	&m, &n, cast(a), &lda, cast(tau), cast(work), &lwork, info);
 }
 
-static inline void xunmqr(const char* side, const char* trans,
-		const int m, const int n, const int k, const num* a,
-		const int lda, const num* tau, num* c,
-		const int ldc, num* work, const int lwork, int* info)
-{
-#ifdef USE_CPLX
-	zunmqr(side, trans,
-#else
-	dormqr(side, trans[0] == 'C' ? "T" : trans,
-#endif
-	&m, &n, &k, ccast(a), &lda, ccast(tau),
-	cast(c), &ldc, cast(work), &lwork, info);
-}
-
 static inline void xungqr(const int m, const int n, const int k, num* a,
 		const int lda, const num* tau, num* work, const int lwork, int* info)
 {
@@ -207,17 +153,6 @@ static inline void xungqr(const int m, const int n, const int k, num* a,
 	dorgqr(
 #endif
 	&m, &n, &k, cast(a), &lda, ccast(tau), cast(work), &lwork, info);
-}
-
-static inline void xtrtri(const char* uplo, const char* diag, const int n,
-		num* a, const int lda, int* info)
-{
-#ifdef USE_CPLX
-	ztrtri(
-#else
-	dtrtri(
-#endif
-	uplo, diag, &n, cast(a), &lda, info);
 }
 
 static inline void ximatcopy(const char trans, const size_t rows, const size_t cols,
@@ -310,7 +245,7 @@ static inline void mul_diag_mat(const int N, const int ld, const num *const d, c
 		if (diff > max) max = diff; \
 		avg += diff; \
 	} \
-	avg /= N*N; \
+	avg /= m*n; \
 	printf(#A " - " #B ":\tmax %.3e\tavg %.3e\n", max, avg); \
 } while (0)
 

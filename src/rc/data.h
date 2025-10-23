@@ -1,5 +1,5 @@
 #pragma once
 
-#include "linalg.h"
+#include "numeric.h"
 
 #include "data_decl.h"

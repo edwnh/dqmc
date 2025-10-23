@@ -1,11 +1,74 @@
 #include "greens.h"
 #include "linalg.h"
 #include "mem.h"
+#include "numeric.h"
 #include "rand.h"
 
 #include <stdio.h>
 
 // old code
+
+#if __APPLE__
+
+#include <Accelerate/Accelerate.h>
+#define MKL_Complex16 double complex
+#define zgetri zgetri_
+#define dgetri dgetri_
+#define zunmqr zunmqr_
+#define dormqr dormqr_
+#define ztrtri ztrtri_
+#define dtrtri dtrtri_
+
+#else
+
+#include <mkl.h>
+
+#endif
+
+#ifdef USE_CPLX
+	#define cast(p) (MKL_Complex16 *)(p)
+	#define ccast(p) (const MKL_Complex16 *)(p)
+#else
+	#define cast(p) (p)
+	#define ccast(p) (p)
+#endif
+
+static inline void xgetri(const int n, num* a, const int lda, const int* ipiv,
+		num* work, const int lwork, int* info)
+{
+#ifdef USE_CPLX
+	zgetri(
+#else
+	dgetri(
+#endif
+	&n, cast(a), &lda, ipiv, cast(work), &lwork, info);
+}
+
+static inline void xunmqr(const char* side, const char* trans,
+		const int m, const int n, const int k, const num* a,
+		const int lda, const num* tau, num* c,
+		const int ldc, num* work, const int lwork, int* info)
+{
+#ifdef USE_CPLX
+	zunmqr(side, trans,
+#else
+	dormqr(side, trans[0] == 'C' ? "T" : trans,
+#endif
+	&m, &n, &k, ccast(a), &lda, ccast(tau),
+	cast(c), &ldc, cast(work), &lwork, info);
+}
+
+static inline void xtrtri(const char* uplo, const char* diag, const int n,
+		num* a, const int lda, int* info)
+{
+#ifdef USE_CPLX
+	ztrtri(
+#else
+	dtrtri(
+#endif
+	uplo, diag, &n, cast(a), &lda, info);
+}
+
 void mul_seq_old(const int N, const int L,
 		const int min, const int maxp1,
 		const num alpha, const num *const restrict B, const int ldB,

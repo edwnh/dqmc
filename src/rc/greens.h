@@ -1,11 +1,11 @@
 #pragma once
 
-#include "linalg.h"
+#include "numeric.h"
 
 struct RC(QdX) {
-    num *Q;
-    num *d;
-    num *X;
+	num *Q;
+	num *d;
+	num *X;
 };
 
 struct RC(LR) {

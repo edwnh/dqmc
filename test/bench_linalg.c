@@ -1,7 +1,8 @@
 #include "linalg.h"
-#include "time_.h"
 #include "mem.h"
+#include "numeric.h"
 #include "rand.h"
+#include "time_.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -29,32 +30,6 @@ static void bench_trmm(int N, int ld, num *A, num *B, num *C)
 		xtrmm("R", "L", "N", "U", N, N, 1.0, A, ld, C, ld);
 	}
 	const double ops = 1.0*N*N*N;
-	printf("%.3f us\t%.3f GFlops\n", US_PER_TICK*((double)elapsed)/trials, ops*trials/(elapsed));
-}
-
-static void bench_trsm(int N, int ld, num *A, num *B, num *C)
-{
-	tick_t elapsed = 0;
-	int trials = 0;
-	const tick_t time_start = time_wall();
-	for (; (elapsed = time_wall() - time_start) < MIN_TIME*TICK_PER_SEC; trials++) {
-		for (int i = 0; i < N*ld; i++) C[i] = B[i];
-		xtrsm("R", "L", "N", "U", N, N, 1.0, A, ld, C, ld);
-	}
-	const double ops = 1.0*N*N*N;
-	printf("%.3f us\t%.3f GFlops\n", US_PER_TICK*((double)elapsed)/trials, ops*trials/(elapsed));
-}
-
-static void bench_trtri(int N, int ld, num *A, num *B, num *C)
-{
-	tick_t elapsed = 0;
-	int trials = 0;
-	const tick_t time_start = time_wall();
-	for (; (elapsed = time_wall() - time_start) < MIN_TIME*TICK_PER_SEC; trials++) {
-		for (int i = 0; i < N*ld; i++) C[i] = A[i];
-		xtrtri("L", "U", N, C, ld, &(int){0});
-	}
-	const double ops = (1.0/3)*N*N*N;
 	printf("%.3f us\t%.3f GFlops\n", US_PER_TICK*((double)elapsed)/trials, ops*trials/(elapsed));
 }
 
@@ -129,8 +104,6 @@ int main(int argc, char *argv[])
 
 	printf("gemm:\t"); bench_gemm(N, ld, A, B, C);
 	printf("trmm:\t"); bench_trmm(N, ld, A, B, C);
-	printf("trsm:\t"); bench_trsm(N, ld, A, B, C);
-	printf("trtri:\t"); bench_trtri(N, ld, A, B, C);
 	printf("getrf:\t"); bench_getrf(N, ld, A, B, C, pvt);
 	printf("geqrf:\t"); bench_geqrf(N, ld, A, B, C, D);
 	printf("geqp3:\t"); bench_geqp3(N, ld, A, B, C, D, pvt);

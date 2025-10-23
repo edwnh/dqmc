@@ -1,5 +1,6 @@
 #include "greens.h"
 #include "linalg.h"
+#include "numeric.h"
 
 void RC(mul_seq)(const int N, const int ld,
 		const int min, const int maxp1,
@@ -58,15 +59,6 @@ int RC(get_lwork)(const int N, const int ld)
 	if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
 
 	xgeqrf(N, N, NULL, ld, NULL, &lwork, -1, &info);
-	if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
-
-	xunmqr("R", "N", N, N, N, NULL, ld, NULL, NULL, ld, &lwork, -1, &info);
-	if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
-
-	xunmqr("R", "C", N, N, N, NULL, ld, NULL, NULL, ld, &lwork, -1, &info);
-	if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
-
-	xunmqr("L", "N", N, N, N, NULL, ld, NULL, NULL, ld, &lwork, -1, &info);
 	if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
 
 	return max_lwork;
