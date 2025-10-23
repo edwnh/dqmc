@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "linalg.h"
+#include "numeric.h"
 
 struct RC(params) {
 	int N, L;

@@ -1,7 +1,6 @@
 #include "mem.h"
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 #define MEM_ALIGN_UP(size) ((((size) + MEM_ALIGN - 1)/MEM_ALIGN) * MEM_ALIGN)
 

@@ -1,4 +1,5 @@
 #include "meas.h"
+#include "linalg.h"
 #include "mem.h"
 #include "numeric.h"
 #include "sim_types.h"

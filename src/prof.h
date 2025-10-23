@@ -2,7 +2,6 @@
 
 #ifdef PROFILE_ENABLE
 
-#include <stdio.h>
 #include "time_.h"
 
 #define PROFILE_LIST \
