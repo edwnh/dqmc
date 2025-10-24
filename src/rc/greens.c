@@ -61,6 +61,9 @@ int RC(get_lwork)(const int N, const int ld)
 	xgeqrf(N, N, NULL, ld, NULL, &lwork, -1, &info);
 	if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
 
+	xungqr(N, N, N, NULL, ld, NULL, &lwork, -1, &info);
+	if (creal(lwork) > max_lwork) max_lwork = (int)lwork;
+
 	return max_lwork;
 }
 
