@@ -7,10 +7,9 @@
 #include "prof.h"
 #include "rand.h"
 #include "sig.h"
+#include "sim_types.h"
 #include "updates.h"
 #include "wrapper.h"
-
-#define N_DOF 2
 
 // returns -1 for failure, 0 for completion, 1 for partial completion
 int RC(dqmc)(struct RC(sim_data) *sim)
@@ -38,61 +37,61 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 	const double *const del = sim->p.del;
 	const double *const exp_lambda = sim->p.exp_lambda;
 
-	struct RC(workspace) *w[N_DOF] = {&sim->up, &sim->dn};
+	struct RC(workspace) *ws = sim->ws;
 
 	int site_order[N]; // N should be small enough to put on stack
 
 	const struct RC(QdX) QdX_NULL = {NULL, NULL, NULL};
 	const struct RC(LR) LR_NULL = {NULL, NULL, NULL};
 	#define QdX0(f) (((f) < 0 || (f) >= F) ? QdX_NULL : \
-		(struct RC(QdX)){w[s]->Q_0 + (f)*ld*N, w[s]->d_0 + (f)*ld, w[s]->X_0 + (f)*ld*N})
+		(struct RC(QdX)){ws[s].Q_0 + (f)*ld*N, ws[s].d_0 + (f)*ld, ws[s].X_0 + (f)*ld*N})
 	#define QdXL(f) (((f) < 0 || (f) >= F) ? QdX_NULL : \
-		(struct RC(QdX)){w[s]->Q_L + (f)*ld*N, w[s]->d_L + (f)*ld, w[s]->X_L + (f)*ld*N})
+		(struct RC(QdX)){ws[s].Q_L + (f)*ld*N, ws[s].d_L + (f)*ld, ws[s].X_L + (f)*ld*N})
 	#define LR0(f) (((f) < 0 || (f) >= F) ? LR_NULL : \
-		(struct RC(LR)){w[s]->iL_0 + (f)*ld*N, w[s]->R_0 + (f)*ld*N, w[s]->phase_iL_0 + (f)})
+		(struct RC(LR)){ws[s].iL_0 + (f)*ld*N, ws[s].R_0 + (f)*ld*N, ws[s].phase_iL_0 + (f)})
 	#define LRL(f) (((f) < 0 || (f) >= F) ? LR_NULL : \
-		(struct RC(LR)){w[s]->iL_L + (f)*ld*N, w[s]->R_L + (f)*ld*N, w[s]->phase_iL_L + (f)})
+		(struct RC(LR)){ws[s].iL_L + (f)*ld*N, ws[s].R_L + (f)*ld*N, ws[s].phase_iL_L + (f)})
 
 	// copy into matrices with leading dimension ld
-	xomatcopy('N', N, N, 1.0, sim->p.exp_Ku,         N, w[0]->exp_K,         ld);
-	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_Ku,     N, w[0]->inv_exp_K,     ld);
-	xomatcopy('N', N, N, 1.0, sim->p.exp_halfKu,     N, w[0]->exp_halfK,     ld);
-	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_halfKu, N, w[0]->inv_exp_halfK, ld);
-	xomatcopy('N', N, N, 1.0, sim->p.exp_Kd,         N, w[1]->exp_K,         ld);
-	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_Kd,     N, w[1]->inv_exp_K,     ld);
-	xomatcopy('N', N, N, 1.0, sim->p.exp_halfKd,     N, w[1]->exp_halfK,     ld);
-	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_halfKd, N, w[1]->inv_exp_halfK, ld);
+	xomatcopy('N', N, N, 1.0, sim->p.exp_Ku,         N, ws[0].exp_K,         ld);
+	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_Ku,     N, ws[0].inv_exp_K,     ld);
+	xomatcopy('N', N, N, 1.0, sim->p.exp_halfKu,     N, ws[0].exp_halfK,     ld);
+	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_halfKu, N, ws[0].inv_exp_halfK, ld);
+	xomatcopy('N', N, N, 1.0, sim->p.exp_Kd,         N, ws[1].exp_K,         ld);
+	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_Kd,     N, ws[1].inv_exp_K,     ld);
+	xomatcopy('N', N, N, 1.0, sim->p.exp_halfKd,     N, ws[1].exp_halfK,     ld);
+	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_halfKd, N, ws[1].inv_exp_halfK, ld);
 
 	num phase;
-	num phases[N_DOF] = {0};
+	num phases[N_FLAVORS] = {0};
 
 	for (int l = 0; l < L; l++) {
 		for (int i = 0; i < N; i++) {
 			const int hsil = hs[i + N*l];
-			w[0]->exp_V[i] = exp_lambda[i + N*hsil];
-			w[1]->exp_V[i] = exp_lambda[i + N*!hsil];
+			ws[0].exp_V[i] = exp_lambda[i + N*hsil];
+			ws[1].exp_V[i] = exp_lambda[i + N*!hsil];
 		}
-		mul_mat_diag(N, ld, w[0]->exp_K, w[0]->exp_V,     w[0]->B + l*ld*N);
-		mul_diag_mat(N, ld, w[1]->exp_V, w[0]->inv_exp_K, w[0]->iB + l*ld*N);
-		mul_mat_diag(N, ld, w[1]->exp_K, w[1]->exp_V,     w[1]->B + l*ld*N);
-		mul_diag_mat(N, ld, w[0]->exp_V, w[1]->inv_exp_K, w[1]->iB + l*ld*N);
+		mul_mat_diag(N, ld, ws[0].exp_K, ws[0].exp_V,     ws[0].B + l*ld*N);
+		mul_diag_mat(N, ld, ws[1].exp_V, ws[0].inv_exp_K, ws[0].iB + l*ld*N);
+		mul_mat_diag(N, ld, ws[1].exp_K, ws[1].exp_V,     ws[1].B + l*ld*N);
+		mul_diag_mat(N, ld, ws[0].exp_V, ws[1].inv_exp_K, ws[1].iB + l*ld*N);
 	}
 
 	#pragma omp parallel for schedule(static, 1)
-	for (int s = 0; s < N_DOF; s++) {
+	for (int s = 0; s < N_FLAVORS; s++) {
 		for (int f = 0; f < F; f++)
 			RC(mul_seq)(N, ld, f*n_matmul, (f + 1)*n_matmul, 1.0,
-					w[s]->B, w[s]->C + f*ld*N, w[s]->tmpNN1);
+					ws[s].B, ws[s].C + f*ld*N, ws[s].tmpNN1);
 		if (sim->s.sweep % 2 == 0) { // first sweep is up, initialize QdXL
 			for (int f = F - 1; f >= 0; f--)
-				RC(calc_QdX)(1, N, ld, w[s]->C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
-						w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
-			phases[s] = RC(calc_Gtt)(N, ld, LR_NULL, LRL(0), w[s]->g, w[s]->tmpNN1, w[s]->pvt);
+				RC(calc_QdX)(1, N, ld, ws[s].C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
+						ws[s].tmpN1, ws[s].pvt, ws[s].work, lwork);
+			phases[s] = RC(calc_Gtt)(N, ld, LR_NULL, LRL(0), ws[s].g, ws[s].tmpNN1, ws[s].pvt);
 		} else { // first sweep is down, initialize QdX0
 			for (int f = 0; f < F; f++)
-				RC(calc_QdX)(0, N, ld, w[s]->C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
-						w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
-			phases[s] = RC(calc_Gtt)(N, ld, LR0(F - 1), LR_NULL, w[s]->g, w[s]->tmpNN1, w[s]->pvt);
+				RC(calc_QdX)(0, N, ld, ws[s].C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
+						ws[s].tmpN1, ws[s].pvt, ws[s].work, lwork);
+			phases[s] = RC(calc_Gtt)(N, ld, LR0(F - 1), LR_NULL, ws[s].g, ws[s].tmpNN1, ws[s].pvt);
 		}
 	}
 	phase = phases[0]*phases[1];
@@ -122,9 +121,9 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 
 			if (!sweep_up) { // wrap for down sweep
 				#pragma omp parallel for schedule(static, 1)
-				for (int s = 0; s < N_DOF; s++) {
+				for (int s = 0; s < N_FLAVORS; s++) {
 					profile_begin(wrap);
-					RC(wrap)(N, ld, w[s]->g, w[s]->iB + l*ld*N, w[s]->B + l*ld*N, w[s]->tmpNN1);
+					RC(wrap)(N, ld, ws[s].g, ws[s].iB + l*ld*N, ws[s].B + l*ld*N, ws[s].tmpNN1);
 					profile_end(wrap);
 				}
 			}
@@ -132,43 +131,43 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 			profile_begin(updates);
 			shuffle(rng, N, site_order);
 			RC(update_delayed)(N, ld, n_delay, del, site_order,
-			               rng, hs + N*l, w[0]->g, w[1]->g, &phase,
-			               w[0]->tmpNN1, w[0]->tmpNN2, w[0]->tmpN1,
-			               w[1]->tmpNN1, w[1]->tmpNN2, w[1]->tmpN1);
+			               rng, hs + N*l, ws[0].g, ws[1].g, &phase,
+			               ws[0].tmpNN1, ws[0].tmpNN2, ws[0].tmpN1,
+			               ws[1].tmpNN1, ws[1].tmpNN2, ws[1].tmpN1);
 			for (int i = 0; i < N; i++) {
 				const int hsil = hs[i + N*l];
-				w[0]->exp_V[i] = exp_lambda[i + N*hsil];
-				w[1]->exp_V[i] = exp_lambda[i + N*!hsil];
+				ws[0].exp_V[i] = exp_lambda[i + N*hsil];
+				ws[1].exp_V[i] = exp_lambda[i + N*!hsil];
 			}
 			profile_end(updates);
 
 			const int recalc = sweep_up ? (m == n_matmul - 1) : (m == 0);
 			#pragma omp parallel for schedule(static, 1)
-			for (int s = 0; s < N_DOF; s++) {
+			for (int s = 0; s < N_FLAVORS; s++) {
 				profile_begin(calcb);
-				mul_mat_diag(N, ld, w[s]->exp_K, w[s]->exp_V, w[s]->B + l*ld*N);
-				mul_diag_mat(N, ld, w[1 - s]->exp_V, w[s]->inv_exp_K, w[s]->iB + l*ld*N);
+				mul_mat_diag(N, ld, ws[s].exp_K, ws[s].exp_V, ws[s].B + l*ld*N);
+				mul_diag_mat(N, ld, ws[1 - s].exp_V, ws[s].inv_exp_K, ws[s].iB + l*ld*N);
 				profile_end(calcb);
 				if (recalc) {
 					profile_begin(multb);
 					RC(mul_seq)(N, ld, f*n_matmul, (f + 1)*n_matmul,
-							1.0, w[s]->B, w[s]->C + f*ld*N, w[s]->tmpNN1);
+							1.0, ws[s].B, ws[s].C + f*ld*N, ws[s].tmpNN1);
 					profile_end(multb);
 					profile_begin(recalc);
 					if (sweep_up) {
-						RC(calc_QdX)(0, N, ld, w[s]->C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
-								w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
-						phases[s] = RC(calc_Gtt)(N, ld, LR0(f), LRL(f + 1), w[s]->g, w[s]->tmpNN1, w[s]->pvt);
+						RC(calc_QdX)(0, N, ld, ws[s].C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
+								ws[s].tmpN1, ws[s].pvt, ws[s].work, lwork);
+						phases[s] = RC(calc_Gtt)(N, ld, LR0(f), LRL(f + 1), ws[s].g, ws[s].tmpNN1, ws[s].pvt);
 					} else {
-						RC(calc_QdX)(1, N, ld, w[s]->C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
-								w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
-						phases[s] = RC(calc_Gtt)(N, ld, LR0(f - 1), LRL(f), w[s]->g, w[s]->tmpNN1, w[s]->pvt);
+						RC(calc_QdX)(1, N, ld, ws[s].C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
+								ws[s].tmpN1, ws[s].pvt, ws[s].work, lwork);
+						phases[s] = RC(calc_Gtt)(N, ld, LR0(f - 1), LRL(f), ws[s].g, ws[s].tmpNN1, ws[s].pvt);
 					}
 					profile_end(recalc);
 				} else {
 					if (sweep_up) {
 						profile_begin(wrap);
-						RC(wrap)(N, ld, w[s]->g, w[s]->B + l*ld*N, w[s]->iB + l*ld*N, w[s]->tmpNN1);
+						RC(wrap)(N, ld, ws[s].g, ws[s].B + l*ld*N, ws[s].iB + l*ld*N, ws[s].tmpNN1);
 						profile_end(wrap);
 					}
 				}
@@ -178,52 +177,52 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 
 			if (enabled_eqlt && (l + sweep_up) % sim->p.period_eqlt == 0) {
 				#pragma omp parallel for schedule(static, 1)
-				for (int s = 0; s < N_DOF; s++) {
+				for (int s = 0; s < N_FLAVORS; s++) {
 					profile_begin(half_wrap);
-					xgemm("N", "N", N, N, N, 1.0, w[s]->g, ld, w[s]->exp_halfK, ld, 0.0, w[s]->tmpNN1, ld);
-					xgemm("N", "N", N, N, N, 1.0, w[s]->inv_exp_halfK, ld, w[s]->tmpNN1, ld, 0.0, w[s]->tmpNN2, ld);
+					xgemm("N", "N", N, N, N, 1.0, ws[s].g, ld, ws[s].exp_halfK, ld, 0.0, ws[s].tmpNN1, ld);
+					xgemm("N", "N", N, N, N, 1.0, ws[s].inv_exp_halfK, ld, ws[s].tmpNN1, ld, 0.0, ws[s].tmpNN2, ld);
 					profile_end(half_wrap);
 				}
 				profile_begin(meas_eq);
-				RC(measure_eqlt)(&sim->p, phase, ld, w[0]->tmpNN2, w[1]->tmpNN2, &sim->m_eq);
+				RC(measure_eqlt)(&sim->p, phase, ld, ws[0].tmpNN2, ws[1].tmpNN2, &sim->m_eq);
 				profile_end(meas_eq);
 			}
 		}
 
 		if (enabled_uneqlt && (sim->s.sweep % sim->p.period_uneqlt == 0) ) {
 			#pragma omp parallel for schedule(static, 1)
-			for (int s = 0; s < N_DOF; s++) {
+			for (int s = 0; s < N_FLAVORS; s++) {
 				profile_begin(calc_ue);
-				xomatcopy('N', N, N, 1.0, w[s]->g, ld, w[s]->G0t, ld);
-				xomatcopy('N', N, N, 1.0, w[s]->g, ld, w[s]->Gtt, ld);
-				xomatcopy('N', N, N, 1.0, w[s]->g, ld, w[s]->Gt0, ld);
+				xomatcopy('N', N, N, 1.0, ws[s].g, ld, ws[s].G0t, ld);
+				xomatcopy('N', N, N, 1.0, ws[s].g, ld, ws[s].Gtt, ld);
+				xomatcopy('N', N, N, 1.0, ws[s].g, ld, ws[s].Gt0, ld);
 				if (sweep_up) { // then QdX0 is fresh, QdXL is old
 					for (int f = F - 1; f >= 0; f--)
-						RC(calc_QdX)(1, N, ld, w[s]->C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
-						         w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
+						RC(calc_QdX)(1, N, ld, ws[s].C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
+						         ws[s].tmpN1, ws[s].pvt, ws[s].work, lwork);
 				} else {
 					for (int f = 0; f < F; f++)
-						RC(calc_QdX)(0, N, ld, w[s]->C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
-						         w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
+						RC(calc_QdX)(0, N, ld, ws[s].C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
+						         ws[s].tmpN1, ws[s].pvt, ws[s].work, lwork);
 				}
-				RC(calc_ue_g)(N, ld, L, F, n_matmul, w[s]->B, w[s]->iB,
-				          w[s]->iL_0, w[s]->R_0, w[s]->iL_L, w[s]->R_L,
-				          w[s]->G0t, w[s]->Gtt, w[s]->Gt0, w[s]->tmpNN1, w[s]->pvt);
+				RC(calc_ue_g)(N, ld, L, F, n_matmul, ws[s].B, ws[s].iB,
+				          ws[s].iL_0, ws[s].R_0, ws[s].iL_L, ws[s].R_L,
+				          ws[s].G0t, ws[s].Gtt, ws[s].Gt0, ws[s].tmpNN1, ws[s].pvt);
 				profile_end(calc_ue);
 				profile_begin(half_wrap_ue);
-				RC(wrap)(N, ld, w[s]->G0t, w[s]->inv_exp_halfK, w[s]->exp_halfK, w[s]->tmpNN1);
-				xomatcopy('N', N, N, 1.0, w[s]->G0t, ld, w[s]->Gtt, ld);
-				xomatcopy('N', N, N, 1.0, w[s]->G0t, ld, w[s]->Gt0, ld);
+				RC(wrap)(N, ld, ws[s].G0t, ws[s].inv_exp_halfK, ws[s].exp_halfK, ws[s].tmpNN1);
+				xomatcopy('N', N, N, 1.0, ws[s].G0t, ld, ws[s].Gtt, ld);
+				xomatcopy('N', N, N, 1.0, ws[s].G0t, ld, ws[s].Gt0, ld);
 				for (int l = 1; l < L; l++) {
-					RC(wrap)(N, ld, w[s]->G0t + l*ld*N, w[s]->inv_exp_halfK, w[s]->exp_halfK, w[s]->tmpNN1);
-					RC(wrap)(N, ld, w[s]->Gtt + l*ld*N, w[s]->inv_exp_halfK, w[s]->exp_halfK, w[s]->tmpNN1);
-					RC(wrap)(N, ld, w[s]->Gt0 + l*ld*N, w[s]->inv_exp_halfK, w[s]->exp_halfK, w[s]->tmpNN1);
+					RC(wrap)(N, ld, ws[s].G0t + l*ld*N, ws[s].inv_exp_halfK, ws[s].exp_halfK, ws[s].tmpNN1);
+					RC(wrap)(N, ld, ws[s].Gtt + l*ld*N, ws[s].inv_exp_halfK, ws[s].exp_halfK, ws[s].tmpNN1);
+					RC(wrap)(N, ld, ws[s].Gt0 + l*ld*N, ws[s].inv_exp_halfK, ws[s].exp_halfK, ws[s].tmpNN1);
 				}
 				profile_end(half_wrap_ue);
 			}
 			profile_begin(meas_uneq);
 			RC(measure_uneqlt)(&sim->p, phase, ld,
-			               w[0]->G0t, w[0]->Gtt, w[0]->Gt0, w[1]->G0t, w[1]->Gtt, w[1]->Gt0,
+			               ws[0].G0t, ws[0].Gtt, ws[0].Gt0, ws[1].G0t, ws[1].Gtt, ws[1].Gt0,
 			               &sim->m_ue);
 			profile_end(meas_uneq);
 		}
