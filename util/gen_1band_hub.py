@@ -245,7 +245,6 @@ def create_1(file_sim=None, file_params=None, overwrite=False, init_rng=None,
         # parameters used by dqmc code
         f.create_group("params")
         # model parameters
-        f["params"]["is_cplx"] = np.array(int(dtype_num == np.complex128), dtype=np.int32)
         f["params"]["N"] = np.array(N, dtype=np.int32)
         f["params"]["L"] = np.array(L, dtype=np.int32)
         f["params"]["map_i"] = map_i

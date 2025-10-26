@@ -30,16 +30,27 @@ static int is_cplx_file(const char *file)
 		fprintf(stderr, "H5Fopen() failed: %ld\n", file_id);
 		return -1;
 	}
-	int is_cplx = -1;
-	herr_t status = H5LTread_dataset_int(file_id, "/params/is_cplx", &is_cplx);
-	if (status < 0) {
-		fprintf(stderr, "H5LTread_dataset() failed for %s: %d\n", "/params/is_cplx", status);
-	}
-	status = H5Fclose(file_id);
-	if (status < 0) {
-		fprintf(stderr, "H5Fclose() failed: %d\n", status);
+
+	hid_t dset_id = H5Dopen2(file_id, "/params/exp_Ku", H5P_DEFAULT);
+	if (dset_id < 0) {
+		fprintf(stderr, "H5Dopen2() failed: %ld\n", dset_id);
+		H5Fclose(file_id);
 		return -1;
 	}
+
+	hid_t type_id = H5Dget_type(dset_id);
+	if (type_id < 0) {
+		fprintf(stderr, "H5Dget_type() failed: %ld\n", type_id);
+		H5Dclose(dset_id);
+		H5Fclose(file_id);
+		return -1;
+	}
+
+	const H5T_class_t type_class = H5Tget_class(type_id);
+	int is_cplx = (type_class == H5T_COMPOUND) ? 1 : (type_class == H5T_FLOAT) ? 0 : -1;
+	H5Tclose(type_id);
+	H5Dclose(dset_id);
+	H5Fclose(file_id);
 	return is_cplx;
 }
 
@@ -85,8 +96,8 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 	// open log file
 	log_f = (log_file != NULL) ? fopen(log_file, "a") : stdout;
 	if (log_f == NULL) {
-		fprintf(stderr, "fopen() failed to open: %s\n", log_file);
-		return -1;
+		fprintf(stderr, "fopen() failed to open: %s. using stdout", log_file);
+		log_f = stdout;
 	}
 
 	fprintf(log_f, "commit id %s compiled on %s %s\n", GIT_ID, __DATE__, __TIME__);
@@ -105,10 +116,12 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 	const int is_cplx = is_cplx_file(sim_file);
 	if (is_cplx == 1) {
 		sim_cplx = sim_data_read_alloc_cplx(sim_file);
-	} else {
-		if (is_cplx < 0)
-			fprintf(stderr, "is_cplx_file() failed. maybe old file? assuming real numbers.\n");
+	} else if (is_cplx == 0) {
 		sim_real = sim_data_read_alloc_real(sim_file);
+	} else {
+		fprintf(stderr, "is_cplx_file() failed\n");
+		status = -1;
+		goto cleanup;
 	}
 	if ((sim_real == NULL) && (sim_cplx == NULL)) {
 		fprintf(stderr, "sim_data_read_alloc() failed: %d\n", status);
@@ -127,17 +140,17 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 			fprintf(stderr, "sim_data_save() failed: %d\n", status);
 			status = -1;
 			goto cleanup;
+		} else {
+			status = retcode;
 		}
 	} else {
 		fprintf(log_f, "benchmark mode enabled; not saving data\n");
 	}
 
-	status = retcode;
-
 cleanup:
-	if (is_cplx) {
+	if (is_cplx == 1) {
 		sim_data_free_cplx(sim_cplx);
-	} else {
+	} else if (is_cplx == 0) {
 		sim_data_free_real(sim_real);
 	}
 
