@@ -308,47 +308,10 @@ def create_1(file_sim=None, file_params=None, overwrite=False, init_rng=None,
         f["state"]["rng"] = rng
         f["state"]["hs"] = init_hs
 
-        # measurements
+        # measurements (datasets will be written by C program)
         f.create_group("meas_eqlt")
-        f["meas_eqlt"]["n_sample"] = np.array(0, dtype=np.int32)
-        f["meas_eqlt"]["sign"] = np.array(0.0, dtype=dtype_num)
-        f["meas_eqlt"]["density"] = np.zeros(num_i, dtype=dtype_num)
-        f["meas_eqlt"]["double_occ"] = np.zeros(num_i, dtype=dtype_num)
-        f["meas_eqlt"]["g00"] = np.zeros(num_ij, dtype=dtype_num)
-        f["meas_eqlt"]["nn"] = np.zeros(num_ij, dtype=dtype_num)
-        f["meas_eqlt"]["xx"] = np.zeros(num_ij, dtype=dtype_num)
-        f["meas_eqlt"]["zz"] = np.zeros(num_ij, dtype=dtype_num)
-        f["meas_eqlt"]["pair_sw"] = np.zeros(num_ij, dtype=dtype_num)
-        if meas_energy_corr:
-            f["meas_eqlt"]["kk"] = np.zeros(num_bb, dtype=dtype_num)
-            f["meas_eqlt"]["kv"] = np.zeros(num_bs, dtype=dtype_num)
-            f["meas_eqlt"]["kn"] = np.zeros(num_bs, dtype=dtype_num)
-            f["meas_eqlt"]["vv"] = np.zeros(num_ij, dtype=dtype_num)
-            f["meas_eqlt"]["vn"] = np.zeros(num_ij, dtype=dtype_num)
-
         if period_uneqlt > 0:
             f.create_group("meas_uneqlt")
-            f["meas_uneqlt"]["n_sample"] = np.array(0, dtype=np.int32)
-            f["meas_uneqlt"]["sign"] = np.array(0.0, dtype=dtype_num)
-            f["meas_uneqlt"]["gt0"] = np.zeros(num_ij*L, dtype=dtype_num)
-            f["meas_uneqlt"]["nn"] = np.zeros(num_ij*L, dtype=dtype_num)
-            f["meas_uneqlt"]["xx"] = np.zeros(num_ij*L, dtype=dtype_num)
-            f["meas_uneqlt"]["zz"] = np.zeros(num_ij*L, dtype=dtype_num)
-            f["meas_uneqlt"]["pair_sw"] = np.zeros(num_ij*L, dtype=dtype_num)
-            if meas_bond_corr:
-                f["meas_uneqlt"]["pair_bb"] = np.zeros(num_bb*L, dtype=dtype_num)
-                f["meas_uneqlt"]["jj"] = np.zeros(num_bb*L, dtype=dtype_num)
-                f["meas_uneqlt"]["jsjs"] = np.zeros(num_bb*L, dtype=dtype_num)
-                f["meas_uneqlt"]["kk"] = np.zeros(num_bb*L, dtype=dtype_num)
-                f["meas_uneqlt"]["ksks"] = np.zeros(num_bb*L, dtype=dtype_num)
-            if meas_energy_corr:
-                f["meas_uneqlt"]["kv"] = np.zeros(num_bs*L, dtype=dtype_num)
-                f["meas_uneqlt"]["kn"] = np.zeros(num_bs*L, dtype=dtype_num)
-                f["meas_uneqlt"]["vv"] = np.zeros(num_ij*L, dtype=dtype_num)
-                f["meas_uneqlt"]["vn"] = np.zeros(num_ij*L, dtype=dtype_num)
-            if meas_nematic_corr:
-                f["meas_uneqlt"]["nem_nnnn"] = np.zeros(num_bb*L, dtype=dtype_num)
-                f["meas_uneqlt"]["nem_ssss"] = np.zeros(num_bb*L, dtype=dtype_num)
 
 def create_batch(Nfiles=1, prefix=None, seed=None, **kwargs):
     if seed is None:

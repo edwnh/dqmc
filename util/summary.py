@@ -7,8 +7,8 @@ def info(path):
         util.load_file(path, "meas_eqlt/n_sample", "meas_eqlt/sign",
                              "meas_eqlt/density", "meas_eqlt/double_occ",
                              "state/sweep", "params/n_sweep")
-    print(f"n_sample={n_sample}, sweep={sweep}/{n_sweep}")
-    if n_sample > 0:
+    print(f"n_sample={n_sample or 0}, sweep={sweep}/{n_sweep}")
+    if n_sample is not None and n_sample > 0:
         print(f"<sign>={(sign/n_sample)}")
         print(f"<n>={(density/sign)}")
         print(f"<m_z^2>={((density-2*double_occ)/sign)}")

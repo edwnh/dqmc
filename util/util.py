@@ -5,7 +5,7 @@ import numpy as np
 
 def load_file(filename, *args):
     with h5py.File(filename, "r") as f:
-        return tuple(f[x][...] for x in args)
+        return tuple((f[x][...] if x in f else None) for x in args)
 
 
 def load_firstfile(prefix, *args):
@@ -17,14 +17,18 @@ def load(prefix, *args):
     nbins = len(files)
     if nbins == 0:
         print(f"no files matching: {prefix}*.h5")
+        if not prefix.endswith("/"):
+            print("probably forgot trailing slash.")
         return
-    last = load_file(files.pop(), *args)
-    data = tuple(np.zeros((nbins,) + a.shape, dtype=a.dtype) for a in last)
-    for a, a_last in zip(data, last):
-        a[-1, ...] = a_last
-    for i, f in enumerate(files):
-        for a, a_i in zip(data, load_file(f, *args)):
-            a[i, ...] = a_i
+    data_raw = [load_file(f, *args) for f in files]
+    data = []
+    for i in range(len(data_raw[0])):
+        a = [d[i] for d in data_raw]
+        t = next((x for x in a if x is not None), None)
+        if t is None:
+            data.append(None)
+        else:
+            data.append(np.stack([x if x is not None else np.zeros_like(t) for x in a]))
     return data
 
 

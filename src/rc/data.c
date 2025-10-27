@@ -8,10 +8,44 @@
 #include "greens.h"
 #include "sim_types.h"
 
+#define H5TYPE_int H5T_NATIVE_INT
+#define H5TYPE_double H5T_NATIVE_DOUBLE
+#define H5TYPE_num num_h5t
+
 #define return_if(cond, val, ...) \
 	do {if (cond) {fprintf(stderr, __VA_ARGS__); return (val);}} while (0)
 
 static hid_t num_h5t;
+
+// does nothing if dataset doesn't exist
+static herr_t my_read(hid_t loc_id,
+	const char *name, hid_t type_id, void *buf)
+{
+	htri_t exists = H5Lexists(loc_id, name, H5P_DEFAULT);
+	if (exists < 0)
+		return (herr_t)exists;
+	if (exists > 0)
+		return H5LTread_dataset(loc_id, name, type_id, buf);
+	return 0; // no error
+}
+
+// either creates data or overwrites existing.
+// assumes any existing dataset has the correct size and type.
+// rank 0 if size == 0.
+static herr_t my_write(hid_t loc_id,
+	const char *name, hsize_t size, hid_t type_id, const void *buf)
+{
+	htri_t exists = H5Lexists(loc_id, name, H5P_DEFAULT);
+	if (exists < 0)
+		return (herr_t)exists;
+	if (exists == 0)
+		return H5LTmake_dataset(loc_id, name, (size > 0), &size, type_id, buf);
+	hid_t dset = H5Dopen2(loc_id, name, H5P_DEFAULT);
+	if (dset < 0) return (herr_t)dset;
+	herr_t status = H5Dwrite(dset, type_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf);
+	status |= H5Dclose(dset);
+	return status;
+}
 
 static int do_alloc(struct RC(sim_data) *sim)
 {
@@ -60,26 +94,22 @@ struct RC(sim_data) *RC(sim_data_read_alloc)(const char *file)
 
 	sim->file = file;
 
-	herr_t status;
+	herr_t status = 0;
 
 #ifdef USE_CPLX
 	num_h5t = H5Tcreate(H5T_COMPOUND, sizeof(num));
-	status = H5Tinsert(num_h5t, "r", 0, H5T_NATIVE_DOUBLE);
-	return_if(status < 0, NULL, "H5Tinsert() failed: %d\n", status);
-	status = H5Tinsert(num_h5t, "i", 8, H5T_NATIVE_DOUBLE);
-	return_if(status < 0, NULL, "H5Tinsert() failed: %d\n", status);
+	status |= H5Tinsert(num_h5t, "r", 0, H5T_NATIVE_DOUBLE);
+	status |= H5Tinsert(num_h5t, "i", 8, H5T_NATIVE_DOUBLE);
 #else
 	num_h5t = H5T_NATIVE_DOUBLE;
 #endif
 
-#define my_read(name, type, buf) do { \
-	status = H5LTread_dataset(file_id, (name), (type), (buf)); \
-	return_if(status < 0, NULL, "H5LTread_dataset() failed for %s: %d\n", (name), status); \
-} while (0)
-
-#define X(name) my_read("/params/" #name, H5T_NATIVE_INT, &sim->p.name);
+#define X(name) \
+	status |= my_read(file_id, "/params/" #name, H5T_NATIVE_INT, &sim->p.name);
 	PARAMS_SCALAR_INT_LIST
 #undef X
+
+	do_alloc(sim);
 
 	const int L = sim->p.L;
 	const int num_i = sim->p.num_i, num_ij = sim->p.num_ij;
@@ -88,45 +118,38 @@ struct RC(sim_data) *RC(sim_data_read_alloc)(const char *file)
 	const int meas_energy_corr = sim->p.meas_energy_corr;
 	const int meas_nematic_corr = sim->p.meas_nematic_corr;
 
-	do_alloc(sim);
-
-#define H5TYPE_int H5T_NATIVE_INT
-#define H5TYPE_double H5T_NATIVE_DOUBLE
-#define H5TYPE_num num_h5t
-#define X(name, type, size) my_read("/params/" #name, H5TYPE_##type, sim->p.name);
+#define X(name, type, size) \
+	status |= my_read(file_id, "/params/" #name, H5TYPE_##type, sim->p.name);
 	PARAMS_ARRAY_LIST
 #undef X
-#undef H5TYPE_num
-#undef H5TYPE_double
-#undef H5TYPE_int
 
-	my_read("/state/rng",          H5T_NATIVE_UINT64, sim->s.rng);
-	my_read("/state/sweep",        H5T_NATIVE_INT,   &sim->s.sweep);
-	my_read("/state/hs",           H5T_NATIVE_INT,    sim->s.hs);
+	status |= my_read(file_id, "/state/rng",   H5T_NATIVE_UINT64, sim->s.rng);
+	status |= my_read(file_id, "/state/sweep", H5T_NATIVE_INT,   &sim->s.sweep);
+	status |= my_read(file_id, "/state/hs",    H5T_NATIVE_INT,    sim->s.hs);
 
-	my_read("/meas_eqlt/n_sample", H5T_NATIVE_INT,   &sim->m_eq.n_sample);
-	my_read("/meas_eqlt/sign",     num_h5t,          &sim->m_eq.sign);
-#define X(name, size) if ((size) > 0) my_read("/meas_eqlt/" #name, num_h5t, sim->m_eq.name);
+	status |= my_read(file_id, "/meas_eqlt/n_sample", H5T_NATIVE_INT,   &sim->m_eq.n_sample);
+	status |= my_read(file_id, "/meas_eqlt/sign",     num_h5t,          &sim->m_eq.sign);
+#define X(name, size) \
+	if ((size) > 0) status |= my_read(file_id, "/meas_eqlt/" #name, num_h5t, sim->m_eq.name);
 	MEAS_EQLT_LIST
 #undef X
 	if (sim->p.period_uneqlt > 0) {
-		my_read("/meas_uneqlt/n_sample", H5T_NATIVE_INT, &sim->m_ue.n_sample);
-		my_read("/meas_uneqlt/sign",     num_h5t,        &sim->m_ue.sign);
-#define X(name, size) if ((size) > 0) my_read("/meas_uneqlt/" #name, num_h5t, sim->m_ue.name);
+		status |= my_read(file_id, "/meas_uneqlt/n_sample", H5T_NATIVE_INT, &sim->m_ue.n_sample);
+		status |= my_read(file_id, "/meas_uneqlt/sign",     num_h5t,        &sim->m_ue.sign);
+#define X(name, size) \
+	if ((size) > 0) status |= my_read(file_id, "/meas_uneqlt/" #name, num_h5t, sim->m_ue.name);
 		MEAS_UNEQLT_LIST
 #undef X
 	}
 
-#undef my_read
-
-	status = H5Fclose(file_id);
-	return_if(status < 0, NULL, "H5Fclose() failed: %d\n", status);
+	status |= H5Fclose(file_id);
+	return_if(status < 0, NULL, "my_read() or H5Fclose() failed: %d\n", status);
 	return sim;
 }
 
 int RC(sim_data_save)(const struct RC(sim_data) *sim)
 {
-	const int L = sim->p.L;
+	const int N = sim->p.N, L = sim->p.L;
 	const int num_i = sim->p.num_i, num_ij = sim->p.num_ij;
 	const int num_b = sim->p.num_b, num_bs = sim->p.num_bs, num_bb = sim->p.num_bb;
 	const int meas_bond_corr = sim->p.meas_bond_corr;
@@ -136,39 +159,31 @@ int RC(sim_data_save)(const struct RC(sim_data) *sim)
 	const hid_t file_id = H5Fopen(sim->file, H5F_ACC_RDWR, H5P_DEFAULT);
 	return_if(file_id < 0, -1, "H5Fopen() failed: %ld\n", file_id);
 
-	herr_t status;
-	hid_t dset_id;
+	herr_t status = 0;
 
-#define my_write(name, type, data) do { \
-	dset_id = H5Dopen2(file_id, (name), H5P_DEFAULT); \
-	return_if(dset_id < 0, -1, "H5Dopen2() failed for %s: %ld\n", name, dset_id); \
-	status = H5Dwrite(dset_id, (type), H5S_ALL, H5S_ALL, H5P_DEFAULT, (data)); \
-	return_if(status < 0, -1, "H5Dwrite() failed for %s: %d\n", name, status); \
-	status = H5Dclose(dset_id); \
-	return_if(status < 0, -1, "H5Dclose() failed for %s: %d\n", name, status); \
-} while (0)
+	status |= my_write(file_id, "/state/rng", 17, H5T_NATIVE_UINT64, sim->s.rng);
+	status |= my_write(file_id, "/state/sweep", 0, H5T_NATIVE_INT, &sim->s.sweep);
+	status |= my_write(file_id, "/state/hs", N*L, H5T_NATIVE_INT, sim->s.hs);
 
-	my_write("/state/rng",            H5T_NATIVE_UINT64,  sim->s.rng);
-	my_write("/state/sweep",          H5T_NATIVE_INT,    &sim->s.sweep);
-	my_write("/state/hs",             H5T_NATIVE_INT,     sim->s.hs);
-
-	my_write("/meas_eqlt/n_sample",   H5T_NATIVE_INT,    &sim->m_eq.n_sample);
-	my_write("/meas_eqlt/sign",       num_h5t, &sim->m_eq.sign);
-#define X(name, size) if ((size) > 0) my_write("/meas_eqlt/" #name, num_h5t, sim->m_eq.name);
-	MEAS_EQLT_LIST
+	if (sim->m_eq.n_sample > 0) {
+		status |= my_write(file_id, "/meas_eqlt/n_sample", 0, H5T_NATIVE_INT, &sim->m_eq.n_sample);
+		status |= my_write(file_id, "/meas_eqlt/sign", 0, num_h5t, &sim->m_eq.sign);
+#define X(name, size) \
+	if ((size) > 0) status |= my_write(file_id, "/meas_eqlt/" #name, size, num_h5t, sim->m_eq.name);
+		MEAS_EQLT_LIST
 #undef X
-	if (sim->p.period_uneqlt > 0) {
-		my_write("/meas_uneqlt/n_sample", H5T_NATIVE_INT,    &sim->m_ue.n_sample);
-		my_write("/meas_uneqlt/sign",     num_h5t, &sim->m_ue.sign);
-#define X(name, size) if ((size) > 0) my_write("/meas_uneqlt/" #name, num_h5t, sim->m_ue.name);
+	}
+	if (sim->p.period_uneqlt > 0 && sim->m_ue.n_sample > 0) {
+		status |= my_write(file_id, "/meas_uneqlt/n_sample", 0, H5T_NATIVE_INT, &sim->m_ue.n_sample);
+		status |= my_write(file_id, "/meas_uneqlt/sign", 0, num_h5t, &sim->m_ue.sign);
+#define X(name, size) \
+	if ((size) > 0) status |= my_write(file_id, "/meas_uneqlt/" #name, size, num_h5t, sim->m_ue.name);
 		MEAS_UNEQLT_LIST
 #undef X
 	}
 
-#undef my_write
-
-	status = H5Fclose(file_id);
-	return_if(status < 0, -1, "H5Fclose() failed: %d\n", status);
+	status |= H5Fclose(file_id);
+	return_if(status < 0, -1, "my_write() or H5Fclose() failed: %d\n", status);
 	return 0;
 }
 
