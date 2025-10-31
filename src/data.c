@@ -14,7 +14,7 @@ static hid_t num_h5t;
 static int do_alloc(struct sim_data *sim)
 {
 	// these must be initialized in sim before any allocations
-	const int N = sim->p.N, L = sim->p.L, F = sim->p.F;
+	const int N = sim->p.N, L = sim->p.L, F = sim->p.F, N_inter = sim->p.N_inter;
 	const int num_i = sim->p.num_i, num_ij = sim->p.num_ij;
 	const int num_b = sim->p.num_b, num_bs = sim->p.num_bs, num_bb = sim->p.num_bb;
 
@@ -22,35 +22,39 @@ static int do_alloc(struct sim_data *sim)
 	const int lwork = get_lwork(N, ld);
 
 	const struct alloc_entry tab[] = {
-		{(void **)&sim->p.map_i,          N        * sizeof(int)},
-		{(void **)&sim->p.map_ij,         N*N      * sizeof(int)},
-		{(void **)&sim->p.bonds,          num_b*2  * sizeof(int)},
-		{(void **)&sim->p.map_bs,         num_b*N  * sizeof(int)},
-		{(void **)&sim->p.map_bb,         num_b*num_b * sizeof(int)},
-		{(void **)&sim->p.peierlsu,       N*N      * sizeof(num)},
-		{(void **)&sim->p.peierlsd,       N*N      * sizeof(num)},
-		{(void **)&sim->p.degen_i,        num_i    * sizeof(int)},
-		{(void **)&sim->p.degen_ij,       num_ij   * sizeof(int)},
-		{(void **)&sim->p.degen_bs,       num_bs   * sizeof(int)},
-		{(void **)&sim->p.degen_bb,       num_bb   * sizeof(int)},
-		{(void **)&sim->p.exp_lambda,     N*2      * sizeof(double)},
-		{(void **)&sim->p.exp_Ku,         N*N      * sizeof(num)},
-		{(void **)&sim->p.exp_Kd,         N*N      * sizeof(num)},
-		{(void **)&sim->p.inv_exp_Ku,     N*N      * sizeof(num)},
-		{(void **)&sim->p.inv_exp_Kd,     N*N      * sizeof(num)},
-		{(void **)&sim->p.exp_halfKu,     N*N      * sizeof(num)},
-		{(void **)&sim->p.exp_halfKd,     N*N      * sizeof(num)},
-		{(void **)&sim->p.inv_exp_halfKu, N*N      * sizeof(num)},
-		{(void **)&sim->p.inv_exp_halfKd, N*N      * sizeof(num)},
-		{(void **)&sim->p.del,            N*2      * sizeof(double)},
-		{(void **)&sim->s.hs,             N*L      * sizeof(int)},
-		{(void **)&sim->m_eq.density,     num_i    * sizeof(num)},
-		{(void **)&sim->m_eq.double_occ,  num_i    * sizeof(num)},
-		{(void **)&sim->m_eq.g00,         num_ij   * sizeof(num)},
-		{(void **)&sim->m_eq.nn,          num_ij   * sizeof(num)},
-		{(void **)&sim->m_eq.xx,          num_ij   * sizeof(num)},
-		{(void **)&sim->m_eq.zz,          num_ij   * sizeof(num)},
-		{(void **)&sim->m_eq.pair_sw,     num_ij   * sizeof(num)},
+		{(void **)&sim->p.map_i,          				N        		* sizeof(int)},
+		{(void **)&sim->p.map_ij,         				N*N      		* sizeof(int)},
+		{(void **)&sim->p.bonds,          				num_b*2  		* sizeof(int)},
+		{(void **)&sim->p.bonds_inter,   				N_inter*2       * sizeof(int)},
+		{(void **)&sim->p.map_bs,         				num_b*N 		* sizeof(int)},
+		{(void **)&sim->p.map_bb,         				num_b*num_b 	* sizeof(int)},
+		{(void **)&sim->p.peierlsu,       				N*N      		* sizeof(num)},
+		{(void **)&sim->p.peierlsd,        				N*N      		* sizeof(num)},
+		{(void **)&sim->p.degen_i,        				num_i    		* sizeof(int)},
+		{(void **)&sim->p.degen_ij,       				num_ij   		* sizeof(int)},
+		{(void **)&sim->p.degen_bs,       				num_bs   		* sizeof(int)},
+		{(void **)&sim->p.degen_bb,       				num_bb   		* sizeof(int)},
+		{(void **)&sim->p.exp_lambda,     				N_inter*4       * sizeof(double)},
+		{(void **)&sim->p.exp_lambda_a,   				N_inter*4       * sizeof(double)},
+		{(void **)&sim->p.exp_Ku,         				N*N      		* sizeof(num)},
+		{(void **)&sim->p.exp_Kd,         				N*N      		* sizeof(num)},
+		{(void **)&sim->p.inv_exp_Ku,     				N*N      		* sizeof(num)},
+		{(void **)&sim->p.inv_exp_Kd,     				N*N      		* sizeof(num)},
+		{(void **)&sim->p.exp_halfKu,     				N*N      		* sizeof(num)},
+		{(void **)&sim->p.exp_halfKd,     				N*N      		* sizeof(num)},
+		{(void **)&sim->p.inv_exp_halfKu, 				N*N      		* sizeof(num)},
+		{(void **)&sim->p.inv_exp_halfKd, 				N*N    			* sizeof(num)},
+		{(void **)&sim->p.Delta_p,        				N_inter*16    	* sizeof(double)},
+		{(void **)&sim->p.Delta_q,            			N_inter*16      * sizeof(double)},
+		{(void **)&sim->p.weight_comparison_matrice,    N_inter*16      * sizeof(double)},
+		{(void **)&sim->s.hs,                     	    N_inter*L      		* sizeof(int)},
+		{(void **)&sim->m_eq.density,     				num_i   	    * sizeof(num)},
+		{(void **)&sim->m_eq.double_occ,  				num_i    		* sizeof(num)},
+		{(void **)&sim->m_eq.g00,         				num_ij   		* sizeof(num)},
+		{(void **)&sim->m_eq.nn,          				num_ij   		* sizeof(num)},
+		{(void **)&sim->m_eq.xx,          				num_ij   		* sizeof(num)},
+		{(void **)&sim->m_eq.zz,          				num_ij   		* sizeof(num)},
+		{(void **)&sim->m_eq.pair_sw,     				num_ij   		* sizeof(num)},
 		{(void **)&sim->m_eq.kk,          (sim->p.meas_energy_corr != 0)*num_bb * sizeof(num)},
 		{(void **)&sim->m_eq.kv,          (sim->p.meas_energy_corr != 0)*num_bs * sizeof(num)},
 		{(void **)&sim->m_eq.kn,          (sim->p.meas_energy_corr != 0)*num_bs * sizeof(num)},
@@ -73,6 +77,7 @@ static int do_alloc(struct sim_data *sim)
 		{(void **)&sim->m_ue.nem_nnnn,    (sim->p.period_uneqlt != 0)*(sim->p.meas_nematic_corr != 0)*num_bb*L * sizeof(num)},
 		{(void **)&sim->m_ue.nem_ssss,    (sim->p.period_uneqlt != 0)*(sim->p.meas_nematic_corr != 0)*num_bb*L * sizeof(num)},
 		{(void **)&sim->up.inv_exp_K,     ld*N   * sizeof(num)},
+		{(void **)&sim->up.inv_exp_V,     N      * sizeof(num)},
 		{(void **)&sim->up.iB,            L*ld*N * sizeof(num)},
 		{(void **)&sim->up.exp_K,         ld*N   * sizeof(num)},
 		{(void **)&sim->up.exp_V,         N      * sizeof(num)},
@@ -91,15 +96,22 @@ static int do_alloc(struct sim_data *sim)
 		{(void **)&sim->up.R_0,           F*ld*N * sizeof(num)},
 		{(void **)&sim->up.phase_iL_0,    F      * sizeof(num)},
 		{(void **)&sim->up.g,             ld*N   * sizeof(num)},
+		{(void **)&sim->up.g_check,       ld*N   * sizeof(num)},
 		{(void **)&sim->up.exp_halfK,     ld*N   * sizeof(num)},
 		{(void **)&sim->up.inv_exp_halfK, ld*N   * sizeof(num)},
 		{(void **)&sim->up.tmpNN1,        ld*N   * sizeof(num)},
 		{(void **)&sim->up.tmpNN2,        ld*N   * sizeof(num)},
-		{(void **)&sim->up.tmpN1,         N      * sizeof(num)},
-		{(void **)&sim->up.tmpN2,         N      * sizeof(num)},
+		{(void **)&sim->up.tmpld11,       ld     * sizeof(num)},
+		{(void **)&sim->up.tmpld12,       ld     * sizeof(num)},
+		{(void **)&sim->up.tmp1N1,        N      * sizeof(num)},
+		{(void **)&sim->up.tmp1N2,        N      * sizeof(num)},
+		{(void **)&sim->up.tmpld21,       ld*2   * sizeof(num)},
+		{(void **)&sim->up.tmp2N1,        2*N    * sizeof(num)},
+		{(void **)&sim->up.tmpld22,       ld*2   * sizeof(num)},
 		{(void **)&sim->up.pvt,           N      * sizeof(int)},
 		{(void **)&sim->up.work,          lwork  * sizeof(num)},
 		{(void **)&sim->dn.inv_exp_K,     ld*N   * sizeof(num)},
+		{(void **)&sim->dn.inv_exp_V,     N      * sizeof(num)},
 		{(void **)&sim->dn.iB,            L*ld*N * sizeof(num)},
 		{(void **)&sim->dn.exp_K,         ld*N   * sizeof(num)},
 		{(void **)&sim->dn.exp_V,         N      * sizeof(num)},
@@ -118,12 +130,18 @@ static int do_alloc(struct sim_data *sim)
 		{(void **)&sim->dn.R_0,           F*ld*N * sizeof(num)},
 		{(void **)&sim->dn.phase_iL_0,    F      * sizeof(num)},
 		{(void **)&sim->dn.g,             ld*N   * sizeof(num)},
+		{(void **)&sim->dn.g_check,      ld*N   * sizeof(num)},
 		{(void **)&sim->dn.exp_halfK,     ld*N   * sizeof(num)},
 		{(void **)&sim->dn.inv_exp_halfK, ld*N   * sizeof(num)},
 		{(void **)&sim->dn.tmpNN1,        ld*N   * sizeof(num)},
 		{(void **)&sim->dn.tmpNN2,        ld*N   * sizeof(num)},
-		{(void **)&sim->dn.tmpN1,         N      * sizeof(num)},
-		{(void **)&sim->dn.tmpN2,         N      * sizeof(num)},
+		{(void **)&sim->dn.tmpld11,       ld     * sizeof(num)},
+		{(void **)&sim->dn.tmpld12,       ld     * sizeof(num)},
+		{(void **)&sim->dn.tmp1N1,        N      * sizeof(num)},
+		{(void **)&sim->dn.tmp1N2,        N      * sizeof(num)},
+		{(void **)&sim->dn.tmpld21,       ld*2   * sizeof(num)},
+		{(void **)&sim->dn.tmp2N1,        2*N    * sizeof(num)},
+		{(void **)&sim->dn.tmpld22,       ld*2   * sizeof(num)},
 		{(void **)&sim->dn.pvt,           N      * sizeof(int)},
 		{(void **)&sim->dn.work,          lwork  * sizeof(num)},
 		{(void **)&sim->up.G0t,           (sim->p.period_uneqlt > 0)*L*ld*N * sizeof(num)},
@@ -166,6 +184,7 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 
 	my_read(_int, "/params/N",      &sim->p.N);
 	my_read(_int, "/params/L",      &sim->p.L);
+	my_read(_int, "/params/N_inter",      &sim->p.N_inter);
 	my_read(_int, "/params/F",      &sim->p.F);
 	my_read(_int, "/params/num_i",  &sim->p.num_i);
 	my_read(_int, "/params/num_ij", &sim->p.num_ij);
@@ -179,6 +198,7 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 
 	do_alloc(sim);
 
+	my_read(_int, "/params/bonds_inter",  sim->p.bonds_inter);
 	my_read(_int,    "/params/map_i",          sim->p.map_i);
 	my_read(_int,    "/params/map_ij",         sim->p.map_ij);
 	my_read(_int,    "/params/bonds",          sim->p.bonds);
@@ -207,7 +227,10 @@ int sim_data_read_alloc(struct sim_data *sim, const char *file)
 	my_read(,  "/params/inv_exp_halfKu", num_h5t,   sim->p.inv_exp_halfKu);
 	my_read(,  "/params/inv_exp_halfKd", num_h5t,   sim->p.inv_exp_halfKd);
 	my_read(_double, "/params/exp_lambda",     sim->p.exp_lambda);
-	my_read(_double, "/params/del",            sim->p.del);
+	my_read(_double, "/params/exp_lambda_a",     sim->p.exp_lambda_a);
+	my_read(_double, "/params/Delta_p",            sim->p.Delta_p);
+	my_read(_double, "/params/Delta_q",            sim->p.Delta_q);
+	my_read(_double, "/params/weight_comparison_matrice", sim->p.weight_comparison_matrice);
 	my_read(_int,    "/params/n_sweep",       &sim->p.n_sweep);
 	my_read(,        "/state/rng", H5T_NATIVE_UINT64, sim->s.rng);
 	my_read(_int,    "/state/sweep",          &sim->s.sweep);

@@ -3,13 +3,16 @@
 #include <stdint.h>
 #include "linalg.h"
 
-void update_delayed(const int N, const int ld, const int n_delay, const double *const del,
-		const int *const site_order,
-		uint64_t *const rng, int *const hs,
-		num *const Gu, num *const Gd, num *const phase,
-		// work arrays (sizes: N*N, N*N, N)
-		num *const au, num *const bu, num *const du,
-		num *const ad, num *const bd, num *const dd);
+void update_shermor(const int N, const int ld, const int N_inter, const int *const bonds_inter,
+	const int *const site_order, uint64_t *const rng, int *const hs,
+	num *const gu, num *const gd, num *const phase,
+	double *const Delta_p, double *const Delta_q, double *const weight_comparison_matrice,
+	num *const cu_p_col, num *const cu_q_col, num *const cu_p_row, 
+	num *const cu_q_row, num *const cu_col, num *const cu_row, 
+	num *const cd_p_col, num *const cd_q_col, num *const cd_p_row, 
+	num *const cd_q_row, num *const cd_col, num *const cd_row, 
+	num *const tmpuld2, num *const tmpdld2
+);
 
 /*
 // regular sherman morrison

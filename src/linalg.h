@@ -62,6 +62,14 @@ static inline size_t best_ld(const size_t N)
 	return ld_aligned;
 }
 
+static inline double xabs(const num A) {
+	#ifdef USE_CPLX
+		return cabs(A);
+	#else
+		return fabs(A);
+	#endif
+}
+
 
 static inline void xgemm(const char *transa, const char *transb,
 		const int m, const int n, const int k,
@@ -299,16 +307,16 @@ static inline void mul_diag_mat(const int N, const int ld, const num *const d, c
 			B[i + ld*j] = d[i] * A[i + ld*j];
 }
 
-#define matdiff(m, n, A, ldA, B, ldB) do { \
+#define matdiff(m, n, A, ldA, B, ldB, sweep, l, s) do { \
 	double max = 0.0, avg = 0.0; \
 	for (int j = 0; j < (n); j++) \
 	for (int i = 0; i < (m); i++) { \
-		const double diff = fabs((A)[i + (ldA)*j] - (B)[i + (ldB)*j]); \
+		const double diff = xabs((A)[i + (ldA)*j] - (B)[i + (ldB)*j]); \
 		if (diff > max) max = diff; \
 		avg += diff; \
 	} \
-	avg /= N*N; \
-	printf(#A " - " #B ":\tmax %.3e\tavg %.3e\n", max, avg); \
+	avg /= m*n; \
+	if (max > 1e-6) printf("On sweep %d, level %d, spin %d, the difference is \tmax %.3e\tavg %.3e\n", sweep, l, s, max, avg); \
 } while (0)
 
 #undef ccast

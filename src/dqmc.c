@@ -24,23 +24,27 @@ FILE *log_f;
 static void dqmc(struct sim_data *sim)
 {
 	const int N = sim->p.N;
+	const int N_inter = sim->p.N_inter;
 	// N*N matrices use padded ld*N storage for better alignment, slightly better performance.
 	const int ld = best_ld(N);
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	int lwork = get_lwork(N, ld); // lapack work array size
-
 	const int L = sim->p.L;
+	const int *const bonds_inter = sim->p.bonds_inter;
 	const int F = sim->p.F;
 	const int n_matmul = sim->p.n_matmul;
 	const int n_delay = sim->p.n_delay;
 	uint64_t *const rng = sim->s.rng;
 	int *const hs = sim->s.hs;
-	const double *const del = sim->p.del;
+	const double *const Delta_p = sim->p.Delta_p;
+	const double *const Delta_q = sim->p.Delta_q;
+	const double *const weight_comparison_matrice = sim->p.weight_comparison_matrice;
 	const double *const exp_lambda = sim->p.exp_lambda;
+	const double *const exp_lambda_a = sim->p.exp_lambda_a;
 
-	struct workspace *w[N_DOF] = {&sim->up, &sim->dn};
+	struct workspace *w[N_DOF] = {&sim->up, &sim->dn}; 
 
-	int site_order[N]; // N should be small enough to put on stack
+	int bond_order[N_inter]; // N should be small enough to put on stack
 
 	const struct QdX QdX_NULL = {NULL, NULL, NULL};
 	const struct LR LR_NULL = {NULL, NULL, NULL};
@@ -52,7 +56,6 @@ static void dqmc(struct sim_data *sim)
 		(struct LR){w[s]->iL_0 + (f)*ld*N, w[s]->R_0 + (f)*ld*N, w[s]->phase_iL_0 + (f)})
 	#define LRL(f) (((f) < 0 || (f) >= F) ? LR_NULL : \
 		(struct LR){w[s]->iL_L + (f)*ld*N, w[s]->R_L + (f)*ld*N, w[s]->phase_iL_L + (f)})
-
 	// copy into matrices with leading dimension ld
 	xomatcopy('N', N, N, 1.0, sim->p.exp_Ku,         N, w[0]->exp_K,         ld);
 	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_Ku,     N, w[0]->inv_exp_K,     ld);
@@ -62,20 +65,32 @@ static void dqmc(struct sim_data *sim)
 	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_Kd,     N, w[1]->inv_exp_K,     ld);
 	xomatcopy('N', N, N, 1.0, sim->p.exp_halfKd,     N, w[1]->exp_halfK,     ld);
 	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_halfKd, N, w[1]->inv_exp_halfK, ld);
-
 	num phase;
 	num phases[N_DOF] = {0};
 
 	for (int l = 0; l < L; l++) {
 		for (int i = 0; i < N; i++) {
-			const int hsil = hs[i + N*l];
-			w[0]->exp_V[i] = exp_lambda[i + N*hsil];
-			w[1]->exp_V[i] = exp_lambda[i + N*!hsil];
+			w[0]->exp_V[i] = 1.0;
+			w[1]->exp_V[i] = 1.0;
+		}
+		for (int i = 0; i < N_inter; i++) {
+			int aa = bonds_inter[0 * N_inter + i];
+			int b = bonds_inter[1 * N_inter + i];
+			w[0]->exp_V[aa] *= exp_lambda[i * 4 + hs[l * N_inter + i]];
+			w[0]->exp_V[b] *= exp_lambda_a[i * 4 + hs[l * N_inter + i]];
+			w[1]->exp_V[aa] *= exp_lambda[i * 4 + hs[l * N_inter + i]];
+			w[1]->exp_V[b] *= exp_lambda_a[i * 4 + hs[l * N_inter + i]];
+		}
+		
+		for (int i = 0; i  < N; i++) {
+			w[0]->inv_exp_V[i] = 1.0 / w[0]->exp_V[i];
+			w[1]->inv_exp_V[i] = 1.0 / w[1]->exp_V[i];
 		}
 		mul_mat_diag(N, ld, w[0]->exp_K, w[0]->exp_V,     w[0]->B + l*ld*N);
-		mul_diag_mat(N, ld, w[1]->exp_V, w[0]->inv_exp_K, w[0]->iB + l*ld*N);
+		mul_diag_mat(N, ld, w[0]->inv_exp_V, w[0]->inv_exp_K, w[0]->iB + l*ld*N);
 		mul_mat_diag(N, ld, w[1]->exp_K, w[1]->exp_V,     w[1]->B + l*ld*N);
-		mul_diag_mat(N, ld, w[0]->exp_V, w[1]->inv_exp_K, w[1]->iB + l*ld*N);
+		mul_diag_mat(N, ld, w[1]->inv_exp_V, w[1]->inv_exp_K, w[1]->iB + l*ld*N);
+
 	}
 
 	#pragma omp parallel for schedule(static, 1)
@@ -86,17 +101,16 @@ static void dqmc(struct sim_data *sim)
 		if (sim->s.sweep % 2 == 0) { // first sweep is up, initialize QdXL
 			for (int f = F - 1; f >= 0; f--)
 				calc_QdX(1, N, ld, w[s]->C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
-						w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
+						w[s]->tmp1N1, w[s]->pvt, w[s]->work, lwork);
 			phases[s] = calc_Gtt(N, ld, LR_NULL, LRL(0), w[s]->g, w[s]->tmpNN1, w[s]->pvt);
 		} else { // first sweep is down, initialize QdX0
 			for (int f = 0; f < F; f++)
 				calc_QdX(0, N, ld, w[s]->C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
-						w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
+						w[s]->tmp1N1, w[s]->pvt, w[s]->work, lwork);
 			phases[s] = calc_Gtt(N, ld, LR0(F - 1), LR_NULL, w[s]->g, w[s]->tmpNN1, w[s]->pvt);
 		}
 	}
 	phase = phases[0]*phases[1];
-
 
 	for (; sim->s.sweep < sim->p.n_sweep; sim->s.sweep++) {
 		const int sig = sig_check_state(sim->s.sweep, sim->p.n_sweep_warm, sim->p.n_sweep);
@@ -119,7 +133,6 @@ static void dqmc(struct sim_data *sim)
 			const int l = sweep_up ? _l : (L - 1 - _l);
 			const int f = (l / n_matmul);
 			const int m = (l % n_matmul);
-
 			if (!sweep_up) { // wrap for down sweep
 				#pragma omp parallel for schedule(static, 1)
 				for (int s = 0; s < N_DOF; s++) {
@@ -130,24 +143,43 @@ static void dqmc(struct sim_data *sim)
 			}
 
 			profile_begin(updates);
-			shuffle(rng, N, site_order);
-			update_delayed(N, ld, n_delay, del, site_order,
-			               rng, hs + N*l, w[0]->g, w[1]->g, &phase,
-			               w[0]->tmpNN1, w[0]->tmpNN2, w[0]->tmpN1,
-			               w[1]->tmpNN1, w[1]->tmpNN2, w[1]->tmpN1);
+			shuffle(rng, N_inter, bond_order);
+			update_shermor(N, ld, N_inter, bonds_inter,
+							bond_order, rng, hs+l*N_inter,
+							w[0]->g, w[1]->g, &phase,
+							Delta_p, Delta_q, weight_comparison_matrice,
+							w[0]->tmpld11, w[0]->tmpld12, w[0]->tmp1N1, 
+							w[0]->tmp1N2, w[0]->tmpld21, w[0]->tmp2N1, 
+							w[1]->tmpld11, w[1]->tmpld12, w[1]->tmp1N1, 
+							w[1]->tmp1N2, w[1]->tmpld21, w[1]->tmp2N1, 
+							w[0]->tmpld22, w[1]->tmpld22
+							);
 			for (int i = 0; i < N; i++) {
-				const int hsil = hs[i + N*l];
-				w[0]->exp_V[i] = exp_lambda[i + N*hsil];
-				w[1]->exp_V[i] = exp_lambda[i + N*!hsil];
+				w[0]->exp_V[i] = 1.0;
+				w[1]->exp_V[i] = 1.0;
+			}
+			for (int i = 0; i < N_inter; i++) {
+				int aa = bonds_inter[0 * N_inter + i];
+				int b = bonds_inter[1 * N_inter + i];
+				int h = hs[l * N_inter + i];
+				// printf("a=%d b=%d hs=%d\n", a, b, h);
+				w[0]->exp_V[aa] *= exp_lambda[i * 4 + h];
+				w[0]->exp_V[b] *= exp_lambda_a[i * 4 + h];
+				w[1]->exp_V[aa] *= exp_lambda[i * 4 + h];
+				w[1]->exp_V[b] *= exp_lambda_a[i * 4 + h];
+			}
+
+			for (int i = 0; i < N; i++) {
+				w[0]->inv_exp_V[i] = 1.0 / w[0]->exp_V[i];
+				w[1]->inv_exp_V[i] = 1.0 / w[1]->exp_V[i];
 			}
 			profile_end(updates);
-
 			const int recalc = sweep_up ? (m == n_matmul - 1) : (m == 0);
 			#pragma omp parallel for schedule(static, 1)
 			for (int s = 0; s < N_DOF; s++) {
 				profile_begin(calcb);
 				mul_mat_diag(N, ld, w[s]->exp_K, w[s]->exp_V, w[s]->B + l*ld*N);
-				mul_diag_mat(N, ld, w[1 - s]->exp_V, w[s]->inv_exp_K, w[s]->iB + l*ld*N);
+				mul_diag_mat(N, ld, w[s]->inv_exp_V, w[s]->inv_exp_K, w[s]->iB + l*ld*N);
 				profile_end(calcb);
 				if (recalc) {
 					profile_begin(multb);
@@ -155,18 +187,22 @@ static void dqmc(struct sim_data *sim)
 							1.0, w[s]->B, w[s]->C + f*ld*N, w[s]->tmpNN1);
 					profile_end(multb);
 					profile_begin(recalc);
+
 					if (sweep_up) {
 						calc_QdX(0, N, ld, w[s]->C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
-								w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
+								w[s]->tmp1N1, w[s]->pvt, w[s]->work, lwork);
 						phases[s] = calc_Gtt(N, ld, LR0(f), LRL(f + 1), w[s]->g, w[s]->tmpNN1, w[s]->pvt);
 					} else {
 						calc_QdX(1, N, ld, w[s]->C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
-								w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
-						phases[s] = calc_Gtt(N, ld, LR0(f - 1), LRL(f), w[s]->g, w[s]->tmpNN1, w[s]->pvt);
+								w[s]->tmp1N1, w[s]->pvt, w[s]->work, lwork);
+						phases[s] = calc_Gtt(N, ld, LR0(f - 1), LRL(f), w[s]->g_check, w[s]->tmpNN1, w[s]->pvt);
+
+						matdiff(N, N, w[s]->g, ld, w[s]->g_check, ld, sim->s.sweep, l, s);
+						memcpy(w[s]->g, w[s]->g_check, N * ld * sizeof(num));
 					}
 					profile_end(recalc);
 				} else {
-					if (sweep_up) {
+					if (sweep_up) {					
 						profile_begin(wrap);
 						wrap(N, ld, w[s]->g, w[s]->B + l*ld*N, w[s]->iB + l*ld*N, w[s]->tmpNN1);
 						profile_end(wrap);
@@ -189,7 +225,6 @@ static void dqmc(struct sim_data *sim)
 				profile_end(meas_eq);
 			}
 		}
-
 		if (enabled_uneqlt && (sim->s.sweep % sim->p.period_uneqlt == 0) ) {
 			#pragma omp parallel for schedule(static, 1)
 			for (int s = 0; s < N_DOF; s++) {
@@ -200,11 +235,11 @@ static void dqmc(struct sim_data *sim)
 				if (sweep_up) { // then QdX0 is fresh, QdXL is old
 					for (int f = F - 1; f >= 0; f--)
 						calc_QdX(1, N, ld, w[s]->C + f*ld*N, QdXL(f + 1), QdXL(f), LRL(f),
-						         w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
+						         w[s]->tmp1N1, w[s]->pvt, w[s]->work, lwork);
 				} else {
 					for (int f = 0; f < F; f++)
 						calc_QdX(0, N, ld, w[s]->C + f*ld*N, QdX0(f - 1), QdX0(f), LR0(f),
-						         w[s]->tmpN1, w[s]->pvt, w[s]->work, lwork);
+						         w[s]->tmp1N1, w[s]->pvt, w[s]->work, lwork);
 				}
 				calc_ue_g(N, ld, L, F, n_matmul, w[s]->B, w[s]->iB,
 				          w[s]->iL_0, w[s]->R_0, w[s]->iL_L, w[s]->R_L,

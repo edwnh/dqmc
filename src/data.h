@@ -4,7 +4,8 @@
 #include "linalg.h"
 
 struct params {
-	int N, L;
+	int N, L, N_inter;
+	int *bonds_inter;
 	int *map_i, *map_ij;
 	int *bonds, *map_bs, *map_bb;
 	num *peierlsu, *peierlsd;
@@ -21,7 +22,7 @@ struct params {
 	int *degen_i, *degen_ij, *degen_bs, *degen_bb;
 	num *exp_Ku, *exp_Kd, *inv_exp_Ku, *inv_exp_Kd;
 	num *exp_halfKu, *exp_halfKd, *inv_exp_halfKu, *inv_exp_halfKd;
-	double *exp_lambda, *del;
+	double *exp_lambda, *exp_lambda_a, *Delta_p, *Delta_q, *weight_comparison_matrice;
 	int F, n_sweep;
 };
 
@@ -64,7 +65,7 @@ struct meas_uneqlt {
 
 struct workspace {
 	num *inv_exp_K, *exp_K;
-	num *exp_V;
+	num *inv_exp_V, *exp_V;
 	num *iB, *B, *C;
 	num *Q_L, *d_L, *X_L;
 	num *iL_L, *R_L, *phase_iL_L;
@@ -72,7 +73,8 @@ struct workspace {
 	num *iL_0, *R_0, *phase_iL_0;
 	num *g;
 	num *exp_halfK, *inv_exp_halfK;
-	num *tmpNN1, *tmpNN2, *tmpN1, *tmpN2;
+	num *g_check;
+	num *tmpNN1, *tmpNN2, *tmpld11, *tmpld12, *tmp1N1, *tmp1N2, *tmpld21, *tmp2N1, *tmpld22;
 	int *pvt;
 	num *work;
 	num *G0t, *Gtt, *Gt0;
