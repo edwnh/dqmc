@@ -47,29 +47,30 @@ class _Ctx:
             "params/period_eqlt",
             "params/L",
             "params/n_sweep_meas",
+            "metadata/mu",
             "metadata/Ny",
             "metadata/Nx",
             "metadata/beta",
             "metadata/bps",
             "params/bonds",
         )
-        self.params = dict(zip(param_keys, util.load_firstfile(path, *param_keys)))
-        self.Ny = int(self.params["metadata/Ny"])
-        self.Nx = int(self.params["metadata/Nx"])
-        self.L = int(self.params["params/L"])
-        self.beta = float(self.params["metadata/beta"])
-        self.bps = int(self.params["metadata/bps"])
-        self.bonds = self.params["params/bonds"].reshape(2, self.bps, self.Ny, self.Nx)
-
-        self.xy_sym = self.Nx == self.Ny
+        stripped_keys = tuple(k.split("/")[-1] for k in param_keys)
+        self.params = dict(zip(stripped_keys, util.load_firstfile(path, *param_keys)))
+        self.Ny = int(self.params["Ny"])
+        self.Nx = int(self.params["Nx"])
+        self.L = int(self.params["L"])
+        self.mu = float(self.params["mu"])
+        self.beta = float(self.params["beta"])
+        self.bps = int(self.params["bps"])
+        self.bonds = self.params["bonds"].reshape(2, self.bps, self.Ny, self.Nx)
 
         self.data = dict(zip(needed, util.load(path, *needed)))
         self.print_status()
         self.reshape_and_symmetrize()
 
     def print_status(self):
-        full_n_sample = self.params["params/n_sweep_meas"] * (
-            self.L // self.params["params/period_eqlt"]
+        full_n_sample = self.params["n_sweep_meas"] * (
+            self.L // self.params["period_eqlt"]
         )
         n_sample = self.data["meas_eqlt/n_sample"]
         frac = n_sample.mean() / full_n_sample
@@ -87,7 +88,7 @@ class _Ctx:
         def _eq_corr_ij(k):
             if k in self.data:
                 self.data[k].shape = -1, Ny, Nx
-                self.data[k] = sym_square(self.data[k], xy_sym=self.xy_sym)
+                self.data[k] = sym_square(self.data[k], xy_sym=(self.Nx == self.Ny))
 
         def _ue_corr_ij(k, tau_sym=False):
             if k in self.data:
@@ -106,6 +107,7 @@ class _Ctx:
 
         _eq_corr_ij("meas_eqlt/nn")
         _eq_corr_ij("meas_eqlt/zz")
+        _eq_corr_ij("meas_eqlt/xx")
         _eq_corr_ij("meas_eqlt/g00")
         _eq_corr_ij("meas_eqlt/pair_sw")
 
@@ -208,6 +210,18 @@ def _zzr(ctx):
         ctx.data["meas_eqlt/n_sample"],
         ctx.data["meas_eqlt/sign"],
         ctx.data["meas_eqlt/zz"],
+    )
+
+
+@observable(
+    description="equal-time spin_x-spin_x correlator",
+    requires=("meas_eqlt/n_sample", "meas_eqlt/sign", "meas_eqlt/xx"),
+)
+def _xxr(ctx):
+    return util.jackknife_noniid(
+        ctx.data["meas_eqlt/n_sample"],
+        ctx.data["meas_eqlt/sign"],
+        ctx.data["meas_eqlt/xx"],
     )
 
 
@@ -433,4 +447,4 @@ def get(path, *names):
         raise KeyError(f"unknown observables: {missing}. available: {_OBS.keys()}")
     needed = set(req for n in names for req in _OBS[n]["requires"])
     ctx = _Ctx(path, needed)
-    return {n: _OBS[n]["fn"](ctx) for n in names}
+    return ctx.params | {n: _OBS[n]["fn"](ctx) for n in names}
