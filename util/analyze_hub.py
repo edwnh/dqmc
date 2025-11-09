@@ -104,6 +104,7 @@ class _Ctx:
                     self.data[k] = sym_tau(self.data[k])
 
         _site_observable("meas_eqlt/density")
+        _site_observable("meas_eqlt/double_occ")
 
         _eq_corr_ij("meas_eqlt/nn")
         _eq_corr_ij("meas_eqlt/zz")
@@ -160,6 +161,42 @@ def _den(ctx):
         ctx.data["meas_eqlt/n_sample"],
         ctx.data["meas_eqlt/sign"],
         ctx.data["meas_eqlt/density"],
+    )
+
+
+@observable(
+    description="double occupancy",
+    requires=("meas_eqlt/n_sample", "meas_eqlt/sign", "meas_eqlt/double_occ"),
+)
+def _docc(ctx):
+    return util.jackknife_noniid(
+        ctx.data["meas_eqlt/n_sample"],
+        ctx.data["meas_eqlt/sign"],
+        ctx.data["meas_eqlt/double_occ"],
+    )
+
+
+@observable(
+    description="equal-time Green's function (real space)",
+    requires=("meas_eqlt/n_sample", "meas_eqlt/sign", "meas_eqlt/g00"),
+)
+def _gr(ctx):
+    return util.jackknife_noniid(
+        ctx.data["meas_eqlt/n_sample"],
+        ctx.data["meas_eqlt/sign"],
+        ctx.data["meas_eqlt/g00"],
+    )
+
+
+@observable(
+    description="equal-time Green's function (momentum space)",
+    requires=("meas_eqlt/n_sample", "meas_eqlt/sign", "meas_eqlt/g00"),
+)
+def _gk(ctx):
+    return util.jackknife_noniid(
+        ctx.data["meas_eqlt/n_sample"],
+        ctx.data["meas_eqlt/sign"],
+        np.fft.fft2(ctx.data["meas_eqlt/g00"]).real,
     )
 
 
@@ -257,7 +294,7 @@ def _nnrt(ctx):
     return util.jackknife_noniid(
         ctx.data["meas_uneqlt/n_sample"],
         ctx.data["meas_uneqlt/sign"],
-        ctx.data["meas_uneqlt/nn"],
+        ctx.data["meas_uneqlt/nn"],  # TODO: subtract disconnected part
     )
 
 
