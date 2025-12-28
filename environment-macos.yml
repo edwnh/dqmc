@@ -1,0 +1,9 @@
+name: dqmc
+channels:
+  - conda-forge
+dependencies:
+  - h5py
+  - scipy
+  - pip
+  - pip:
+    - -e .

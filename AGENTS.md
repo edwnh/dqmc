@@ -30,7 +30,12 @@ Installable package (`pip install -e .`) with CLI tool `dqmc-util`.
 
 ### Prerequisites
 ```bash
-conda env create -f environment.yml && conda activate dqmc
+# For macOS
+conda env create -f environment-macos.yml && conda activate dqmc
+
+# For Linux (includes Intel compilers and MKL)
+conda env create -f environment-linux.yml && conda activate dqmc
+
 make deps  # downloads HDF5
 ```
 

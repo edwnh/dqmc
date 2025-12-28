@@ -17,7 +17,7 @@ Linux and macOS are the only supported OS currently.
 - None. Libraries are statically linked by default.
 
 ### Python package (`dqmc_util`)
-Installed automatically via `pip install -e .` (included in environment.yml).
+Installed automatically via `pip install -e .` (included in `environment-macos.yml` or `environment-linux.yml`).
 Dependencies: `numpy`, `scipy`, `h5py`
 
 ## Compilation instructions
@@ -25,9 +25,13 @@ Dependencies: `numpy`, `scipy`, `h5py`
 These instructions should work on most Linux and macOS systems. The easiest way to try the code is to create a GitHub Codespaces with this repository.
 
 1.  If conda/mamba is not installed yet, install conda/mamba (recommend miniforge or micromamba) and initialize (`conda init`).
-2.  Create a new conda environment according to environment.yml.
+2.  Create a new conda environment. Use the macOS file on macOS and the Linux file on Linux.
     ```bash
-    conda env create -f environment.yml
+    # macOS
+    conda env create -f environment-macos.yml
+
+    # Linux (Intel compiler + MKL)
+    conda env create -f environment-linux.yml
     ```
     Wait for all the packages to download and install. This might take a while. Then activate the new environment named `dqmc`.
     ```bash
