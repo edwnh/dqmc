@@ -64,7 +64,7 @@ def jackknife_noniid(*args, f=lambda n, ns, nsx: (nsx.T/ns.T).T.real):
     the first argument must be equal (or proportional) to the number of samples
     in each bin.
     the keyword argument f is a function that defines the desired statistic in
-    terms of the arguments, summed over the bin index.
+        terms of the arguments, summed over the bin index.
     '''
     nbin = args[0].shape[0]
     sums = tuple(a.sum(0) for a in args)

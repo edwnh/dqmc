@@ -1,4 +1,6 @@
 """
+Maximum entropy analytic continuation.
+
 references:
 https://doi.org/10.1016/0370-1573(95)00074-7
 https://www.cond-mat.de/events/correl12/manuscripts/jarrell.pdf

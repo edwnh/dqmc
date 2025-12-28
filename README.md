@@ -16,10 +16,9 @@ Linux and macOS are the only supported OS currently.
 ### Runtime dependencies
 - None. Libraries are statically linked by default.
 
-### Python packages (for scripts in `util/`)
-- `numpy`
-- `scipy`
-- `h5py`
+### Python package (`dqmc_util`)
+Installed automatically via `pip install -e .` (included in environment.yml).
+Dependencies: `numpy`, `scipy`, `h5py`
 
 ## Compilation instructions
 
@@ -46,19 +45,19 @@ These instructions should work on most Linux and macOS systems. The easiest way 
 
 ## Usage
 
-1. Generate simulation files using `gen_1band_hub.py` or a similar script. Parameters can be passed through the command line. A list of parameters and their default values can be found in the function definitions of `create_1` and `create_batch` in `util/gen_1band_hub.py`.
+1. Generate simulation files using `dqmc-util gen` or a similar script. Parameters can be passed through the command line. A list of parameters and their default values can be found in the function definitions of `create_1` and `create_batch` in `dqmc_util/gen_1band_hub.py`.
 2. Perform the Monte Carlo sweeps using the `build/dqmc` binary
     1. Usage: `./build/dqmc [-b] [-l log_file.log] [-s interval] [-t max_time] sim_file.h5`.
         * `-b`: Benchmark mode, data is not saved.
         * `-l log_file.log`: Write output to log_file.log instead of stdout.
         * `-s interval`: Saves a checkpoint every interval seconds.
         * `-t max_time`: Run for a maximum of max_time seconds. Saves a checkpoint if simulation does not complete.
-4. Analyze the data using the scripts in `util/`. Typically, this is done inside Jupyter notebooks.
+3. Analyze the data using the `dqmc_util` package. Typically, this is done inside Jupyter notebooks.
 
 ### Example
 
 ```
-(dqmc) @edwnh ➜ /workspaces/dqmc (master) $ python util/gen_1band_hub.py
+(dqmc) @edwnh ➜ /workspaces/dqmc (master) $ dqmc-util gen
 created simulation files: sim_0.h5
 parameter file: sim.h5.params
 (dqmc) @edwnh ➜ /workspaces/dqmc (master) $ build/dqmc sim_0.h5
@@ -80,7 +79,7 @@ thread_1/1_______|_% of all_|___total (s)_|___us per call_|___# calls
            calcb |    1.992 |       0.421 |         2.394 |    176000
          meas_eq |    0.970 |       0.205 |        20.531 |     10000
 ---------------------------------------------------------------------
-(dqmc) @edwnh ➜ /workspaces/dqmc (master) $ python util/summary.py sim_0.h5
+(dqmc) @edwnh ➜ /workspaces/dqmc (master) $ dqmc-util summary sim_0.h5
 sim_0.h5
 n_sample=10000, sweep=2200/2200
 <sign>=1.0
@@ -99,7 +98,7 @@ One Markov chain = one HDF5 file = one bin. Each HDF5 file contains the followin
 * meas_eqlt: equal-time measurements
 * meas_uneqlt: unequal-time measurements i.e. <O(tau) P>. This group exists only if unequal-time measurements are enabled.
 
-`util/gen_1band_hub.py` is the best reference to see the contents of each group.
+`dqmc_util/gen_1band_hub.py` is the best reference to see the contents of each group.
 
 ### Simulation file generation
 
@@ -147,16 +146,14 @@ List of parameters
         * `numeric.h`: type definitions and `RC()` macro for real/complex dual compilation
         * `sim_types.h`: X-macro lists defining simulation parameters and measurement arrays
         * `updates.c/updates.h`: propose changes to the auxiliary field and update the Green's function accordingly
-* `src_py`: (unmaintained) Python implementations of the DQMC algorithm
-    * `dqmc.py`: (legacy) Python implementation of DQMC code with quadratic beta scaling.
-    * `ltdqmc.py`: Python implementation of DQMC code with linear beta scaling.
-* `util`: various python scripts for simulation file generation and data analysis
+* `dqmc_util`: Python package for simulation file generation and data analysis (install with `pip install -e .`)
     * `analyze_hub.py`: analysis routines for Hubbard model (symmetrization, correlators, structure factors)
+    * `core.py`: utility functions for data loading and jackknife resampling
     * `gen_1band_hub.py`: generate HDF5 simulation file for the Hubbard model
-    * `get_mu.py`: estimate desired chemical potential for a target filling based on fitting to a sweep of simulations at different chemical potentials
+    * `get_mu.py`: estimate desired chemical potential for a target filling
     * `info.py`: print out some parameters of a single simulation file
     * `maxent.py`: code for Maximum Entropy Method analytic continuation
-    * `print_n.py`: print out average sign and density, including errorbars, for a batch of simulation files
+    * `print_n.py`: print out average sign and density with errorbars
     * `push.py`: push simulation filenames onto a stack file
-    * `summary.py`: print out average sign, density, and local moment for a single simulation file
-    * `util.py`: utility functions for data analysis
+    * `summary.py`: print out average sign, density, and local moment
+    * `cli.py`: unified CLI entry point (`dqmc-util` command)

@@ -1,27 +1,30 @@
 import sys
 import numpy as np
 from scipy.interpolate import CubicSpline
-import util
+
+from . import core
 
 
 def get_mu_n_chi(path):
-    period_eqlt, L, n_sweep_meas, N, mu, beta = util.load_firstfile(path,
+    period_eqlt, L, n_sweep_meas, N, mu, beta = core.load_firstfile(path,
         "params/period_eqlt", "params/L", "params/n_sweep_meas", "params/N", "metadata/mu", "metadata/beta")
-    n_sample, sign, density, nn = util.load(path,
+    n_sample, sign, density, nn = core.load(path,
         "meas_eqlt/n_sample", "meas_eqlt/sign", "meas_eqlt/density", "meas_eqlt/nn")
 
     full_n_sample = n_sweep_meas*(L//period_eqlt)
     frac = n_sample.mean()/full_n_sample
     print(f"{path}: complete bins {(n_sample == full_n_sample).sum()}/{len(n_sample)}, samples {frac*100:.3f}%")
 
-    nj = util.jackknife_noniid(n_sample, sign, density.sum(1))
-    chij = beta*util.jackknife_noniid(n_sample, sign, density.sum(1), nn.sum(1),
+    nj = core.jackknife_noniid(n_sample, sign, density.sum(1))
+    chij = beta*core.jackknife_noniid(n_sample, sign, density.sum(1), nn.sum(1),
                                       f=lambda ns, s, n, nn: ((nn.T/s.T) - N*((n.T/s.T)**2)).T)
 
     return mu, nj[0], nj[1], chij[0], chij[1]
 
 
-def main(argv):
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
     target = float(argv[1])
     paths = argv[2:]
     if len(paths) == 1:
@@ -38,4 +41,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main()

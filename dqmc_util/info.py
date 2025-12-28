@@ -16,8 +16,9 @@ def info(path):
             print("{} = {}".format(k, f["params"][k][...]))
 
 
-def main(argv):
-    #rework this function to make sure it works on Windows
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
     for path_spec in argv[1:]:
         files = sorted(glob(path_spec))
         if len(files) == 0:
@@ -28,4 +29,4 @@ def main(argv):
                 info(f)
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main()

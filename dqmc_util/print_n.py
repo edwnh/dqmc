@@ -1,10 +1,12 @@
 import sys
 from glob import glob
 
-import analyze_hub
+from . import analyze_hub
 
 
-def main(argv):
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
     # wildcard path expansion on Windows
     for path in argv[1:]:
         paths = sorted(glob(path))
@@ -18,4 +20,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main()

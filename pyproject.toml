@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dqmc-util"
+version = "0.1.0"
+description = "Python utilities for DQMC simulations"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "scipy",
+    "h5py",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib"]
+
+[project.scripts]
+dqmc-util = "dqmc_util.cli:main"

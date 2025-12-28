@@ -351,7 +351,9 @@ def create_batch(Nfiles=1, prefix=None, seed=None, **kwargs):
     print("parameter file:", file_p)
 
 
-def main(argv):
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
     kwargs = {}
     for arg in argv[1:]:
         eq = arg.find("=")
@@ -371,4 +373,4 @@ def main(argv):
     create_batch(**kwargs)
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main()
