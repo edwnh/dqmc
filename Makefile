@@ -2,15 +2,19 @@ BUILD_DIR = build
 TARGET = $(BUILD_DIR)/dqmc
 
 UNAME := $(shell uname)
+HDF_VERSION = 2.0.0
 
 ifeq ($(UNAME), Linux)
 	CC = icx
 	MKLROOT ?= $(CONDA_PREFIX)
-	HDF_PREFIX ?= HDF5-1.14.5-Linux/HDF_Group/HDF5/1.14.5
+	HDF_DIST = hdf5-$(HDF_VERSION)-ubuntu-2404_intel.tar.gz
 else ifeq ($(UNAME), Darwin)
 	CC = clang
-	HDF_PREFIX ?= HDF5-1.14.5-Darwin/HDF_Group/HDF5/1.14.5
+	HDF_DIST = hdf5-$(HDF_VERSION)-macos14_clang.tar.gz
 endif
+
+HDF_URL = https://github.com/HDFGroup/hdf5/releases/download/$(HDF_VERSION)/$(HDF_DIST)
+HDF_PREFIX ?= HDF5-$(HDF_VERSION)-$(UNAME)/HDF_Group/HDF5/$(HDF_VERSION)
 
 SRCS = \
 	src/main_1.c \
@@ -86,7 +90,7 @@ else ifeq ($(UNAME), Darwin)
 	# LDFLAGS += -lhdf5 -lhdf5_hl
 endif
 
-.PHONY: all clean
+.PHONY: all clean deps
 
 all: $(TARGET)
 
@@ -111,5 +115,12 @@ $(BUILD_DIR)/cplx/%.o : %.c
 
 clean:
 	$(RM) -r $(BUILD_DIR)
+
+deps:
+	@curl -fL "$(HDF_URL)" -o "$(HDF_DIST)" && \
+	tar -xf "$(HDF_DIST)" && \
+	tar -xf hdf5/HDF5-$(HDF_VERSION)-$(UNAME).tar.gz && \
+	rm -rf hdf5/ "$(HDF_DIST)" && \
+	echo "done"
 
 -include $(OBJS:%.o=%.d) $(OBJS_REAL:%.o=%.d) $(OBJS_CPLX:%.o=%.d)

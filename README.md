@@ -21,33 +21,22 @@ Linux and macOS are the only supported OS currently.
 - `scipy`
 - `h5py`
 
-On a local computer: install conda/mamba (recommend miniforge or micromamba) and set up a new environment using `environment.yml`. You can probably follow the instructions below for the GitHub Codespace.
+## Compilation instructions
 
-On a cluster: you may have HDF5, Intel compilers and MKL, and Python packages available in your cluster's modules. Modify the variables `MKLROOT` and `HDF_PREFIX` in `Makefile` accordingly. You might also need to switch to dynamic linking. Alternatively, it might still be easier to follow the  compile a binary locally or in a codespace and upload the binary to the cluster.
+These instructions should work on most Linux and macOS systems. The easiest way to try the code is to create a GitHub Codespaces with this repository.
 
-## Linux compilation instructions
-
-The easiest way to try the code is to create a GitHub Codespaces with this repository.
-
-1.  First, install conda/mamba (recommend miniforge or micromamba). Initialize conda.
-    ```bash
-    conda init
-    ```
-    Close (Ctrl+D) and reopen the terminal (Ctrl+`).
+1.  If conda/mamba is not installed yet, install conda/mamba (recommend miniforge or micromamba) and initialize (`conda init`).
 2.  Create a new conda environment according to environment.yml.
     ```bash
     conda env create -f environment.yml
     ```
-    Wait for all the packages to download and install. This might take a few minutes. Then activate the new environment named `dqmc`.
+    Wait for all the packages to download and install. This might take a while. Then activate the new environment named `dqmc`.
     ```bash
     conda activate dqmc
     ```
-3.  Download and extract the latest release of HDF5.
+3.  Download and extract the HDF5 dependency.
     ```bash
-    wget https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.5/hdf5-1.14.5-ubuntu-2404_gcc.tar.gz
-    tar xf hdf5-1.14.5-ubuntu-2404_gcc.tar.gz
-    tar xf hdf5/HDF5-1.14.5-Linux.tar.gz
-    rm -r hdf5 hdf5-1.14.5-ubuntu-2404_gcc.tar.gz
+    make deps
     ```
 4.  Now the environment is ready for compiling and running the code.
     ```bash
@@ -59,7 +48,7 @@ The easiest way to try the code is to create a GitHub Codespaces with this repos
 
 1. Generate simulation files using `gen_1band_hub.py` or a similar script. Parameters can be passed through the command line. A list of parameters and their default values can be found in the function definitions of `create_1` and `create_batch` in `util/gen_1band_hub.py`.
 2. Perform the Monte Carlo sweeps using the `build/dqmc` binary
-    1. Single file mode usage: `./build/dqmc [-b] [-l log_file.log] [-s interval] [-t max_time] sim_file.h5`.
+    1. Usage: `./build/dqmc [-b] [-l log_file.log] [-s interval] [-t max_time] sim_file.h5`.
         * `-b`: Benchmark mode, data is not saved.
         * `-l log_file.log`: Write output to log_file.log instead of stdout.
         * `-s interval`: Saves a checkpoint every interval seconds.
