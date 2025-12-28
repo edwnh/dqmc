@@ -118,7 +118,7 @@ List of parameters
 * `n_delay`: Number of updates to group together in the delayed update scheme. Default: `n_delay=16`.
 * `n_matmul`: Half the maximum number of direct matrix multiplications before applying a QR decomposition for stability. Default: `n_matmul=8`.
 * `n_sweep_warm`: Number of warmup sweeps. Default: `n_sweep_warm=200`.
-* `n_sweep_meas`: Number of measurement sweeps. Default: `n_sweep_meas=800`.
+* `n_sweep_meas`: Number of measurement sweeps. Default: `n_sweep_meas=2000`.
 * `period_eqlt`: Period of equal-time measurements. 1 means equal-time measurements are performed `L` times per spacetime sweep. Default: `period_eqlt=8`.
 * `period_uneqlt`: Period of unequal-time measurements. 1 means unequal-time measurements are performed once per spacetime sweep. 0 means disabled. Default: `period_uneqlt=0`.
 * `meas_bond_corr`: Whether to measure bond-bond correlations (current, kinetic energy, bond singlets). Default: `meas_bond_corr=1`.
@@ -129,24 +129,29 @@ List of parameters
 ### Code description
 
 * `build`: build directory
-    * `Makefile`: makefile
 * `src`: C code
-    * `data.c/data.h`: loading and saving simulation data to and from the simulation file
-    * `dqmc.c/dqmc.h`: core DQMC algorithm
-    * `greens.c/greens.h`: functions for calculating equal and unequal-time Green's functions
-    * `linalg.h`: inline wrappers for BLAS/LAPACK functions, to minimize code changes when complex numbers are used
     * `main_1.c`: main function for a binary that runs only a single simulation file
     * `main_stack.c`: main function for a binary that runs the simulation files listed in the stack file
-    * `meas.c/meas.h`: code for performing measurements
     * `mem.c/mem.h`: minimal implementation of an aligned memory pool
     * `prof.c/prof.h`: code related to profiling
     * `rand.h`: random number generator
     * `sig.c/sig.h`: signal handling
     * `time_.h`: high resolution timer
-    * `updates.c/updates.h`: propose changes to the auxiliary field and update the Green's function accordingly
-* `src_py`
-    * `dqmc.py`: python implementation of dqmc code.
+    * `wrapper.c/wrapper.h`: wrapper for the core DQMC routine with file I/O and checkpointing
+    * `rc/`: files compiled twice for real and complex matrix support (via `-DUSE_CPLX`)
+        * `data.c/data.h/data_decl.h`: loading and saving simulation data to and from the simulation file
+        * `dqmc.c/dqmc_decl.h`: core DQMC algorithm
+        * `greens.c/greens.h`: functions for calculating equal and unequal-time Green's functions
+        * `linalg.h`: inline wrappers for BLAS/LAPACK functions
+        * `meas.c/meas.h`: code for performing measurements
+        * `numeric.h`: type definitions and `RC()` macro for real/complex dual compilation
+        * `sim_types.h`: X-macro lists defining simulation parameters and measurement arrays
+        * `updates.c/updates.h`: propose changes to the auxiliary field and update the Green's function accordingly
+* `src_py`: (unmaintained) Python implementations of the DQMC algorithm
+    * `dqmc.py`: (legacy) Python implementation of DQMC code with quadratic beta scaling.
+    * `ltdqmc.py`: Python implementation of DQMC code with linear beta scaling.
 * `util`: various python scripts for simulation file generation and data analysis
+    * `analyze_hub.py`: analysis routines for Hubbard model (symmetrization, correlators, structure factors)
     * `gen_1band_hub.py`: generate HDF5 simulation file for the Hubbard model
     * `get_mu.py`: estimate desired chemical potential for a target filling based on fitting to a sweep of simulations at different chemical potentials
     * `info.py`: print out some parameters of a single simulation file
