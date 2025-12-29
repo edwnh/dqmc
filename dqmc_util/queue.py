@@ -138,3 +138,7 @@ def dequeue_main(argv=None):
             notfound += 1
 
     print(f"removed={removed} not_in_todo={notfound}")
+
+
+if __name__ == "__main__":
+    enqueue_main()

@@ -66,7 +66,7 @@ dqmc-util gen U=8 L=40 Nfiles=160 prefix=U8L40/bin
 dqmc-util enqueue queue U8L40/*.h5
 
 # 3. Run 8 parallel workers (typically from a job script)
-seq 8 | xargs -P 0 -I{} dqmc-util worker queue ./build/dqmc -s 900 -t 7200
+dqmc-util worker queue ./build/dqmc -n 8 -s 900 -t 7200
 
 # 4. Monitor queue status
 dqmc-util queue-status queue
