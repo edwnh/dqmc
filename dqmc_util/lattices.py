@@ -3,7 +3,7 @@
 import numpy as np
 
 
-def make_square_2d(Nx, Ny, tp=0.0, nflux=0, trans_sym=True):
+def make_square_2d(Nx, Ny, tp, nflux, trans_sym):
     """
     Build geometry data for a 2D square lattice with periodic boundaries.
     
@@ -21,7 +21,7 @@ def make_square_2d(Nx, Ny, tp=0.0, nflux=0, trans_sym=True):
     Returns
     -------
     dict with keys:
-        N, num_b, num_i, num_ij, num_bs, num_bb,
+        N, bps, num_b, num_i, num_ij, num_bs, num_bb,
         bonds, map_i, map_ij, map_bs, map_bb,
         degen_i, degen_ij, degen_bs, degen_bb,
         tij, peierls

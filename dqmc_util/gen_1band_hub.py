@@ -110,7 +110,7 @@ def create_1(file_sim, file_params, init_rng, overwrite=False,**kwargs):
     p = SimParams(**{k: v for k, v in kwargs.items() if k in {f.name for f in fields(SimParams)}})
     verify_params(p)
 
-    lat = make_square_2d(p.Nx, p.Ny, tp=p.tp, nflux=p.nflux, trans_sym=bool(p.trans_sym))
+    lat = make_square_2d(p.Nx, p.Ny, p.tp, p.nflux, p.trans_sym)
     N = lat["N"]
 
     dtype_num = np.complex128 if p.nflux != 0 else np.float64
@@ -206,6 +206,10 @@ def create_batch(Nfiles=1, prefix=None, seed=None, **kwargs):
     """Create multiple simulation files with independent RNG streams."""
     init_rng = rand_seed_urandom() if seed is None else rand_seed_splitmix64(seed)
     prefix = prefix or "sim"
+
+    dirname = os.path.dirname(prefix)
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
 
     file_0 = f"{prefix}_0.h5"
     file_p = f"{prefix}.h5.params"
