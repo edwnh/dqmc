@@ -71,7 +71,7 @@ dqmc-util dequeue /path/to/queue 'sim_*.h5'     # remove from queue
 2. **Cluster / production runs**
    - Build the `dqmc` binary on a compute cluster login node.
    - Run a batching script (often named something like `create_batch.py`) that imports and calls functions from `dqmc_util.gen_1band_hub`, iterating over arrays/grids of parameters to generate many HDF5 files across directories.
-   - Run the jobs on the cluster, then download the resulting HDF5 files locally.
+   - Run the jobs on the cluster (typically 100s - 1000s of jobs, each lasting hours to days), then download the resulting HDF5 files locally.
    - Do analysis locally in Jupyter notebooks; notebooks typically `from dqmc_util import analyze_hub` and use its `get(...)` function to load/organize results.
 
 ### Tests (`test/`)
