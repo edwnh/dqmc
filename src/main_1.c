@@ -55,14 +55,8 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	int status = dqmc_wrapper(argv[optind], log_file,
-	                          atoi(save_interval) * TICK_PER_SEC,
-	                          atoi(max_time) * TICK_PER_SEC,
-	                          bench);
-
-	if (status < 0) {
-		fprintf(stderr, "dqmc_wrapper() failed: %d", status);
-		return 1;
-	}
-	return 0;
+	return dqmc_wrapper(argv[optind], log_file,
+	                    atoi(save_interval) * TICK_PER_SEC,
+	                    atoi(max_time) * TICK_PER_SEC,
+	                    bench);
 }

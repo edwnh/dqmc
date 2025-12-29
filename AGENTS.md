@@ -53,6 +53,14 @@ build/dqmc -s 300 -t 3600 sim_0.h5              # with checkpointing
 dqmc-util summary sim_0.h5                      # check results
 ```
 
+### Sharded Queue (for clusters)
+```bash
+dqmc-util enqueue /path/to/queue 'sim_*.h5'     # add jobs to queue
+dqmc-util queue-status /path/to/queue           # check queue status
+dqmc-util worker /path/to/queue ./build/dqmc -s 300 -t 3600  # run worker
+dqmc-util dequeue /path/to/queue 'sim_*.h5'     # remove from queue
+```
+
 ## Common Workflows
 
 1. **Local dev**

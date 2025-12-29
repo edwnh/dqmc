@@ -12,7 +12,11 @@ def main():
         "get_mu": "get_mu",
         "print-n": "print_n",
         "print_n": "print_n",
-        "push": "push",
+        # Queue commands
+        "enqueue": "enqueue",
+        "worker": "worker",
+        "queue-status": "queue_status",
+        "dequeue": "dequeue",
     }
 
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
@@ -23,7 +27,11 @@ def main():
         print("  summary             Quick simulation status")
         print("  get-mu, get_mu      Find chemical potential for target filling")
         print("  print-n, print_n    Print sign and density")
-        print("  push                Append file paths to stack file")
+        print("\nQueue commands (sharded directory queue):")
+        print("  enqueue             Add .h5 files to queue")
+        print("  worker              Run worker loop processing queue")
+        print("  queue-status        Show queue counts")
+        print("  dequeue             Remove files from todo queue")
         return
 
     cmd = sys.argv[1]
@@ -51,9 +59,18 @@ def main():
     elif module_name == "print_n":
         from . import print_n
         print_n.main()
-    elif module_name == "push":
-        from . import push
-        push.main()
+    elif module_name == "enqueue":
+        from . import queue
+        queue.enqueue_main()
+    elif module_name == "worker":
+        from . import worker
+        worker.main()
+    elif module_name == "queue_status":
+        from . import queue
+        queue.status_main()
+    elif module_name == "dequeue":
+        from . import queue
+        queue.dequeue_main()
 
 
 if __name__ == "__main__":

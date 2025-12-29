@@ -11,7 +11,7 @@
 #include "updates.h"
 #include "wrapper.h"
 
-// returns -1 for failure, 0 for completion, 1 for partial completion
+// returns 0 for completion, 1 for partial completion
 int RC(dqmc)(struct RC(sim_data) *sim)
 {
 	// check existing progress

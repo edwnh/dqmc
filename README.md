@@ -50,15 +50,31 @@ These instructions should work on most Linux and macOS systems. The easiest way 
 ## Usage
 
 1. Generate simulation files using `dqmc-util gen` or a similar script. Parameters can be passed through the command line. A list of parameters and their default values can be found in the function definitions of `create_1` and `create_batch` in `dqmc_util/gen_1band_hub.py`.
-2. Perform the Monte Carlo sweeps using the `build/dqmc` binary
-    1. Usage: `./build/dqmc [-b] [-l log_file.log] [-s interval] [-t max_time] sim_file.h5`.
-        * `-b`: Benchmark mode, data is not saved.
-        * `-l log_file.log`: Write output to log_file.log instead of stdout.
-        * `-s interval`: Saves a checkpoint every interval seconds.
-        * `-t max_time`: Run for a maximum of max_time seconds. Saves a checkpoint if simulation does not complete.
+2. Perform the Monte Carlo sweeps using the `build/dqmc` binary directly, or the sharded queue system described below.
 3. Analyze the data using the `dqmc_util` package. Typically, this is done inside Jupyter notebooks.
 
-### Example
+### Running on clusters with the sharded queue
+
+For running many simulations on compute clusters, the sharded directory queue system provides a flexible option to run many workers in parallel. For example,
+
+```bash
+# 1. Generate simulation files
+mkdir U8L40
+dqmc-util gen U=8 L=40 Nfiles=160 prefix=U8L40/bin
+
+# 2. Enqueue all .h5 files
+dqmc-util enqueue queue U8L40/*.h5
+
+# 3. Run 8 parallel workers (typically from a job script)
+seq 8 | xargs -P 0 -I{} dqmc-util worker queue ./build/dqmc -s 900 -t 7200
+
+# 4. Monitor queue status
+dqmc-util queue-status queue
+```
+
+The queue uses atomic `rename()` operations and 128 shards to avoid lock contention on distributed filesystems like Lustre. Workers claim tasks by moving symlinks from `todo/` to `running/`, and move them to `done/` on completion. Checkpointed jobs are returned to `todo/` for future workers to pick up.
+
+### Examples
 
 ```
 (dqmc) @edwnh ➜ /workspaces/dqmc (master) $ dqmc-util gen
@@ -89,6 +105,42 @@ n_sample=10000, sweep=2200/2200
 <sign>=1.0
 <n>=[1.]
 <m_z^2>=[0.82869916]
+```
+
+```
+ewh@12700h ~/S/dqmc (pypkg)> mkdir test_data                                                                                                                                 (dqmc) 
+ewh@12700h ~/S/dqmc (pypkg)> dqmc-util gen Nfiles=16 mu=-3 L=32 prefix=test_data/bin                                                                                         (dqmc) 
+created simulation files: test_data/bin_0.h5 ... test_data/bin_15.h5
+parameter file: test_data/bin.h5.params
+ewh@12700h ~/S/dqmc (pypkg)> dqmc-util enqueue queue test_data/*.h5                                                                                                          (dqmc) 
+enqueued=16 skipped=0
+ewh@12700h ~/S/dqmc (pypkg)> seq 4 | xargs -I{} -P 0 dqmc-util worker queue/ build/dqmc -s 5 -t 30                                                                           (dqmc) 
+          12700h 203358: starting: /home/ewh/Sync/dqmc/test_data/bin_10.h5
+          12700h 203357: starting: /home/ewh/Sync/dqmc/test_data/bin_4.h5
+          12700h 203359: starting: /home/ewh/Sync/dqmc/test_data/bin_14.h5
+          12700h 203356: starting: /home/ewh/Sync/dqmc/test_data/bin_5.h5
+          12700h 203358: completed: /home/ewh/Sync/dqmc/test_data/bin_10.h5
+          12700h 203358: starting: /home/ewh/Sync/dqmc/test_data/bin_3.h5
+          12700h 203357: completed: /home/ewh/Sync/dqmc/test_data/bin_4.h5
+          12700h 203357: starting: /home/ewh/Sync/dqmc/test_data/bin_0.h5
+          12700h 203359: completed: /home/ewh/Sync/dqmc/test_data/bin_14.h5
+          12700h 203359: starting: /home/ewh/Sync/dqmc/test_data/bin_8.h5
+          12700h 203356: completed: /home/ewh/Sync/dqmc/test_data/bin_5.h5
+          12700h 203356: starting: /home/ewh/Sync/dqmc/test_data/bin_2.h5
+          12700h 203358: completed: /home/ewh/Sync/dqmc/test_data/bin_3.h5
+          12700h 203358: starting: /home/ewh/Sync/dqmc/test_data/bin_13.h5
+          12700h 203357: completed: /home/ewh/Sync/dqmc/test_data/bin_0.h5
+          12700h 203357: starting: /home/ewh/Sync/dqmc/test_data/bin_6.h5
+          12700h 203359: completed: /home/ewh/Sync/dqmc/test_data/bin_8.h5
+          12700h 203359: starting: /home/ewh/Sync/dqmc/test_data/bin_7.h5
+          12700h 203359: checkpointed: /home/ewh/Sync/dqmc/test_data/bin_7.h5
+          12700h 203356: checkpointed: /home/ewh/Sync/dqmc/test_data/bin_2.h5
+          12700h 203357: checkpointed: /home/ewh/Sync/dqmc/test_data/bin_6.h5
+          12700h 203358: checkpointed: /home/ewh/Sync/dqmc/test_data/bin_13.h5
+ewh@12700h ~/S/dqmc (pypkg)> dqmc-util print-n test_data/                                                                                                                    (dqmc) 
+test_data/: complete bins 7/16, samples 52.056%
+<sign> = [0.67469084 0.00423175]
+<n> = [6.14809830e-01 2.43399236e-04]
 ```
 
 ## Details
@@ -133,8 +185,7 @@ List of parameters
 
 * `build`: build directory
 * `src`: C code
-    * `main_1.c`: main function for a binary that runs only a single simulation file
-    * `main_stack.c`: main function for a binary that runs the simulation files listed in the stack file
+    * `main_1.c`: main function
     * `mem.c/mem.h`: minimal implementation of an aligned memory pool
     * `prof.c/prof.h`: code related to profiling
     * `rand.h`: random number generator
@@ -158,6 +209,7 @@ List of parameters
     * `info.py`: print out some parameters of a single simulation file
     * `maxent.py`: code for Maximum Entropy Method analytic continuation
     * `print_n.py`: print out average sign and density with errorbars
-    * `push.py`: push simulation filenames onto a stack file
+    * `queue.py`: Lustre-friendly sharded directory queue (enqueue, status, dequeue)
+    * `worker.py`: worker process that consumes jobs from the queue
     * `summary.py`: print out average sign, density, and local moment
     * `cli.py`: unified CLI entry point (`dqmc-util` command)
