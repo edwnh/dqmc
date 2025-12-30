@@ -18,20 +18,6 @@ def spline_sum(f, axis, include_beta=False):
     return np.tensordot(f, k, axes=(axis, 0))
 
 
-def sym_square(corr, xy_sym=False):
-    Ny, Nx = corr.shape[-2:]
-    corr = 0.5 * (corr + corr[..., (-np.arange(Ny)) % Ny, :])
-    corr = 0.5 * (corr + corr[..., :, (-np.arange(Nx)) % Nx])
-    if xy_sym and Nx == Ny:
-        corr = 0.5 * (corr + np.swapaxes(corr, -1, -2))
-    return corr
-
-
-def sym_tau(corr):
-    L = corr.shape[1]
-    return 0.5 * (corr + corr[:, (-np.arange(L)) % L, ...])
-
-
 def fnnq(s, nnq, d):
     N = nnq.shape[-2] * nnq.shape[-1]
     ret = nnq.T / s.T
@@ -47,6 +33,9 @@ class _Ctx:
             "params/period_eqlt",
             "params/L",
             "params/n_sweep_meas",
+            "metadata/U",
+            "metadata/t'",
+            "metadata/nflux",
             "metadata/mu",
             "metadata/Ny",
             "metadata/Nx",
@@ -59,7 +48,6 @@ class _Ctx:
         self.Ny = int(self.params["Ny"])
         self.Nx = int(self.params["Nx"])
         self.L = int(self.params["L"])
-        self.mu = float(self.params["mu"])
         self.beta = float(self.params["beta"])
         self.bps = int(self.params["bps"])
         self.bonds = self.params["bonds"].reshape(2, self.bps, self.Ny, self.Nx)
@@ -81,6 +69,16 @@ class _Ctx:
     def reshape_and_symmetrize(self):
         Ny, Nx, L = self.Ny, self.Nx, self.L
 
+        def sym_square(corr, xy_sym=False):
+            corr = 0.5 * (corr + corr[..., (-np.arange(Ny)) % Ny, :])
+            corr = 0.5 * (corr + corr[..., :, (-np.arange(Nx)) % Nx])
+            if xy_sym and Nx == Ny:
+                corr = 0.5 * (corr + np.swapaxes(corr, -1, -2))
+            return corr
+
+        def sym_tau(corr):
+            return 0.5 * (corr + corr[:, (-np.arange(L)) % L, ...])
+
         def _site_observable(k):
             if k in self.data:
                 self.data[k].shape = -1
@@ -88,7 +86,7 @@ class _Ctx:
         def _eq_corr_ij(k):
             if k in self.data:
                 self.data[k].shape = -1, Ny, Nx
-                self.data[k] = sym_square(self.data[k], xy_sym=(self.Nx == self.Ny))
+                self.data[k] = sym_square(self.data[k], xy_sym=(Nx == Ny))
 
         def _ue_corr_ij(k, tau_sym=False):
             if k in self.data:

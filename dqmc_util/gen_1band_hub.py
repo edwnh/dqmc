@@ -232,8 +232,7 @@ def create_batch(Nfiles=1, prefix=None, seed=None, **kwargs):
             f["state"]["hs"][...] = init_hs
 
     last_file = file_0 if Nfiles == 1 else f"{prefix}_{Nfiles-1}.h5"
-    print(f"created: {file_0}" + (f" ... {last_file}" if Nfiles > 1 else ""))
-    print(f"params:  {file_p}")
+    print(f"created: {file_0}" + (f" ... {last_file}" if Nfiles > 1 else "") + f", {file_p}")
 
 
 def main(argv=None):
