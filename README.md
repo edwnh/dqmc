@@ -1,215 +1,112 @@
 # Determinantal quantum Monte Carlo for the Hubbard model
 
-## Environment and dependencies
+High-performance DQMC (C) for the Hubbard model, plus Python utilities (`dqmc_util`) for generating inputs and analyzing outputs.
 
-Linux and macOS are the only supported OS currently.
+## Supported platforms
 
-### Build dependencies (Linux)
+- Linux and macOS
+- Windows is not supported natively; use WSL2 or GitHub Codespaces if needed.
+
+## Dependencies
+
+**Build (Linux):**
 - Intel compiler `icx`
 - Intel MKL headers and libraries
-- HDF5 headers and libraries
+- HDF5 headers and libraries (downloaded via `make deps`)
 
-### Build dependencies (macOS)
-- `clang` compiler from Xcode Command Line Tools
-- HDF5 headers and libraries
+**Build (macOS):**
+- `clang` (Xcode Command Line Tools)
+- HDF5 headers and libraries (downloaded via `make deps`)
 
-### Runtime dependencies
-- None. Libraries are statically linked by default.
+**Python (`dqmc_util`):**
+- Installed via `pip install -e .` (included in `environment-*.yml`)
+- Runtime deps: `numpy`, `scipy`, `h5py`
 
-### Python package (`dqmc_util`)
-Installed automatically via `pip install -e .` (included in `environment-macos.yml` or `environment-linux.yml`).
-Dependencies: `numpy`, `scipy`, `h5py`
+## Install and build
 
-## Compilation instructions
+1. Create the conda environment:
+   ```bash
+   # macOS
+   conda env create -f environment-macos.yml
 
-These instructions should work on most Linux and macOS systems. The easiest way to try the code is to create a GitHub Codespaces with this repository.
+   # Linux
+   conda env create -f environment-linux.yml
+   ```
+2. Activate it:
+   ```bash
+   conda activate dqmc
+   ```
+3. Download/extract the bundled HDF5 dependency (first time only):
+   ```bash
+   make deps
+   ```
+4. Build:
+   ```bash
+   make
+   ```
+   The binary is `build/dqmc`.
 
-1.  If conda/mamba is not installed yet, install conda/mamba (recommend miniforge or micromamba) and initialize (`conda init`).
-2.  Create a new conda environment. Use the macOS file on macOS and the Linux file on Linux.
-    ```bash
-    # macOS
-    conda env create -f environment-macos.yml
-
-    # Linux (Intel compiler + MKL)
-    conda env create -f environment-linux.yml
-    ```
-    Wait for all the packages to download and install. This might take a while. Then activate the new environment named `dqmc`.
-    ```bash
-    conda activate dqmc
-    ```
-3.  Download and extract the HDF5 dependency.
-    ```bash
-    make deps
-    ```
-4.  Now the environment is ready for compiling and running the code.
-    ```bash
-    make
-    ```
-    The binary executable is located at `build/dqmc`.
-
-## Usage
-
-1. Generate simulation files using `dqmc-util gen` or a similar script. Parameters can be passed through the command line. A list of parameters and their default values can be found in the function definitions of `create_1` and `create_batch` in `dqmc_util/gen_1band_hub.py`.
-2. Perform the Monte Carlo sweeps using the `build/dqmc` binary directly, or the sharded queue system described below.
-3. Analyze the data using the `dqmc_util` package. Typically, this is done inside Jupyter notebooks.
-
-### Running on clusters with the sharded queue
-
-For running many simulations on compute clusters, the sharded directory queue system provides a flexible option to run many workers in parallel. For example,
+## Quickstart (smoke run)
 
 ```bash
-# 1. Generate simulation files
-mkdir U8L40
-dqmc-util gen U=8 L=40 Nfiles=160 prefix=U8L40/bin
+conda activate dqmc
+make deps  # first time only
+make
 
-# 2. Enqueue all .h5 files
-dqmc-util enqueue queue U8L40/*.h5
+dqmc-util gen Nx=4 Ny=4 U=4 dt=0.1 L=20 n_sweep_warm=50 n_sweep_meas=100
+build/dqmc sim_0.h5
+dqmc-util summary sim_0.h5
+```
 
-# 3. Run 8 parallel workers (typically from a job script)
-dqmc-util worker queue ./build/dqmc -n 8 -s 900 -t 7200
+## Workflow
 
-# 4. Monitor queue status
+1. Generate HDF5 simulation files: `dqmc-util gen` (alias: `dqmc-util gen-1band-hub`)
+2. Run Monte Carlo sweeps: `build/dqmc sim_0.h5` (optionally with checkpointing)
+3. Analyze results: `dqmc-util summary`, `dqmc-util print-n`, or `dqmc_util.analyze_hub` in Python
+
+### Run one file
+
+```bash
+build/dqmc sim_0.h5
+dqmc-util summary sim_0.h5
+```
+
+### Run many files (sharded queue)
+
+For 2+ files, prefer the queue/worker system (`dqmc-util enqueue` + `dqmc-util worker`).
+
+```bash
+dqmc-util gen Nx=6 Ny=6 U=4 mu=0 dt=0.1 L=50 Nfiles=160 prefix=runs/U4_T0.25/bin
+dqmc-util enqueue queue 'runs/U4_T0.25/bin_*.h5'
+dqmc-util worker queue ./build/dqmc -n 8 -s 300 -t 3600
 dqmc-util queue-status queue
+dqmc-util print-n runs/U4_T0.25/
 ```
 
-The queue uses atomic `rename()` operations and 128 shards to avoid lock contention on distributed filesystems like Lustre. Workers claim tasks by moving symlinks from `todo/` to `running/`, and move them to `done/` on completion. Checkpointed jobs are returned to `todo/` for future workers to pick up.
+## Examples
 
-### Examples
+See `examples/README.md` and:
+- `examples/mz2_vs_T/` - magnetic moment vs temperature
+- `examples/n_vs_mu/` - density vs chemical potential
 
-```
-(dqmc) @edwnh ➜ /workspaces/dqmc (master) $ dqmc-util gen
-created simulation files: sim_0.h5
-parameter file: sim.h5.params
-(dqmc) @edwnh ➜ /workspaces/dqmc (master) $ build/dqmc sim_0.h5
-commit id 03f858a
-compiled on Jan 21 2025 05:35:45
-opening sim_0.h5
-0/2200 sweeps completed
-starting dqmc
-2200/2200 sweeps completed
-saving data
-cpu model name  : AMD EPYC 7763 64-Core Processor
-wall time: 21.158
-thread_1/1_______|_% of all_|___total (s)_|___us per call_|___# calls
-            wrap |   30.276 |       6.406 |        38.824 |    165000
-          recalc |   29.423 |       6.225 |       282.970 |     22000
-         updates |   19.414 |       4.108 |        46.679 |     88000
-           multb |   14.079 |       2.979 |       135.401 |     22000
-       half_wrap |    3.677 |       0.778 |        38.905 |     20000
-           calcb |    1.992 |       0.421 |         2.394 |    176000
-         meas_eq |    0.970 |       0.205 |        20.531 |     10000
----------------------------------------------------------------------
-(dqmc) @edwnh ➜ /workspaces/dqmc (master) $ dqmc-util summary sim_0.h5
-sim_0.h5
-n_sample=10000, sweep=2200/2200
-<sign>=1.0
-<n>=[1.]
-<m_z^2>=[0.82869916]
-```
+## HDF5 layout
 
-```
-ewh@12700h ~/S/dqmc (pypkg)> mkdir test_data                                                                                                                                 (dqmc) 
-ewh@12700h ~/S/dqmc (pypkg)> dqmc-util gen Nfiles=16 mu=-3 L=32 prefix=test_data/bin                                                                                         (dqmc) 
-created simulation files: test_data/bin_0.h5 ... test_data/bin_15.h5
-parameter file: test_data/bin.h5.params
-ewh@12700h ~/S/dqmc (pypkg)> dqmc-util enqueue queue test_data/*.h5                                                                                                          (dqmc) 
-enqueued=16 skipped=0
-ewh@12700h ~/S/dqmc (pypkg)> seq 4 | xargs -I{} -P 0 dqmc-util worker queue/ build/dqmc -s 5 -t 30                                                                           (dqmc) 
-          12700h 203358: starting: /home/ewh/Sync/dqmc/test_data/bin_10.h5
-          12700h 203357: starting: /home/ewh/Sync/dqmc/test_data/bin_4.h5
-          12700h 203359: starting: /home/ewh/Sync/dqmc/test_data/bin_14.h5
-          12700h 203356: starting: /home/ewh/Sync/dqmc/test_data/bin_5.h5
-          12700h 203358: completed: /home/ewh/Sync/dqmc/test_data/bin_10.h5
-          12700h 203358: starting: /home/ewh/Sync/dqmc/test_data/bin_3.h5
-          12700h 203357: completed: /home/ewh/Sync/dqmc/test_data/bin_4.h5
-          12700h 203357: starting: /home/ewh/Sync/dqmc/test_data/bin_0.h5
-          12700h 203359: completed: /home/ewh/Sync/dqmc/test_data/bin_14.h5
-          12700h 203359: starting: /home/ewh/Sync/dqmc/test_data/bin_8.h5
-          12700h 203356: completed: /home/ewh/Sync/dqmc/test_data/bin_5.h5
-          12700h 203356: starting: /home/ewh/Sync/dqmc/test_data/bin_2.h5
-          12700h 203358: completed: /home/ewh/Sync/dqmc/test_data/bin_3.h5
-          12700h 203358: starting: /home/ewh/Sync/dqmc/test_data/bin_13.h5
-          12700h 203357: completed: /home/ewh/Sync/dqmc/test_data/bin_0.h5
-          12700h 203357: starting: /home/ewh/Sync/dqmc/test_data/bin_6.h5
-          12700h 203359: completed: /home/ewh/Sync/dqmc/test_data/bin_8.h5
-          12700h 203359: starting: /home/ewh/Sync/dqmc/test_data/bin_7.h5
-          12700h 203359: checkpointed: /home/ewh/Sync/dqmc/test_data/bin_7.h5
-          12700h 203356: checkpointed: /home/ewh/Sync/dqmc/test_data/bin_2.h5
-          12700h 203357: checkpointed: /home/ewh/Sync/dqmc/test_data/bin_6.h5
-          12700h 203358: checkpointed: /home/ewh/Sync/dqmc/test_data/bin_13.h5
-ewh@12700h ~/S/dqmc (pypkg)> dqmc-util print-n test_data/                                                                                                                    (dqmc) 
-test_data/: complete bins 7/16, samples 52.056%
-<sign> = [0.67469084 0.00423175]
-<n> = [6.14809830e-01 2.43399236e-04]
-```
+One Markov chain = one HDF5 file = one “bin”.
 
-## Details
+- `/metadata`: model parameters for analysis (e.g., `beta`, `mu`, `Nx`, `Ny`)
+- `/params`: simulation parameters and matrices (often stored in a shared `*.h5.params`)
+- `/state`: sweep counter, RNG state, auxiliary field configuration
+- `/meas_eqlt`: equal-time measurements
+- `/meas_uneqlt`: unequal-time measurements (optional)
 
-### Simulation files
+For details and authoritative defaults, see `dqmc_util/gen_1band_hub.py` (`SimParams`).
 
-One Markov chain = one HDF5 file = one bin. Each HDF5 file contains the following groups:
-* metadata: Miscellaneous information and parameters not used during the simulation, but possibly useful in data analysis. Examples: name of the model, Hamiltonian parameters, temperature.
-* params: Simulation parameters and pre-calculated matrices used in the simulation. Examples: kinetic energy matrix and its exponential, number of warmup and measurement sweeps. The data in this group may be stored in a separate HDF5 file, with extension .h5.params. This saves storage space since a batch of simulation files typically has identical params.
-* state: Simulation state: sweep number, RNG state, auxiliary field configuration
-* meas_eqlt: equal-time measurements
-* meas_uneqlt: unequal-time measurements i.e. <O(tau) P>. This group exists only if unequal-time measurements are enabled.
+## Parameter notes
 
-`dqmc_util/gen_1band_hub.py` is the best reference to see the contents of each group.
+- Trotter error rule of thumb: ensure `U * dt^2 <= 0.05`
+- `L` must be divisible by `n_matmul` and `period_eqlt`
 
-### Simulation file generation
+## AI agent docs
 
-List of parameters
-* `Nfiles`: Number of simulation files to generate. Each file is identical except for the RNG seed. Default: `Nfiles=1`.
-* `prefix`: Prefix for the name of each simulation file. Default: `prefix="sim"`.
-* `seed`: RNG seed. Default: RNG is initialized by `os.urandom()`.
-* `overwrite`: Whether to overwrite existing files. Default: `False`.
-* `Nx`, `Ny`: Rectangular cluster geometry. Default: `Nx=16 Ny=4`.
-* `mu`: Chemical potential. Default: `mu=0`.
-* `tp`: 2nd neighbor hopping. Default: `tp=0`.
-* `U`: Hubbard interaction. Default: `U=6`.
-* `dt`: Imaginary time discretization. Default: `dt=0.115`.
-* `L`: Number of imaginary time steps. Default: `L=40`.
-* `nflux`: Number of magnetic flux quanta perpendicular to the plane. Default: `nflux=0`.
-* `n_delay`: Number of updates to group together in the delayed update scheme. Default: `n_delay=16`.
-* `n_matmul`: Half the maximum number of direct matrix multiplications before applying a QR decomposition for stability. Default: `n_matmul=8`.
-* `n_sweep_warm`: Number of warmup sweeps. Default: `n_sweep_warm=200`.
-* `n_sweep_meas`: Number of measurement sweeps. Default: `n_sweep_meas=2000`.
-* `period_eqlt`: Period of equal-time measurements. 1 means equal-time measurements are performed `L` times per spacetime sweep. Default: `period_eqlt=8`.
-* `period_uneqlt`: Period of unequal-time measurements. 1 means unequal-time measurements are performed once per spacetime sweep. 0 means disabled. Default: `period_uneqlt=0`.
-* `meas_bond_corr`: Whether to measure bond-bond correlations (current, kinetic energy, bond singlets). Default: `meas_bond_corr=1`.
-* `meas_energy_corr`: Whether to measure energy-energy correlations. Default: `meas_energy_corr=0`.
-* `meas_nematic_corr`: Whether to measure spin and charge nematic correlations. Default: `meas_nematic_corr=0`.
-* `trans_sym`: Whether to apply translational symmetry to compress measurement data. Default: `trans_sym=1`.
-
-### Code description
-
-* `build`: build directory
-* `src`: C code
-    * `main_1.c`: main function
-    * `mem.c/mem.h`: minimal implementation of an aligned memory pool
-    * `prof.c/prof.h`: code related to profiling
-    * `rand.h`: random number generator
-    * `sig.c/sig.h`: signal handling
-    * `time_.h`: high resolution timer
-    * `wrapper.c/wrapper.h`: wrapper for the core DQMC routine with file I/O and checkpointing
-    * `rc/`: files compiled twice for real and complex matrix support (via `-DUSE_CPLX`)
-        * `data.c/data.h/data_decl.h`: loading and saving simulation data to and from the simulation file
-        * `dqmc.c/dqmc_decl.h`: core DQMC algorithm
-        * `greens.c/greens.h`: functions for calculating equal and unequal-time Green's functions
-        * `linalg.h`: inline wrappers for BLAS/LAPACK functions
-        * `meas.c/meas.h`: code for performing measurements
-        * `numeric.h`: type definitions and `RC()` macro for real/complex dual compilation
-        * `sim_types.h`: X-macro lists defining simulation parameters and measurement arrays
-        * `updates.c/updates.h`: propose changes to the auxiliary field and update the Green's function accordingly
-* `dqmc_util`: Python package for simulation file generation and data analysis (install with `pip install -e .`)
-    * `analyze_hub.py`: analysis routines for Hubbard model (symmetrization, correlators, structure factors)
-    * `core.py`: utility functions for data loading and jackknife resampling
-    * `gen_1band_hub.py`: generate HDF5 simulation file for the Hubbard model
-    * `get_mu.py`: estimate desired chemical potential for a target filling
-    * `info.py`: print out some parameters of a single simulation file
-    * `maxent.py`: code for Maximum Entropy Method analytic continuation
-    * `print_n.py`: print out average sign and density with errorbars
-    * `queue.py`: Lustre-friendly sharded directory queue (enqueue, status, dequeue)
-    * `worker.py`: worker process that consumes jobs from the queue
-    * `summary.py`: print out average sign, density, and local moment
-    * `cli.py`: unified CLI entry point (`dqmc-util` command)
+- `AGENTS.md`: working on this codebase (build, architecture, guardrails)
+- `.claude/skills/`: task runbooks (generate, run, analyze, scans, dev, advanced)
