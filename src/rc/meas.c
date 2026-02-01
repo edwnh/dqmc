@@ -29,12 +29,12 @@
 void RC(measure_eqlt)(const struct RC(params) *const p, const num phase,
 		const int ld,
 		const num *const gu,
-		const num *const gd,
+		// const num *const gd,
 		struct RC(meas_eqlt) *const m)
 {
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	(void)__builtin_assume_aligned(gu, MEM_ALIGN);
-	(void)__builtin_assume_aligned(gd, MEM_ALIGN);
+	// (void)__builtin_assume_aligned(gd, MEM_ALIGN);
 
 	m->n_sample++;
 	m->sign += phase;
@@ -46,7 +46,8 @@ void RC(measure_eqlt)(const struct RC(params) *const p, const num phase,
 	for (int i = 0; i < N; i++) {
 		const int r = p->map_i[i];
 		const num pre = phase / p->degen_i[r];
-		const num guii = gu[i + i*ld], gdii = gd[i + i*ld];
+		const num guii = gu[i + i*ld];
+		const num gdii = conj(guii);
 		m->density[r] += pre*(2. - guii - gdii);
 		m->double_occ[r] += pre*(1. - guii)*(1. - gdii);
 	}
@@ -57,10 +58,14 @@ void RC(measure_eqlt)(const struct RC(params) *const p, const num phase,
 		const int delta = (i == j);
 		const int r = p->map_ij[i + j*N];
 		const num pre = phase / p->degen_ij[r];
-		const num guii = gu[i + i*ld], gdii = gd[i + i*ld];
-		const num guij = gu[i + j*ld], gdij = gd[i + j*ld];
-		const num guji = gu[j + i*ld], gdji = gd[j + i*ld];
-		const num gujj = gu[j + j*ld], gdjj = gd[j + j*ld];
+		const num guii = gu[i + i*ld];
+		const num guij = gu[i + j*ld];
+		const num guji = gu[j + i*ld];
+		const num gujj = gu[j + j*ld];
+		const num gdii = conj(guii);
+		const num gdij = conj(guij);
+		const num gdji = conj(guji);
+		const num gdjj = conj(gujj);
 #ifdef USE_PEIERLS
 		m->g00[r] += 0.5*pre*(guij*p->peierlsu[j + i*N] + gdij*p->peierlsd[j + i*N]);
 #else
@@ -100,18 +105,18 @@ void RC(measure_eqlt)(const struct RC(params) *const p, const num phase,
 		const int delta_i1j = (i1 == j);
 		const num gui0j = gu[i0 + ld*j];
 		const num guji0 = gu[j + ld*i0];
-		const num gdi0j = gd[i0 + ld*j];
-		const num gdji0 = gd[j + ld*i0];
+		const num gdi0j = conj(gui0j);
+		const num gdji0 = conj(guji0);
 		const num gui1j = gu[i1 + ld*j];
 		const num guji1 = gu[j + ld*i1];
-		const num gdi1j = gd[i1 + ld*j];
-		const num gdji1 = gd[j + ld*i1];
+		const num gdi1j = conj(gui1j);
+		const num gdji1 = conj(guji1);
 		const num gui0i1 = gu[i0 + ld*i1];
 		const num gui1i0 = gu[i1 + ld*i0];
-		const num gdi0i1 = gd[i0 + ld*i1];
-		const num gdi1i0 = gd[i1 + ld*i0];
+		const num gdi0i1 = conj(gui0i1);
+		const num gdi1i0 = conj(gui1i0);
 		const num gujj = gu[j + ld*j];
-		const num gdjj = gd[j + ld*j];
+		const num gdjj = conj(gujj);
 
 		const num ku = pui1i0*(delta_i0i1 - gui0i1) + pui0i1*(delta_i0i1 - gui1i0);
 		const num kd = pdi1i0*(delta_i0i1 - gdi0i1) + pdi0i1*(delta_i0i1 - gdi1i0);
@@ -159,18 +164,18 @@ void RC(measure_eqlt)(const struct RC(params) *const p, const num phase,
 		const num guj1i1 = gu[j1 + i1*ld];
 		const num guj1j0 = gu[j1 + j0*ld];
 		const num guj0j1 = gu[j0 + j1*ld];
-		const num gdi1i0 = gd[i1 + i0*ld];
-		const num gdi0i1 = gd[i0 + i1*ld];
-		const num gdi0j0 = gd[i0 + j0*ld];
-		const num gdi1j0 = gd[i1 + j0*ld];
-		const num gdi0j1 = gd[i0 + j1*ld];
-		const num gdi1j1 = gd[i1 + j1*ld];
-		const num gdj0i0 = gd[j0 + i0*ld];
-		const num gdj1i0 = gd[j1 + i0*ld];
-		const num gdj0i1 = gd[j0 + i1*ld];
-		const num gdj1i1 = gd[j1 + i1*ld];
-		const num gdj1j0 = gd[j1 + j0*ld];
-		const num gdj0j1 = gd[j0 + j1*ld];
+		const num gdi1i0 = conj(gui1i0);
+		const num gdi0i1 = conj(gui0i1);
+		const num gdi0j0 = conj(gui0j0);
+		const num gdi1j0 = conj(gui1j0);
+		const num gdi0j1 = conj(gui0j1);
+		const num gdi1j1 = conj(gui1j1);
+		const num gdj0i0 = conj(guj0i0);
+		const num gdj1i0 = conj(guj1i0);
+		const num gdj0i1 = conj(guj0i1);
+		const num gdj1i1 = conj(guj1i1);
+		const num gdj1j0 = conj(guj1j0);
+		const num gdj0j1 = conj(guj0j1);
 		const num x = pui0i1*puj0j1*(delta_i0j1 - guj1i0)*gui1j0 + pui1i0*puj1j0*(delta_i1j0 - guj0i1)*gui0j1
 		            + pdi0i1*pdj0j1*(delta_i0j1 - gdj1i0)*gdi1j0 + pdi1i0*pdj1j0*(delta_i1j0 - gdj0i1)*gdi0j1;
 		const num y = pui0i1*puj1j0*(delta_i0j0 - guj0i0)*gui1j1 + pui1i0*puj0j1*(delta_i1j1 - guj1i1)*gui0j0
@@ -186,9 +191,9 @@ void RC(measure_uneqlt)(const struct RC(params) *const p, const num phase,
 		const num *const Gu0t,
 		const num *const Gutt,
 		const num *const Gut0,
-		const num *const Gd0t,
-		const num *const Gdtt,
-		const num *const Gdt0,
+		// const num *const Gd0t,
+		// const num *const Gdtt,
+		// const num *const Gdt0,
 		struct RC(meas_uneqlt) *const m)
 {
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
@@ -209,7 +214,7 @@ void RC(measure_uneqlt)(const struct RC(params) *const p, const num phase,
 	const int meas_nematic_corr = p->meas_nematic_corr;
 
 	const num *const Gu00 = Gutt;
-	const num *const Gd00 = Gdtt;
+	// const num *const Gd00 = Gdtt;
 
 	// 2 site measurements
 	#pragma omp parallel for
@@ -218,9 +223,9 @@ void RC(measure_uneqlt)(const struct RC(params) *const p, const num phase,
 		const num *const Gu0t_t = Gu0t + ld*N*t;
 		const num *const Gutt_t = Gutt + ld*N*t;
 		const num *const Gut0_t = Gut0 + ld*N*t;
-		const num *const Gd0t_t = Gd0t + ld*N*t;
-		const num *const Gdtt_t = Gdtt + ld*N*t;
-		const num *const Gdt0_t = Gdt0 + ld*N*t;
+		// const num *const Gd0t_t = Gd0t + ld*N*t;
+		// const num *const Gdtt_t = Gdtt + ld*N*t;
+		// const num *const Gdt0_t = Gdt0 + ld*N*t;
 	for (int j = 0; j < N; j++)
 	for (int i = 0; i < N; i++) {
 		const int r = p->map_ij[i + j*N];
@@ -230,10 +235,10 @@ void RC(measure_uneqlt)(const struct RC(params) *const p, const num phase,
 		const num guij = Gut0_t[i + ld*j];
 		const num guji = Gu0t_t[j + ld*i];
 		const num gujj = Gu00[j + ld*j];
-		const num gdii = Gdtt_t[i + ld*i];
-		const num gdij = Gdt0_t[i + ld*j];
-		const num gdji = Gd0t_t[j + ld*i];
-		const num gdjj = Gd00[j + ld*j];
+		const num gdii = conj(guii);
+		const num gdij = conj(guij);
+		const num gdji = conj(guji);
+		const num gdjj = conj(gujj);
 #ifdef USE_PEIERLS
 		m->gt0[r + num_ij*t] += 0.5*pre*(guij*p->peierlsu[j + i*N] + gdij*p->peierlsd[j + i*N]);
 #else
@@ -261,9 +266,9 @@ void RC(measure_uneqlt)(const struct RC(params) *const p, const num phase,
 		const num *const Gu0t_t = Gu0t + ld*N*t;
 		const num *const Gutt_t = Gutt + ld*N*t;
 		const num *const Gut0_t = Gut0 + ld*N*t;
-		const num *const Gd0t_t = Gd0t + ld*N*t;
-		const num *const Gdtt_t = Gdtt + ld*N*t;
-		const num *const Gdt0_t = Gdt0 + ld*N*t;
+		// const num *const Gd0t_t = Gd0t + ld*N*t;
+		// const num *const Gdtt_t = Gdtt + ld*N*t;
+		// const num *const Gdt0_t = Gdt0 + ld*N*t;
 	for (int j = 0; j < N; j++)
 	for (int b = 0; b < num_b; b++) {
 		const int i0 = p->bonds[b];
@@ -281,18 +286,18 @@ void RC(measure_uneqlt)(const struct RC(params) *const p, const num phase,
 		const int delta_i1j = delta_t*(i1 == j);
 		const num gui0j = Gut0_t[i0 + ld*j];
 		const num guji0 = Gu0t_t[j + ld*i0];
-		const num gdi0j = Gdt0_t[i0 + ld*j];
-		const num gdji0 = Gd0t_t[j + ld*i0];
+		const num gdi0j = conj(gui0j);
+		const num gdji0 = conj(guji0);
 		const num gui1j = Gut0_t[i1 + ld*j];
 		const num guji1 = Gu0t_t[j + ld*i1];
-		const num gdi1j = Gdt0_t[i1 + ld*j];
-		const num gdji1 = Gd0t_t[j + ld*i1];
+		const num gdi1j = conj(gui1j);
+		const num gdji1 = conj(guji1);
 		const num gui0i1 = Gutt_t[i0 + ld*i1];
 		const num gui1i0 = Gutt_t[i1 + ld*i0];
-		const num gdi0i1 = Gdtt_t[i0 + ld*i1];
-		const num gdi1i0 = Gdtt_t[i1 + ld*i0];
+		const num gdi0i1 = conj(gui0i1);
+		const num gdi1i0 = conj(gui1i0);
 		const num gujj = Gu00[j + ld*j];
-		const num gdjj = Gd00[j + ld*j];
+		const num gdjj = conj(gujj);
 
 		const num ku = pui1i0*(delta_i0i1 - gui0i1) + pui0i1*(delta_i0i1 - gui1i0);
 		const num kd = pdi1i0*(delta_i0i1 - gdi0i1) + pdi0i1*(delta_i0i1 - gdi1i0);
@@ -345,18 +350,18 @@ void RC(measure_uneqlt)(const struct RC(params) *const p, const num phase,
 		const num guj1i1 = Gu00[j1 + i1*ld];
 		const num guj1j0 = Gu00[j1 + j0*ld];
 		const num guj0j1 = Gu00[j0 + j1*ld];
-		const num gdi1i0 = Gd00[i1 + i0*ld];
-		const num gdi0i1 = Gd00[i0 + i1*ld];
-		const num gdi0j0 = Gd00[i0 + j0*ld];
-		const num gdi1j0 = Gd00[i1 + j0*ld];
-		const num gdi0j1 = Gd00[i0 + j1*ld];
-		const num gdi1j1 = Gd00[i1 + j1*ld];
-		const num gdj0i0 = Gd00[j0 + i0*ld];
-		const num gdj1i0 = Gd00[j1 + i0*ld];
-		const num gdj0i1 = Gd00[j0 + i1*ld];
-		const num gdj1i1 = Gd00[j1 + i1*ld];
-		const num gdj1j0 = Gd00[j1 + j0*ld];
-		const num gdj0j1 = Gd00[j0 + j1*ld];
+		const num gdi1i0 = conj(gui1i0);
+		const num gdi0i1 = conj(gui0i1);
+		const num gdi0j0 = conj(gui0j0);
+		const num gdi1j0 = conj(gui1j0);
+		const num gdi0j1 = conj(gui0j1);
+		const num gdi1j1 = conj(gui1j1);
+		const num gdj0i0 = conj(guj0i0);
+		const num gdj1i0 = conj(guj1i0);
+		const num gdj0i1 = conj(guj0i1);
+		const num gdj1i1 = conj(guj1i1);
+		const num gdj1j0 = conj(guj1j0);
+		const num gdj0j1 = conj(guj0j1);
 		m->pair_bb[bb] += 0.5*pre*(gui0j0*gdi1j1 + gui1j0*gdi0j1 + gui0j1*gdi1j0 + gui1j1*gdi0j0);
 		const num x = pui0i1*puj0j1*(delta_i0j1 - guj1i0)*gui1j0 + pui1i0*puj1j0*(delta_i1j0 - guj0i1)*gui0j1
 		            + pdi0i1*pdj0j1*(delta_i0j1 - gdj1i0)*gdi1j0 + pdi1i0*pdj1j0*(delta_i1j0 - gdj0i1)*gdi0j1;
@@ -414,22 +419,22 @@ void RC(measure_uneqlt)(const struct RC(params) *const p, const num phase,
 		const num guj1j0 = Gu00[j1 + j0*ld];
 		const num guj0j1 = Gu00[j0 + j1*ld];
 		const num guj1j1 = Gu00[j1 + j1*ld];
-		const num gdi0i0 = Gd00[i0 + i0*ld];
-		const num gdi1i0 = Gd00[i1 + i0*ld];
-		const num gdi0i1 = Gd00[i0 + i1*ld];
-		const num gdi1i1 = Gd00[i1 + i1*ld];
-		const num gdi0j0 = Gd00[i0 + j0*ld];
-		const num gdi1j0 = Gd00[i1 + j0*ld];
-		const num gdi0j1 = Gd00[i0 + j1*ld];
-		const num gdi1j1 = Gd00[i1 + j1*ld];
-		const num gdj0i0 = Gd00[j0 + i0*ld];
-		const num gdj1i0 = Gd00[j1 + i0*ld];
-		const num gdj0i1 = Gd00[j0 + i1*ld];
-		const num gdj1i1 = Gd00[j1 + i1*ld];
-		const num gdj0j0 = Gd00[j0 + j0*ld];
-		const num gdj1j0 = Gd00[j1 + j0*ld];
-		const num gdj0j1 = Gd00[j0 + j1*ld];
-		const num gdj1j1 = Gd00[j1 + j1*ld];
+		const num gdi0i0 = conj(gui0i0);
+		const num gdi1i0 = conj(gui1i0);
+		const num gdi0i1 = conj(gui0i1);
+		const num gdi1i1 = conj(gui1i1);
+		const num gdi0j0 = conj(gui0j0);
+		const num gdi1j0 = conj(gui1j0);
+		const num gdi0j1 = conj(gui0j1);
+		const num gdi1j1 = conj(gui1j1);
+		const num gdj0i0 = conj(guj0i0);
+		const num gdj1i0 = conj(guj1i0);
+		const num gdj0i1 = conj(guj0i1);
+		const num gdj1i1 = conj(guj1i1);
+		const num gdj0j0 = conj(guj0j0);
+		const num gdj1j0 = conj(guj1j0);
+		const num gdj0j1 = conj(guj0j1);
+		const num gdj1j1 = conj(guj1j1);
 		const int delta_i0i1 = 0;
 		const int delta_j0j1 = 0;
 		const num uuuu = +(1.-gui0i0)*(1.-gui1i1)*(1.-guj0j0)*(1.-guj1j1)+(1.-gui0i0)*(1.-gui1i1)*(delta_j0j1-guj1j0)*guj0j1+(1.-gui0i0)*(delta_i1j0-guj0i1)*gui1j0*(1.-guj1j1)-(1.-gui0i0)*(delta_i1j0-guj0i1)*gui1j1*(delta_j0j1-guj1j0)+(1.-gui0i0)*(delta_i1j1-guj1i1)*gui1j0*guj0j1+(1.-gui0i0)*(delta_i1j1-guj1i1)*gui1j1*(1.-guj0j0)+(delta_i0i1-gui1i0)*gui0i1*(1.-guj0j0)*(1.-guj1j1)+(delta_i0i1-gui1i0)*gui0i1*(delta_j0j1-guj1j0)*guj0j1-(delta_i0i1-gui1i0)*gui0j0*(delta_i1j0-guj0i1)*(1.-guj1j1)-(delta_i0i1-gui1i0)*gui0j0*(delta_i1j1-guj1i1)*guj0j1+(delta_i0i1-gui1i0)*gui0j1*(delta_i1j0-guj0i1)*(delta_j0j1-guj1j0)-(delta_i0i1-gui1i0)*gui0j1*(delta_i1j1-guj1i1)*(1.-guj0j0)+(delta_i0j0-guj0i0)*gui0i1*gui1j0*(1.-guj1j1)-(delta_i0j0-guj0i0)*gui0i1*gui1j1*(delta_j0j1-guj1j0)+(delta_i0j0-guj0i0)*gui0j0*(1.-gui1i1)*(1.-guj1j1)+(delta_i0j0-guj0i0)*gui0j0*(delta_i1j1-guj1i1)*gui1j1-(delta_i0j0-guj0i0)*gui0j1*(1.-gui1i1)*(delta_j0j1-guj1j0)-(delta_i0j0-guj0i0)*gui0j1*(delta_i1j1-guj1i1)*gui1j0+(delta_i0j1-guj1i0)*gui0i1*gui1j0*guj0j1+(delta_i0j1-guj1i0)*gui0i1*gui1j1*(1.-guj0j0)+(delta_i0j1-guj1i0)*gui0j0*(1.-gui1i1)*guj0j1-(delta_i0j1-guj1i0)*gui0j0*(delta_i1j0-guj0i1)*gui1j1+(delta_i0j1-guj1i0)*gui0j1*(1.-gui1i1)*(1.-guj0j0)+(delta_i0j1-guj1i0)*gui0j1*(delta_i1j0-guj0i1)*gui1j0;
@@ -466,9 +471,9 @@ void RC(measure_uneqlt)(const struct RC(params) *const p, const num phase,
 		const num *const Gu0t_t = Gu0t + ld*N*t;
 		const num *const Gutt_t = Gutt + ld*N*t;
 		const num *const Gut0_t = Gut0 + ld*N*t;
-		const num *const Gd0t_t = Gd0t + ld*N*t;
-		const num *const Gdtt_t = Gdtt + ld*N*t;
-		const num *const Gdt0_t = Gdt0 + ld*N*t;
+		// const num *const Gd0t_t = Gd0t + ld*N*t;
+		// const num *const Gdtt_t = Gdtt + ld*N*t;
+		// const num *const Gdt0_t = Gdt0 + ld*N*t;
 	for (int c = 0; c < num_b; c++) {
 		const int j0 = p->bonds[c];
 		const int j1 = p->bonds[c + num_b];
@@ -505,22 +510,22 @@ void RC(measure_uneqlt)(const struct RC(params) *const p, const num phase,
 		const num guj1j0 = Gu00[j1 + j0*ld];
 		const num guj0j1 = Gu00[j0 + j1*ld];
 		const num guj1j1 = Gu00[j1 + j1*ld];
-		const num gdi0i0 = Gdtt_t[i0 + i0*ld];
-		const num gdi1i0 = Gdtt_t[i1 + i0*ld];
-		const num gdi0i1 = Gdtt_t[i0 + i1*ld];
-		const num gdi1i1 = Gdtt_t[i1 + i1*ld];
-		const num gdi0j0 = Gdt0_t[i0 + j0*ld];
-		const num gdi1j0 = Gdt0_t[i1 + j0*ld];
-		const num gdi0j1 = Gdt0_t[i0 + j1*ld];
-		const num gdi1j1 = Gdt0_t[i1 + j1*ld];
-		const num gdj0i0 = Gd0t_t[j0 + i0*ld];
-		const num gdj1i0 = Gd0t_t[j1 + i0*ld];
-		const num gdj0i1 = Gd0t_t[j0 + i1*ld];
-		const num gdj1i1 = Gd0t_t[j1 + i1*ld];
-		const num gdj0j0 = Gd00[j0 + j0*ld];
-		const num gdj1j0 = Gd00[j1 + j0*ld];
-		const num gdj0j1 = Gd00[j0 + j1*ld];
-		const num gdj1j1 = Gd00[j1 + j1*ld];
+		const num gdi0i0 = conj(gui0i0);
+		const num gdi1i0 = conj(gui1i0);
+		const num gdi0i1 = conj(gui0i1);
+		const num gdi1i1 = conj(gui1i1);
+		const num gdi0j0 = conj(gui0j0);
+		const num gdi1j0 = conj(gui1j0);
+		const num gdi0j1 = conj(gui0j1);
+		const num gdi1j1 = conj(gui1j1);
+		const num gdj0i0 = conj(guj0i0);
+		const num gdj1i0 = conj(guj1i0);
+		const num gdj0i1 = conj(guj0i1);
+		const num gdj1i1 = conj(guj1i1);
+		const num gdj0j0 = conj(guj0j0);
+		const num gdj1j0 = conj(guj1j0);
+		const num gdj0j1 = conj(guj0j1);
+		const num gdj1j1 = conj(guj1j1);
 		m->pair_bb[bb + num_bb*t] += 0.5*pre*(gui0j0*gdi1j1 + gui1j0*gdi0j1 + gui0j1*gdi1j0 + gui1j1*gdi0j0);
 		const num x = -pui0i1*puj0j1*guj1i0*gui1j0 - pui1i0*puj1j0*guj0i1*gui0j1
 		             - pdi0i1*pdj0j1*gdj1i0*gdi1j0 - pdi1i0*pdj1j0*gdj0i1*gdi0j1;
@@ -544,9 +549,9 @@ void RC(measure_uneqlt)(const struct RC(params) *const p, const num phase,
 		const num *const Gu0t_t = Gu0t + ld*N*t;
 		const num *const Gutt_t = Gutt + ld*N*t;
 		const num *const Gut0_t = Gut0 + ld*N*t;
-		const num *const Gd0t_t = Gd0t + ld*N*t;
-		const num *const Gdtt_t = Gdtt + ld*N*t;
-		const num *const Gdt0_t = Gdt0 + ld*N*t;
+		// const num *const Gd0t_t = Gd0t + ld*N*t;
+		// const num *const Gdtt_t = Gdtt + ld*N*t;
+		// const num *const Gdt0_t = Gdt0 + ld*N*t;
 	for (int c = 0; c < NEM_BONDS*N; c++) {
 		const int j0 = p->bonds[c];
 		const int j1 = p->bonds[c + num_b];
@@ -571,22 +576,22 @@ void RC(measure_uneqlt)(const struct RC(params) *const p, const num phase,
 		const num guj1j0 = Gu00[j1 + j0*ld];
 		const num guj0j1 = Gu00[j0 + j1*ld];
 		const num guj1j1 = Gu00[j1 + j1*ld];
-		const num gdi0i0 = Gdtt_t[i0 + i0*ld];
-		const num gdi1i0 = Gdtt_t[i1 + i0*ld];
-		const num gdi0i1 = Gdtt_t[i0 + i1*ld];
-		const num gdi1i1 = Gdtt_t[i1 + i1*ld];
-		const num gdi0j0 = Gdt0_t[i0 + j0*ld];
-		const num gdi1j0 = Gdt0_t[i1 + j0*ld];
-		const num gdi0j1 = Gdt0_t[i0 + j1*ld];
-		const num gdi1j1 = Gdt0_t[i1 + j1*ld];
-		const num gdj0i0 = Gd0t_t[j0 + i0*ld];
-		const num gdj1i0 = Gd0t_t[j1 + i0*ld];
-		const num gdj0i1 = Gd0t_t[j0 + i1*ld];
-		const num gdj1i1 = Gd0t_t[j1 + i1*ld];
-		const num gdj0j0 = Gd00[j0 + j0*ld];
-		const num gdj1j0 = Gd00[j1 + j0*ld];
-		const num gdj0j1 = Gd00[j0 + j1*ld];
-		const num gdj1j1 = Gd00[j1 + j1*ld];
+		const num gdi0i0 = conj(gui0i0);
+		const num gdi1i0 = conj(gui1i0);
+		const num gdi0i1 = conj(gui0i1);
+		const num gdi1i1 = conj(gui1i1);
+		const num gdi0j0 = conj(gui0j0);
+		const num gdi1j0 = conj(gui1j0);
+		const num gdi0j1 = conj(gui0j1);
+		const num gdi1j1 = conj(gui1j1);
+		const num gdj0i0 = conj(guj0i0);
+		const num gdj1i0 = conj(guj1i0);
+		const num gdj0i1 = conj(guj0i1);
+		const num gdj1i1 = conj(guj1i1);
+		const num gdj0j0 = conj(guj0j0);
+		const num gdj1j0 = conj(guj1j0);
+		const num gdj0j1 = conj(guj0j1);
+		const num gdj1j1 = conj(guj1j1);
 		const int delta_i0i1 = 0;
 		const int delta_j0j1 = 0;
 		const int delta_i0j0 = 0;

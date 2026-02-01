@@ -75,9 +75,9 @@ static int do_alloc(struct RC(sim_data) *sim)
 #define X(name, type, size) {(void **)&sim->ws[0].name, (size) * sizeof(type)},
 		WORKSPACE_LIST
 #undef X
-#define X(name, type, size) {(void **)&sim->ws[1].name, (size) * sizeof(type)},
-		WORKSPACE_LIST
-#undef X
+// #define X(name, type, size) {(void **)&sim->ws[1].name, (size) * sizeof(type)},
+// 		WORKSPACE_LIST
+// #undef X
 	};
 
 	sim->pool = my_calloc_table(tab, sizeof(tab)/sizeof(tab[0]));

@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include "numeric.h"
 
-#define N_FLAVORS 2 // number of fermion flavors
+#define N_FLAVORS 1 // number of fermion flavors
 
 #define PARAMS_SCALAR_INT_LIST \
 	X(N) \

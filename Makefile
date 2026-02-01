@@ -1,5 +1,5 @@
 BUILD_DIR = build
-TARGET = $(BUILD_DIR)/dqmc
+TARGET = $(BUILD_DIR)/negUdqmc
 
 UNAME := $(shell uname)
 HDF_VERSION = 2.0.0

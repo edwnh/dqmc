@@ -57,10 +57,10 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_Ku,     N, ws[0].inv_exp_K,     ld);
 	xomatcopy('N', N, N, 1.0, sim->p.exp_halfKu,     N, ws[0].exp_halfK,     ld);
 	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_halfKu, N, ws[0].inv_exp_halfK, ld);
-	xomatcopy('N', N, N, 1.0, sim->p.exp_Kd,         N, ws[1].exp_K,         ld);
-	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_Kd,     N, ws[1].inv_exp_K,     ld);
-	xomatcopy('N', N, N, 1.0, sim->p.exp_halfKd,     N, ws[1].exp_halfK,     ld);
-	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_halfKd, N, ws[1].inv_exp_halfK, ld);
+	// xomatcopy('N', N, N, 1.0, sim->p.exp_Kd,         N, ws[1].exp_K,         ld);
+	// xomatcopy('N', N, N, 1.0, sim->p.inv_exp_Kd,     N, ws[1].inv_exp_K,     ld);
+	// xomatcopy('N', N, N, 1.0, sim->p.exp_halfKd,     N, ws[1].exp_halfK,     ld);
+	// xomatcopy('N', N, N, 1.0, sim->p.inv_exp_halfKd, N, ws[1].inv_exp_halfK, ld);
 
 	num phase;
 	num phases[N_FLAVORS] = {0};
@@ -69,12 +69,12 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 		for (int i = 0; i < N; i++) {
 			const int hsil = hs[i + N*l];
 			ws[0].exp_V[i] = exp_lambda[i + N*hsil];
-			ws[1].exp_V[i] = exp_lambda[i + N*!hsil];
+			ws[0].tmpN1[i] = exp_lambda[i + N*!hsil];
 		}
 		mul_mat_diag(N, ld, ws[0].exp_K, ws[0].exp_V,     ws[0].B + l*ld*N);
-		mul_diag_mat(N, ld, ws[1].exp_V, ws[0].inv_exp_K, ws[0].iB + l*ld*N);
-		mul_mat_diag(N, ld, ws[1].exp_K, ws[1].exp_V,     ws[1].B + l*ld*N);
-		mul_diag_mat(N, ld, ws[0].exp_V, ws[1].inv_exp_K, ws[1].iB + l*ld*N);
+		mul_diag_mat(N, ld, ws[0].tmpN1, ws[0].inv_exp_K, ws[0].iB + l*ld*N);
+		// mul_mat_diag(N, ld, ws[1].exp_K, ws[1].exp_V,     ws[1].B + l*ld*N);
+		// mul_diag_mat(N, ld, ws[0].exp_V, ws[1].inv_exp_K, ws[1].iB + l*ld*N);
 	}
 
 	#pragma omp parallel for schedule(static, 1)
@@ -94,7 +94,7 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 			phases[s] = RC(calc_Gtt)(N, ld, LR0(F - 1), LR_NULL, ws[s].g, ws[s].tmpNN1, ws[s].pvt);
 		}
 	}
-	phase = phases[0]*phases[1];
+	phase = 1.0; //phases[0]*phases[1];
 
 
 	for (; sim->s.sweep < sim->p.n_sweep; sim->s.sweep++) {
@@ -131,13 +131,13 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 			profile_begin(updates);
 			shuffle(rng, N, site_order);
 			RC(update_delayed)(N, ld, n_delay, del, site_order,
-			               rng, hs + N*l, ws[0].g, ws[1].g, &phase,
-			               ws[0].tmpNN1, ws[0].tmpNN2, ws[0].tmpN1,
-			               ws[1].tmpNN1, ws[1].tmpNN2, ws[1].tmpN1);
+			               rng, hs + N*l, ws[0].g, //ws[1].g, &phase,
+			               ws[0].tmpNN1, ws[0].tmpNN2, ws[0].tmpN1);
+			               // ws[1].tmpNN1, ws[1].tmpNN2, ws[1].tmpN1);
 			for (int i = 0; i < N; i++) {
 				const int hsil = hs[i + N*l];
 				ws[0].exp_V[i] = exp_lambda[i + N*hsil];
-				ws[1].exp_V[i] = exp_lambda[i + N*!hsil];
+				ws[0].tmpN1[i] = exp_lambda[i + N*!hsil];
 			}
 			profile_end(updates);
 
@@ -146,7 +146,7 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 			for (int s = 0; s < N_FLAVORS; s++) {
 				profile_begin(calcb);
 				mul_mat_diag(N, ld, ws[s].exp_K, ws[s].exp_V, ws[s].B + l*ld*N);
-				mul_diag_mat(N, ld, ws[1 - s].exp_V, ws[s].inv_exp_K, ws[s].iB + l*ld*N);
+				mul_diag_mat(N, ld, ws[s].tmpN1, ws[s].inv_exp_K, ws[s].iB + l*ld*N);
 				profile_end(calcb);
 				if (recalc) {
 					profile_begin(multb);
@@ -173,7 +173,7 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 				}
 			}
 
-			if (recalc) phase = phases[0]*phases[1];
+			// if (recalc) phase = phases[0]*phases[1];
 
 			if (enabled_eqlt && (l + sweep_up) % sim->p.period_eqlt == 0) {
 				#pragma omp parallel for schedule(static, 1)
@@ -184,7 +184,7 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 					profile_end(half_wrap);
 				}
 				profile_begin(meas_eq);
-				RC(measure_eqlt)(&sim->p, phase, ld, ws[0].tmpNN2, ws[1].tmpNN2, &sim->m_eq);
+				RC(measure_eqlt)(&sim->p, phase, ld, ws[0].tmpNN2, &sim->m_eq);
 				profile_end(meas_eq);
 			}
 		}
@@ -222,7 +222,7 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 			}
 			profile_begin(meas_uneq);
 			RC(measure_uneqlt)(&sim->p, phase, ld,
-			               ws[0].G0t, ws[0].Gtt, ws[0].Gt0, ws[1].G0t, ws[1].Gtt, ws[1].Gt0,
+			               ws[0].G0t, ws[0].Gtt, ws[0].Gt0,// ws[1].G0t, ws[1].Gtt, ws[1].Gt0,
 			               &sim->m_ue);
 			profile_end(meas_uneq);
 		}

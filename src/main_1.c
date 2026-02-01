@@ -24,7 +24,7 @@ static void usage(const char *name)
 
 int main(int argc, char **argv)
 {
-	omp_set_num_threads(2);
+	omp_set_num_threads(1);
 	char *log_file = NULL;
 	char *save_interval = "0";
 	char *max_time = "0";

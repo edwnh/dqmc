@@ -7,37 +7,37 @@
 void RC(update_delayed)(const int N, const int ld, const int n_delay, const double *const del,
 		const int *const site_order,
 		uint64_t *const rng, int *const hs,
-		num *const gu, num *const gd, num *const phase,
-		num *const au, num *const bu, num *const du,
-		num *const ad, num *const bd, num *const dd)
+		num *const gu,// num *const gd, num *const phase,
+		num *const au, num *const bu, num *const du)
+		// num *const ad, num *const bd, num *const dd)
 {
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	(void)__builtin_assume_aligned(gu, MEM_ALIGN);
-	(void)__builtin_assume_aligned(gd, MEM_ALIGN);
+	// (void)__builtin_assume_aligned(gd, MEM_ALIGN);
 	(void)__builtin_assume_aligned(au, MEM_ALIGN);
 	(void)__builtin_assume_aligned(bu, MEM_ALIGN);
-	(void)__builtin_assume_aligned(du, MEM_ALIGN);
-	(void)__builtin_assume_aligned(ad, MEM_ALIGN);
-	(void)__builtin_assume_aligned(bd, MEM_ALIGN);
-	(void)__builtin_assume_aligned(dd, MEM_ALIGN);
+	// (void)__builtin_assume_aligned(du, MEM_ALIGN);
+	// (void)__builtin_assume_aligned(ad, MEM_ALIGN);
+	// (void)__builtin_assume_aligned(bd, MEM_ALIGN);
+	// (void)__builtin_assume_aligned(dd, MEM_ALIGN);
 
 	int k = 0;
 	for (int j = 0; j < N; j++) du[j] = gu[j + ld*j];
-	for (int j = 0; j < N; j++) dd[j] = gd[j + ld*j];
+	// for (int j = 0; j < N; j++) dd[j] = gd[j + ld*j];
 	for (int ii = 0; ii < N; ii++) {
 		const int i = site_order[ii];
 		const double delu = del[i + N*hs[i]];
 		const double deld = del[i + N*!hs[i]];
 		if (delu == 0.0 && deld == 0.0) continue;
 		const num ru = 1.0 + (1.0 - du[i]) * delu;
-		const num rd = 1.0 + (1.0 - dd[i]) * deld;
-		const num prob = ru * rd;
+		// const num rd = 1.0 + (1.0 - dd[i]) * deld;
+		const num prob = ru*ru*(1.0 + deld);
 		const double absprob = fabs(prob);
 		if (rand_doub(rng) < absprob) {
-			#pragma omp parallel sections
-			{
-			#pragma omp section
-			{
+			// #pragma omp parallel sections
+			// {
+			// #pragma omp section
+			// {
 			for (int j = 0; j < N; j++) au[j + ld*k] = gu[j + ld*i];
 			for (int j = 0; j < N; j++) bu[j + ld*k] = gu[i + ld*j];
 			xgemv("N", N, k, 1.0, au, ld, bu + i,
@@ -47,50 +47,50 @@ void RC(update_delayed)(const int N, const int ld, const int n_delay, const doub
 			au[i + ld*k] -= 1.0;
 			for (int j = 0; j < N; j++) au[j + ld*k] *= delu/ru;
 			for (int j = 0; j < N; j++) du[j] += au[j + ld*k] * bu[j + ld*k];
-			}
-			#pragma omp section
-			{
-			for (int j = 0; j < N; j++) ad[j + ld*k] = gd[j + ld*i];
-			for (int j = 0; j < N; j++) bd[j + ld*k] = gd[i + ld*j];
-			xgemv("N", N, k, 1.0, ad, ld, bd + i,
-			      ld, 1.0, ad + ld*k, 1);
-			xgemv("N", N, k, 1.0, bd, ld, ad + i,
-			      ld, 1.0, bd + ld*k, 1);
-			ad[i + ld*k] -= 1.0;
-			for (int j = 0; j < N; j++) ad[j + ld*k] *= deld/rd;
-			for (int j = 0; j < N; j++) dd[j] += ad[j + ld*k] * bd[j + ld*k];
-			}
-			}
+			// }
+			// #pragma omp section
+			// {
+			// for (int j = 0; j < N; j++) ad[j + ld*k] = gd[j + ld*i];
+			// for (int j = 0; j < N; j++) bd[j + ld*k] = gd[i + ld*j];
+			// xgemv("N", N, k, 1.0, ad, ld, bd + i,
+			//       ld, 1.0, ad + ld*k, 1);
+			// xgemv("N", N, k, 1.0, bd, ld, ad + i,
+			//       ld, 1.0, bd + ld*k, 1);
+			// ad[i + ld*k] -= 1.0;
+			// for (int j = 0; j < N; j++) ad[j + ld*k] *= deld/rd;
+			// for (int j = 0; j < N; j++) dd[j] += ad[j + ld*k] * bd[j + ld*k];
+			// }
+			// }
 			k++;
 			hs[i] = !hs[i];
-			*phase *= prob/absprob;
+			// *phase *= prob/absprob;
 		}
 		if (k == n_delay) {
 			k = 0;
-			#pragma omp parallel sections
-			{
-			#pragma omp section
-			{
+			// #pragma omp parallel sections
+			// {
+			// #pragma omp section
+			// {
 			xgemm("N", "T", N, N, n_delay, 1.0,
 			      au, ld, bu, ld, 1.0, gu, ld);
 			for (int j = 0; j < N; j++) du[j] = gu[j + ld*j];
-			}
-			#pragma omp section
-			{
-			xgemm("N", "T", N, N, n_delay, 1.0,
-			      ad, ld, bd, ld, 1.0, gd, ld);
-			for (int j = 0; j < N; j++) dd[j] = gd[j + ld*j];
-			}
-			}
+			// }
+			// #pragma omp section
+			// {
+			// xgemm("N", "T", N, N, n_delay, 1.0,
+			//       ad, ld, bd, ld, 1.0, gd, ld);
+			// for (int j = 0; j < N; j++) dd[j] = gd[j + ld*j];
+			// }
+			// }
 		}
 	}
-	#pragma omp parallel sections
-	{
-	#pragma omp section
+	// #pragma omp parallel sections
+	// {
+	// #pragma omp section
 	xgemm("N", "T", N, N, k, 1.0, au, ld, bu, ld, 1.0, gu, ld);
-	#pragma omp section
-	xgemm("N", "T", N, N, k, 1.0, ad, ld, bd, ld, 1.0, gd, ld);
-	}
+	// #pragma omp section
+	// xgemm("N", "T", N, N, k, 1.0, ad, ld, bd, ld, 1.0, gd, ld);
+	// }
 }
 
 // below is unmaintained
