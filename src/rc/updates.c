@@ -93,12 +93,13 @@ void RC(update_delayed)(const int N, const int ld, const int n_delay, const doub
 	}
 }
 
-void RC(update_shermor)(const int N, const int ld, const double *const del,
-		const int *const site_order,
+void RC(update_woodbury)(const int N, const int ld, const int num_b_V,
+		const num *const del, const num *const dela, const num *const pre_ratio,
+		const int *const bond_order, const int *const bonds_V,
 		uint64_t *const rng, int *const hs,
 		num *const gu, num *const gd, num *const phase,
-		num *const au, num *const bu,
-		num *const ad, num *const bd)
+		num *const au, num *const bu, num *const cu,
+		num *const ad, num *const bd, num *const cd)
 {
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
 	(void)__builtin_assume_aligned(gu, MEM_ALIGN);
@@ -108,34 +109,68 @@ void RC(update_shermor)(const int N, const int ld, const double *const del,
 	(void)__builtin_assume_aligned(ad, MEM_ALIGN);
 	(void)__builtin_assume_aligned(bd, MEM_ALIGN);
 
-	for (int ii = 0; ii < N; ii++) {
-		const int i = site_order[ii];
-		const double delu = del[i + N*hs[i]];
-		const double deld = del[i + N*!hs[i]];
-		if (delu == 0.0 && deld == 0.0) continue;
-		const num ru = 1.0 + (1.0 - gu[i + ld*i]) * delu;
-		const num rd = 1.0 + (1.0 - gd[i + ld*i]) * deld;
-		const num prob = ru * rd;
+	for (int ii = 0; ii < num_b_V; ii++) {
+		const int b = bond_order[ii];
+		const int p = bonds_V[b + 0*num_b_V];
+		const int q = bonds_V[b + 1*num_b_V];
+
+		const int hs_old = hs[b];
+		const double r = rand_doub(rng);
+		int hs_proposed;
+		if (r < (1.0/3.0)) hs_proposed = 0;
+		else if (r < (2.0/3.0)) hs_proposed = 1;
+		else hs_proposed = 2;
+		if (hs_proposed == hs_old) hs_proposed = 3;
+
+		const int hs_idx = hs_proposed + hs_old*4;
+		const num delpu = del[hs_idx];
+		const num delqu = dela[hs_idx];
+		const num delpd = del[hs_idx];
+		const num delqd = dela[hs_idx];
+		if (delpu == 0.0 && delqu == 0.0 && delpd == 0.0 && delqd == 0.0) continue;
+
+		const num detu = (1 + (1 - gu[p + ld*p])*delpu) * (1 + (1 - gu[q + ld*q])*delqu)
+		               - gu[q + ld*p]*gu[p + ld*q]*delpu*delqu;
+		const num detd = (1 + (1 - gd[p + ld*p])*delpd) * (1 + (1 - gd[q + ld*q])*delqd)
+		               - gd[q + ld*p]*gd[p + ld*q]*delpd*delqd;
+		const num prob = pre_ratio[hs_idx] * detu * detd;
 		const double absprob = fabs(prob);
 		if (rand_doub(rng) < absprob) {
-			for (int j = 0; j < N; j++) au[j] = gu[j + ld*i];
-			au[i] -= 1.0;
-			const num scu = delu/ru;
-			for (int j = 0; j < N; j++) bu[j] = scu*gu[i + ld*j];
+			const num delpqu = delpu*delqu;
+			// remember it's column major
+			num twobytwou[4] = {delpqu*(1 - gu[q + ld*q]) + delpu, delpqu*gu[q + ld*p], delpqu*gu[p + ld*q], delpqu*(1 - gu[p + ld*p]) + delqu};
+			for (int i = 0; i < 4; i++) twobytwou[i] /= detu;
+			for (int j = 0; j < N; j++) {
+				au[j + ld*0] = gu[j + ld*p];
+				au[j + ld*1] = gu[j + ld*q];
+			}
+			au[p + ld*0] -= 1.0;
+			au[q + ld*1] -= 1.0;
+			for (int j = 0; j < N; j++) {
+				bu[j + ld*0] = gu[p + ld*j];
+				bu[j + ld*1] = gu[q + ld*j];
+			}
+			// gu += au * twobytwo * bu^T
+			xgemm("N", "N", N, 2, 2, 1.0, au, ld, twobytwou, 2, 0.0, cu, ld);
+			xgemm("N", "T", N, N, 2, 1.0, cu, ld, bu, ld, 1.0, gu, ld);
 
-			for (int k = 0; k < N; k++)
-				for (int j = 0; j < N; j++)
-					gu[j + ld*k] += au[j]*bu[k];
+			num twobytwod[4] = {delpqu*(1 - gd[q + ld*q]) + delpd, delpqu*gd[q + ld*p], delpqu*gd[p + ld*q], delpqu*(1 - gd[p + ld*p]) + delqd};
+			for (int i = 0; i < 4; i++) twobytwod[i] /= detd;
+			for (int j = 0; j < N; j++) {
+				ad[j + ld*0] = gd[j + ld*p];
+				ad[j + ld*1] = gd[j + ld*q];
+			}
+			ad[p + ld*0] -= 1.0;
+			ad[q + ld*1] -= 1.0;
+			for (int j = 0; j < N; j++) {
+				bd[j + ld*0] = gd[p + ld*j];
+				bd[j + ld*1] = gd[q + ld*j];
+			}
+			// gd += ad * twobytwo * bd^T
+			xgemm("N", "N", N, 2, 2, 1.0, ad, ld, twobytwod, 2, 0.0, cd, ld);
+			xgemm("N", "T", N, N, 2, 1.0, cd, ld, bd, ld, 1.0, gd, ld);
 
-			for (int j = 0; j < N; j++) ad[j] = gd[j + ld*i];
-			ad[i] -= 1.0;
-			const num scd = deld/rd;
-			for (int j = 0; j < N; j++) bd[j] = scd*gd[i + ld*j];
-			for (int k = 0; k < N; k++)
-				for (int j = 0; j < N; j++)
-					gd[j + ld*k] += ad[j]*bd[k];
-
-			hs[i] = !hs[i];
+			hs[b] = hs_proposed;
 			*phase *= prob/absprob;
 		}
 	}

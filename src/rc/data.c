@@ -53,6 +53,7 @@ static int do_alloc(struct RC(sim_data) *sim)
 	const int N = sim->p.N, L = sim->p.L, F = sim->p.F;
 	const int num_i = sim->p.num_i, num_ij = sim->p.num_ij;
 	const int num_b = sim->p.num_b, num_bs = sim->p.num_bs, num_bb = sim->p.num_bb;
+	const int num_b_V = sim->p.num_b_V;
 	const int meas_bond_corr = sim->p.meas_bond_corr;
 	const int meas_energy_corr = sim->p.meas_energy_corr;
 	const int meas_nematic_corr = sim->p.meas_nematic_corr;
@@ -65,7 +66,7 @@ static int do_alloc(struct RC(sim_data) *sim)
 #define X(name, type, size) {(void **)&sim->p.name, (size) * sizeof(type)},
 		PARAMS_ARRAY_LIST
 #undef X
-		{(void **)&sim->s.hs, N*L * sizeof(int)},
+		{(void **)&sim->s.hs, sim->p.num_b_V*L * sizeof(int)},
 #define X(name, size) {(void **)&sim->m_eq.name, (size) * sizeof(num)},
 		MEAS_EQLT_LIST
 #undef X
@@ -163,7 +164,7 @@ int RC(sim_data_save)(const struct RC(sim_data) *sim)
 
 	status |= my_write(file_id, "/state/rng", 17, H5T_NATIVE_UINT64, sim->s.rng);
 	status |= my_write(file_id, "/state/sweep", 0, H5T_NATIVE_INT, &sim->s.sweep);
-	status |= my_write(file_id, "/state/hs", N*L, H5T_NATIVE_INT, sim->s.hs);
+	status |= my_write(file_id, "/state/hs", sim->p.num_b_V*L, H5T_NATIVE_INT, sim->s.hs);
 
 	if (sim->m_eq.n_sample > 0) {
 		status |= my_write(file_id, "/meas_eqlt/n_sample", 0, H5T_NATIVE_INT, &sim->m_eq.n_sample);

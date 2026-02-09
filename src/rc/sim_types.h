@@ -23,7 +23,8 @@
 	X(num_ij) \
 	X(num_b) \
 	X(num_bs) \
-	X(num_bb)
+	X(num_bb) \
+	X(num_b_V)
 
 // format: X(name, type, size)
 // using size assumes the following variables are in scope:
@@ -32,6 +33,7 @@
 	X(map_i,          int, N) \
 	X(map_ij,         int, N*N) \
 	X(bonds,          int, num_b*2) \
+	X(bonds_V,        int, num_b_V*2) \
 	X(map_bs,         int, num_b*N) \
 	X(map_bb,         int, num_b*num_b) \
 	X(degen_i,        int, num_i) \
@@ -48,8 +50,12 @@
 	X(exp_halfKd,     num, N*N) \
 	X(inv_exp_halfKu, num, N*N) \
 	X(inv_exp_halfKd, num, N*N) \
-	X(exp_lambda,  double, N*2) \
-	X(del,         double, N*2)
+	X(exp_lambda,     num, 4) \
+	X(exp_lambdaa,    num, 4) \
+	X(del,            num, 4*4) \
+	X(dela,           num, 4*4) \
+	X(pre_ratio,      num, 4*4) \
+	X(pre_phase,      num, 4)
 
 // format: X(name, size)
 // using size assumes the following variables are also in scope:
@@ -113,6 +119,7 @@
 	X(inv_exp_halfK, num, ld*N) \
 	X(tmpNN1,        num, ld*N) \
 	X(tmpNN2,        num, ld*N) \
+	X(tmp2N,         num, ld*2) \
 	X(tmpN1,         num, N) \
 	X(tmpN2,         num, N) \
 	X(pvt,           int, N) \

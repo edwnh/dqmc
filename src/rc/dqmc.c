@@ -10,7 +10,7 @@
 #include "sim_types.h"
 #include "updates.h"
 #include "wrapper.h"
-
+#include <stdio.h>
 // returns 0 for completion, 1 for partial completion
 int RC(dqmc)(struct RC(sim_data) *sim)
 {
@@ -23,6 +23,7 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 	fprintf(log_f, "starting dqmc\n");
 
 	const int N = sim->p.N;
+	const int num_b_V = sim->p.num_b_V;
 	// N*N matrices use padded ld*N storage for better alignment, slightly better performance.
 	const int ld = best_ld(N);
 	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
@@ -34,12 +35,17 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 	const int n_delay = sim->p.n_delay;
 	uint64_t *const rng = sim->s.rng;
 	int *const hs = sim->s.hs;
-	const double *const del = sim->p.del;
-	const double *const exp_lambda = sim->p.exp_lambda;
+	const int *const bonds_V = sim->p.bonds_V;
+	const num *const del = sim->p.del;
+	const num *const dela = sim->p.dela;
+	const num *const exp_lambda = sim->p.exp_lambda;
+	const num *const exp_lambdaa = sim->p.exp_lambdaa;
+	const num *const pre_ratio = sim->p.pre_ratio;
+	const num *const pre_phase = sim->p.pre_phase;
 
 	struct RC(workspace) *ws = sim->ws;
 
-	int site_order[N]; // N should be small enough to put on stack
+	int bond_order[num_b_V]; // N should be small enough to put on stack
 
 	const struct RC(QdX) QdX_NULL = {NULL, NULL, NULL};
 	const struct RC(LR) LR_NULL = {NULL, NULL, NULL};
@@ -63,18 +69,36 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 	xomatcopy('N', N, N, 1.0, sim->p.inv_exp_halfKd, N, ws[1].inv_exp_halfK, ld);
 
 	num phase;
+	num phase_pre = 1.0;
 	num phases[N_FLAVORS] = {0};
 
 	for (int l = 0; l < L; l++) {
 		for (int i = 0; i < N; i++) {
-			const int hsil = hs[i + N*l];
-			ws[0].exp_V[i] = exp_lambda[i + N*hsil];
-			ws[1].exp_V[i] = exp_lambda[i + N*!hsil];
+			ws[0].exp_V[i] = 1;
+			ws[1].exp_V[i] = 1;
+		}
+		for (int b = 0; b < num_b_V; b++) {
+			const int i = bonds_V[b + 0*num_b_V];
+			const int ia = bonds_V[b + 1*num_b_V];
+			const int hsbl = hs[b + num_b_V*l];
+			ws[0].exp_V[i] *= exp_lambda[hsbl];
+			ws[1].exp_V[i] *= exp_lambda[hsbl];
+			ws[0].exp_V[ia] *= exp_lambdaa[hsbl];
+			ws[1].exp_V[ia] *= exp_lambdaa[hsbl];
+		}
+		for (int i = 0; i < N; i++) {
+			ws[0].tmpN1[i] = 1/ws[0].exp_V[i];
+			ws[1].tmpN1[i] = 1/ws[1].exp_V[i];
 		}
 		mul_mat_diag(N, ld, ws[0].exp_K, ws[0].exp_V,     ws[0].B + l*ld*N);
-		mul_diag_mat(N, ld, ws[1].exp_V, ws[0].inv_exp_K, ws[0].iB + l*ld*N);
+		mul_diag_mat(N, ld, ws[0].tmpN1, ws[0].inv_exp_K, ws[0].iB + l*ld*N);
 		mul_mat_diag(N, ld, ws[1].exp_K, ws[1].exp_V,     ws[1].B + l*ld*N);
-		mul_diag_mat(N, ld, ws[0].exp_V, ws[1].inv_exp_K, ws[1].iB + l*ld*N);
+		mul_diag_mat(N, ld, ws[1].tmpN1, ws[1].inv_exp_K, ws[1].iB + l*ld*N);
+	}
+	for (int l = 0; l < L; l++) {
+		for (int b = 0; b < num_b_V; b++) {
+			phase_pre *= pre_phase[hs[b + num_b_V*l]];
+		}
 	}
 
 	#pragma omp parallel for schedule(static, 1)
@@ -94,8 +118,7 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 			phases[s] = RC(calc_Gtt)(N, ld, LR0(F - 1), LR_NULL, ws[s].g, ws[s].tmpNN1, ws[s].pvt);
 		}
 	}
-	phase = phases[0]*phases[1];
-
+	phase = phase_pre*phases[0]*phases[1];
 
 	for (; sim->s.sweep < sim->p.n_sweep; sim->s.sweep++) {
 		const int sig = sig_check_state(sim->s.sweep, sim->p.n_sweep_warm, sim->p.n_sweep);
@@ -129,15 +152,31 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 			}
 
 			profile_begin(updates);
-			shuffle(rng, N, site_order);
-			RC(update_delayed)(N, ld, n_delay, del, site_order,
-			               rng, hs + N*l, ws[0].g, ws[1].g, &phase,
-			               ws[0].tmpNN1, ws[0].tmpNN2, ws[0].tmpN1,
-			               ws[1].tmpNN1, ws[1].tmpNN2, ws[1].tmpN1);
+			shuffle(rng, num_b_V, bond_order);
+			// RC(update_delayed)(N, ld, n_delay, del, site_order,
+			//                rng, hs + N*l, ws[0].g, ws[1].g, &phase,
+			//                ws[0].tmpNN1, ws[0].tmpNN2, ws[0].tmpN1,
+			//                ws[1].tmpNN1, ws[1].tmpNN2, ws[1].tmpN1);
+			RC(update_woodbury)(N, ld, num_b_V, del, dela, pre_ratio, bond_order, bonds_V,
+			                    rng, hs + num_b_V*l, ws[0].g, ws[1].g, &phase,
+			                    ws[0].tmpNN1, ws[0].tmpNN2, ws[0].tmp2N,
+			                    ws[1].tmpNN1, ws[1].tmpNN2, ws[1].tmp2N);
 			for (int i = 0; i < N; i++) {
-				const int hsil = hs[i + N*l];
-				ws[0].exp_V[i] = exp_lambda[i + N*hsil];
-				ws[1].exp_V[i] = exp_lambda[i + N*!hsil];
+				ws[0].exp_V[i] = 1;
+				ws[1].exp_V[i] = 1;
+			}
+			for (int b = 0; b < num_b_V; b++) {
+				const int i = bonds_V[b + 0*num_b_V];
+				const int ia = bonds_V[b + 1*num_b_V];
+				const int hsbl = hs[b + num_b_V*l];
+				ws[0].exp_V[i] *= exp_lambda[hsbl];
+				ws[1].exp_V[i] *= exp_lambda[hsbl];
+				ws[0].exp_V[ia] *= exp_lambdaa[hsbl];
+				ws[1].exp_V[ia] *= exp_lambdaa[hsbl];
+			}
+			for (int i = 0; i < N; i++) {
+				ws[0].tmpN1[i] = 1/ws[0].exp_V[i];
+				ws[1].tmpN1[i] = 1/ws[1].exp_V[i];
 			}
 			profile_end(updates);
 
@@ -146,7 +185,7 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 			for (int s = 0; s < N_FLAVORS; s++) {
 				profile_begin(calcb);
 				mul_mat_diag(N, ld, ws[s].exp_K, ws[s].exp_V, ws[s].B + l*ld*N);
-				mul_diag_mat(N, ld, ws[1 - s].exp_V, ws[s].inv_exp_K, ws[s].iB + l*ld*N);
+				mul_diag_mat(N, ld, ws[s].tmpN1, ws[s].inv_exp_K, ws[s].iB + l*ld*N);
 				profile_end(calcb);
 				if (recalc) {
 					profile_begin(multb);
@@ -173,7 +212,15 @@ int RC(dqmc)(struct RC(sim_data) *sim)
 				}
 			}
 
-			if (recalc) phase = phases[0]*phases[1];
+			if (recalc) {
+				phase_pre = 1.0;
+				for (int l = 0; l < L; l++) {
+					for (int b = 0; b < num_b_V; b++) {
+						phase_pre *= pre_phase[hs[b + num_b_V*l]];
+					}
+				}
+				phase = phase_pre*phases[0]*phases[1];
+			}
 
 			if (enabled_eqlt && (l + sweep_up) % sim->p.period_eqlt == 0) {
 				#pragma omp parallel for schedule(static, 1)
