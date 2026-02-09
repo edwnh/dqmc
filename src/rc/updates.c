@@ -93,41 +93,56 @@ void RC(update_delayed)(const int N, const int ld, const int n_delay, const doub
 	}
 }
 
-// below is unmaintained
-/*
-void update_shermor(const int N, const double *const del,
+void RC(update_shermor)(const int N, const int ld, const double *const del,
 		const int *const site_order,
 		uint64_t *const rng, int *const hs,
-		double *const gu, double *const gd, int *const sign,
-		double *const cu, double *const du,
-		double *const cd, double *const dd)
+		num *const gu, num *const gd, num *const phase,
+		num *const au, num *const bu,
+		num *const ad, num *const bd)
 {
+	__builtin_assume(ld % MEM_ALIGN_NUM == 0);
+	(void)__builtin_assume_aligned(gu, MEM_ALIGN);
+	(void)__builtin_assume_aligned(gd, MEM_ALIGN);
+	(void)__builtin_assume_aligned(au, MEM_ALIGN);
+	(void)__builtin_assume_aligned(bu, MEM_ALIGN);
+	(void)__builtin_assume_aligned(ad, MEM_ALIGN);
+	(void)__builtin_assume_aligned(bd, MEM_ALIGN);
+
 	for (int ii = 0; ii < N; ii++) {
 		const int i = site_order[ii];
 		const double delu = del[i + N*hs[i]];
 		const double deld = del[i + N*!hs[i]];
-		const double pu = (1 + (1 - gu[i + N*i])*delu);
-		const double pd = (1 + (1 - gd[i + N*i])*deld);
-		const double prob = pu*pd;
-		if (rand_doub(rng) < fabs(prob)) {
-			for (int j = 0; j < N; j++) cu[j] = gu[j + N*i];
-			cu[i] -= 1.0;
-			for (int j = 0; j < N; j++) du[j] = gu[i + N*j];
-			const double au = delu/pu;
-			dger(&N, &N, &au, cu, cint(1), du, cint(1), gu, &N);
+		if (delu == 0.0 && deld == 0.0) continue;
+		const num ru = 1.0 + (1.0 - gu[i + ld*i]) * delu;
+		const num rd = 1.0 + (1.0 - gd[i + ld*i]) * deld;
+		const num prob = ru * rd;
+		const double absprob = fabs(prob);
+		if (rand_doub(rng) < absprob) {
+			for (int j = 0; j < N; j++) au[j] = gu[j + ld*i];
+			au[i] -= 1.0;
+			const num scu = delu/ru;
+			for (int j = 0; j < N; j++) bu[j] = scu*gu[i + ld*j];
 
-			for (int j = 0; j < N; j++) cd[j] = gd[j + N*i];
-			cd[i] -= 1.0;
-			for (int j = 0; j < N; j++) dd[j] = gd[i + N*j];
-			const double ad = deld/pd;
-			dger(&N, &N, &ad, cd, cint(1), dd, cint(1), gd, &N);
+			for (int k = 0; k < N; k++)
+				for (int j = 0; j < N; j++)
+					gu[j + ld*k] += au[j]*bu[k];
+
+			for (int j = 0; j < N; j++) ad[j] = gd[j + ld*i];
+			ad[i] -= 1.0;
+			const num scd = deld/rd;
+			for (int j = 0; j < N; j++) bd[j] = scd*gd[i + ld*j];
+			for (int k = 0; k < N; k++)
+				for (int j = 0; j < N; j++)
+					gd[j + ld*k] += ad[j]*bd[k];
 
 			hs[i] = !hs[i];
-			if (prob < 0) *sign *= -1;
+			*phase *= prob/absprob;
 		}
 	}
 }
 
+// below is unmaintained
+/*
 void update_submat(const int N, const int q, const double *const del,
 		const int *const site_order,
 		uint64_t *const rng, int *const hs,
