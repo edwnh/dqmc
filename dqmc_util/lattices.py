@@ -3,7 +3,7 @@
 import numpy as np
 
 
-def make_square_2d(Nx, Ny, tp, nflux, trans_sym):
+def make_square_2d(Nx, Ny, tp, tpp, nflux, trans_sym):
     """
     Build geometry data for a 2D square lattice with periodic boundaries.
     
@@ -13,6 +13,8 @@ def make_square_2d(Nx, Ny, tp, nflux, trans_sym):
         Lattice dimensions.
     tp : float
         Next-nearest neighbor hopping (adds diagonal bonds if nonzero).
+    tpp : float
+        Third-neighbor hopping (adds bonds to (0, +-2) and (+-2, 0) neighbors if nonzero).
     nflux : int
         Number of magnetic flux quanta (Peierls phases).
     trans_sym : bool
@@ -27,7 +29,12 @@ def make_square_2d(Nx, Ny, tp, nflux, trans_sym):
         tij, peierls
     """
     N = Nx * Ny
-    bps = 4 if tp != 0.0 else 2  # bonds per site
+    # bonds per site
+    bps = 2
+    if tp != 0.0:
+        bps += 2  # (+-1, +-1) neighbors
+    if tpp != 0.0:
+        bps += 2  # (0, +-2) and (+-2, 0) neighbors
 
     # --- 1-site mapping ---
     if trans_sym:
@@ -62,16 +69,23 @@ def make_square_2d(Nx, Ny, tp, nflux, trans_sym):
         for ix in range(Nx):
             i = ix + Nx * iy
             ix1, iy1 = (ix + 1) % Nx, (iy + 1) % Ny
+            ix2, iy2 = (ix + 2) % Nx, (iy + 2) % Ny
             bonds[0, i] = i
             bonds[1, i] = ix1 + Nx * iy        # +x
             bonds[0, i + N] = i
             bonds[1, i + N] = ix + Nx * iy1    # +y
-            if bps == 4:
-                bonds[0, i + 2*N] = i
-                bonds[1, i + 2*N] = ix1 + Nx * iy1  # +x+y
-                bonds[0, i + 3*N] = ix1 + Nx * iy
-                bonds[1, i + 3*N] = ix + Nx * iy1   # +x to +y
-
+            if tp != 0.0:
+                i += 2*N
+                bonds[0, i] = i
+                bonds[1, i] = ix1 + Nx * iy1  # +x+y
+                bonds[0, i + N] = ix1 + Nx * iy
+                bonds[1, i + N] = ix + Nx * iy1   # +x to +y
+            if tpp != 0.0:
+                i += 2*N
+                bonds[0, i] = i
+                bonds[1, i] = ix2 + Nx * iy        # +2x
+                bonds[0, i + N] = i
+                bonds[1, i + N] = ix + Nx * iy2   # +2y
     # --- Bond-site mapping ---
     num_bs = bps * N if trans_sym else num_b * N
     map_bs = np.zeros((N, num_b), dtype=np.int32)
@@ -103,6 +117,7 @@ def make_square_2d(Nx, Ny, tp, nflux, trans_sym):
         for ix in range(Nx):
             i = ix + Nx * iy
             ix1, iy1 = (ix + 1) % Nx, (iy + 1) % Ny
+            ix2, iy2 = (ix + 2) % Nx, (iy + 2) % Ny
             # nearest neighbor
             tij[ix + Nx * iy1, i] += 1
             tij[i, ix + Nx * iy1] += 1
@@ -113,6 +128,11 @@ def make_square_2d(Nx, Ny, tp, nflux, trans_sym):
             tij[i, ix1 + Nx * iy1] += tp
             tij[ix1 + Nx * iy, ix + Nx * iy1] += tp
             tij[ix + Nx * iy1, ix1 + Nx * iy] += tp
+            # third-neighbor
+            tij[ix + Nx * iy2, i] += tpp
+            tij[i, ix + Nx * iy2] += tpp
+            tij[ix2 + Nx * iy, i] += tpp
+            tij[i, ix2 + Nx * iy] += tpp
 
     # --- Peierls phases (symmetric gauge) ---
     alpha = 0.5
