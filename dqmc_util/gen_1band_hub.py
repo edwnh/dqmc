@@ -21,6 +21,7 @@ class SimParams:
     Ny: int = 8
     mu: float = 0.0
     tp: float = 0.0 # 2nd neighbor hopping
+    tpp: float = 0.0 # 3rd neighbor hopping
     U: float = 6.0
     dt: float = 0.1 # imaginary time step
     L: int = 40 # number of time slices
@@ -110,7 +111,7 @@ def create_1(file_sim, file_params, init_rng, overwrite=False,**kwargs):
     p = SimParams(**{k: v for k, v in kwargs.items() if k in {f.name for f in fields(SimParams)}})
     verify_params(p)
 
-    lat = make_square_2d(p.Nx, p.Ny, p.tp, p.nflux, p.trans_sym)
+    lat = make_square_2d(p.Nx, p.Ny, p.tp, p.tpp, p.nflux, p.trans_sym)
     N = lat["N"]
 
     dtype_num = np.complex128 if p.nflux != 0 else np.float64
@@ -149,7 +150,7 @@ def create_1(file_sim, file_params, init_rng, overwrite=False,**kwargs):
         g["model"] = "Hubbard (complex)" if dtype_num == np.complex128 else "Hubbard"
         g["Nx"], g["Ny"] = p.Nx, p.Ny
         g["bps"] = lat["bps"]
-        g["U"], g["t'"], g["nflux"], g["mu"] = p.U, p.tp, p.nflux, p.mu
+        g["U"], g["t'"], g["t''"], g["nflux"], g["mu"] = p.U, p.tp, p.tpp, p.nflux, p.mu
         g["beta"] = p.L * p.dt
 
         # Parameters (used by dqmc code)
