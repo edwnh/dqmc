@@ -47,7 +47,7 @@ static herr_t my_write(hid_t loc_id,
 	return status;
 }
 
-static int do_alloc(struct RC(sim_data) *sim)
+static int do_alloc(struct RC(sim_data) *sim, const int print_mem_only)
 {
 	// these must be initialized in sim before any allocations
 	const int N = sim->p.N, L = sim->p.L, F = sim->p.F;
@@ -80,12 +80,21 @@ static int do_alloc(struct RC(sim_data) *sim)
 #undef X
 	};
 
+	if (print_mem_only) {
+		size_t total_size = MEM_ALIGN_UP(sizeof(struct RC(sim_data)));
+		for (size_t i = 0; i < sizeof(tab)/sizeof(tab[0]); i++)
+			total_size += MEM_ALIGN_UP(tab[i].size);
+		printf("required memory allocation: %zu bytes = %.2f MiB\n",
+				total_size, total_size/(1024.0*1024.0));
+		return 0;
+	}
+
 	sim->pool = my_calloc_table(tab, sizeof(tab)/sizeof(tab[0]));
 	return_if(sim->pool == NULL, -1, "my_calloc_table() failed\n");
 	return 0;
 }
 
-struct RC(sim_data) *RC(sim_data_read_alloc)(const char *file)
+struct RC(sim_data) *RC(sim_data_read_alloc)(const char *file, const int print_mem_only)
 {
 	struct RC(sim_data) *sim = my_calloc(sizeof(*sim));
 
@@ -109,7 +118,12 @@ struct RC(sim_data) *RC(sim_data_read_alloc)(const char *file)
 	PARAMS_SCALAR_INT_LIST
 #undef X
 
-	do_alloc(sim);
+	do_alloc(sim, print_mem_only);
+	if (print_mem_only) {
+		my_free(sim);
+		H5Fclose(file_id);
+		return NULL;
+	}
 
 	const int L = sim->p.L;
 	const int num_i = sim->p.num_i, num_ij = sim->p.num_ij;

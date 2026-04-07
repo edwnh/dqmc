@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MEM_ALIGN_UP(size) ((((size) + MEM_ALIGN - 1)/MEM_ALIGN) * MEM_ALIGN)
-
 void *my_calloc(const size_t size)
 {
 	const size_t size_aligned = MEM_ALIGN_UP(size);

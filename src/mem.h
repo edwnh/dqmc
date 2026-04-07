@@ -3,6 +3,7 @@
 #include <string.h>
 
 #define MEM_ALIGN 64
+#define MEM_ALIGN_UP(size) ((((size) + MEM_ALIGN - 1)/MEM_ALIGN) * MEM_ALIGN)
 
 struct alloc_entry {
 	void **ptr;

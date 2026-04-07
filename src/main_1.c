@@ -18,6 +18,7 @@ static void usage(const char *name)
 	       "options:\n"
 	       "  -b           set benchmarking mode. no data is saved.\n"
 	       "  -l file.log  output to log file instead of stdout.\n"
+	       "  -m           print memory consumption. exits immediately.\n"
 	       "  -s interval  time (seconds) between automatic checkpoints.\n"
 	       "  -t max_time  maximum run time (seconds).\n", name);
 }
@@ -29,15 +30,19 @@ int main(int argc, char **argv)
 	char *save_interval = "0";
 	char *max_time = "0";
 	int bench = 0;
+	int print_mem_only = 0;
 
 	int c;
-	while ((c = getopt(argc, argv, "bl:s:t:")) != -1)
+	while ((c = getopt(argc, argv, "bl:ms:t:")) != -1)
 		switch (c) {
 		case 'b':
 			bench = 1;
 			break;
 		case 'l':
 			log_file = optarg;
+			break;
+		case 'm':
+			print_mem_only = 1;
 			break;
 		case 's':
 			save_interval = optarg;
@@ -58,5 +63,5 @@ int main(int argc, char **argv)
 	return dqmc_wrapper(argv[optind], log_file,
 	                    atoi(save_interval) * TICK_PER_SEC,
 	                    atoi(max_time) * TICK_PER_SEC,
-	                    bench);
+	                    bench, print_mem_only);
 }

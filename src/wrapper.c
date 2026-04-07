@@ -86,7 +86,7 @@ static void print_cpu_model(void)
 }
 
 int dqmc_wrapper(const char *sim_file, const char *log_file,
-		const tick_t save_interval, const tick_t max_time, const int bench)
+		const tick_t save_interval, const tick_t max_time, const int bench, const int print_mem_only)
 {
 	const tick_t wall_start = time_wall();
 	profile_clear();
@@ -115,14 +115,21 @@ int dqmc_wrapper(const char *sim_file, const char *log_file,
 
 	const int is_cplx = is_cplx_file(sim_file);
 	if (is_cplx == 1) {
-		sim_cplx = sim_data_read_alloc_cplx(sim_file);
+		sim_cplx = sim_data_read_alloc_cplx(sim_file, print_mem_only);
 	} else if (is_cplx == 0) {
-		sim_real = sim_data_read_alloc_real(sim_file);
+		sim_real = sim_data_read_alloc_real(sim_file, print_mem_only);
 	} else {
 		fprintf(stderr, "is_cplx_file() failed\n");
 		status = -1;
 		goto cleanup;
 	}
+
+	if (print_mem_only) { // sim_data_read_alloc will have printed memory consumption
+		if (log_f != stdout)
+			fclose(log_f);
+		return 0;
+	}
+
 	if ((sim_real == NULL) && (sim_cplx == NULL)) {
 		fprintf(stderr, "sim_data_read_alloc() failed: %d\n", status);
 		status = -1;
